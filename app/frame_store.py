@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from pathlib import Path
+import re
 
 from PySide6.QtGui import QPixmap
 
@@ -25,12 +26,17 @@ class FrameStore:
 
         files = [
             p
-            for p in sorted(folder.iterdir())
+            for p in sorted(folder.iterdir(), key=self._natural_sort_key)
             if p.is_file() and p.suffix.lower() in self.VALID_SUFFIXES
         ]
         self._frame_files = files
         self._cache.clear()
         return len(files)
+
+    @staticmethod
+    def _natural_sort_key(path: Path):
+        chunks = re.split(r"(\d+)", path.name.lower())
+        return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
 
     def get_frame(self, frame_idx: int) -> QPixmap | None:
         if not self._frame_files or frame_idx < 0 or frame_idx >= len(self._frame_files):
