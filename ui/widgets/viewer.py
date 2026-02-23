@@ -29,6 +29,13 @@ class ViewerWidget(QWidget):
         self._dragging_menu = False
         self._last_drag_angle = 0.0
         self._use_proxy_frames = False
+        self._border_colors = {
+            0: QColor(150, 150, 150),  # gris
+            1: QColor(80, 200, 120),  # verde
+            2: QColor(215, 84, 84),  # rojo
+            3: QColor(232, 206, 85),  # amarillo
+        }
+        self._active_border_color = self._border_colors[0]
 
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
@@ -143,6 +150,8 @@ class ViewerWidget(QWidget):
             for index, icon_center in enumerate(self._menu_item_centers(center)):
                 if self._point_in_circle(click_pos, icon_center, 20) and video_rect.contains(icon_center):
                     self.selected_icon = index
+                    if index in self._border_colors:
+                        self._active_border_color = self._border_colors[index]
                     self.update()
                     ev.accept()
                     return
@@ -196,6 +205,7 @@ class ViewerWidget(QWidget):
             x = (self.width() - scaled.width()) // 2
             y = (self.height() - scaled.height()) // 2
             painter.drawPixmap(x, y, scaled)
+            self._draw_video_border(painter, video_rect)
             self._draw_radial_menu(painter, video_rect)
             painter.end()
             return
@@ -203,8 +213,17 @@ class ViewerWidget(QWidget):
         draw_viewer_frame(self, self.frame, self.total_frames)
 
         painter = QPainter(self)
+        self._draw_video_border(painter, video_rect)
         self._draw_radial_menu(painter, video_rect)
         painter.end()
+
+    def _draw_video_border(self, painter: QPainter, video_rect: QRectF):
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(QPen(self._active_border_color, 4))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRect(video_rect.adjusted(1, 1, -1, -1))
+        painter.restore()
 
     def _draw_radial_menu(self, painter: QPainter, video_rect: QRectF):
         center = self._menu_center(video_rect)
@@ -219,7 +238,7 @@ class ViewerWidget(QWidget):
             painter.setBrush(QColor(22, 30, 38, 80))
             painter.drawEllipse(center, 103, 103)
 
-            symbols = ["♪", "⏺", "⚑", "✂", "⏱", "↺", "★", "◎"]
+            symbols = ["G", "V", "R", "A", "⏱", "↺", "★", "◎"]
             for index, icon_center in enumerate(self._menu_item_centers(center)):
                 is_selected = index == self.selected_icon
                 bg = QColor(65, 122, 214, 220) if is_selected else QColor(27, 33, 42, 210)
