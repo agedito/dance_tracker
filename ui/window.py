@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
@@ -14,15 +16,14 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from pathlib import Path
 
 from app.frame_store import FrameStore
 from app.logic import ReviewState
+from ui.preferences import load_preferences, save_preferences
+from ui.widgets.log_widget import LogWidget
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
-from ui.widgets.log_widget import LogWidget
-from ui.preferences import load_preferences, save_preferences
 
 
 class MainWindow(QMainWindow):
