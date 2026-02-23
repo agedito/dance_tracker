@@ -1,4 +1,5 @@
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -16,6 +17,7 @@ from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
+from ui.preferences import load_preferences, save_preferences
 
 
 class MainWindow(QMainWindow):
@@ -29,6 +31,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(title)
         self.resize(1200, 780)
+        self._preferences = load_preferences()
 
         root = QWidget()
         self.setCentralWidget(root)
@@ -71,7 +74,42 @@ class MainWindow(QMainWindow):
         self.main_splitter.setSizes([470, 300])
         outer.addWidget(self.main_splitter, 1)
 
+        self._load_layout_preferences()
+        self._connect_layout_persistence()
+
         self.set_frame(0)
+
+    def _connect_layout_persistence(self):
+        self.top_splitter.splitterMoved.connect(self._save_layout_preferences)
+        self.bottom_splitter.splitterMoved.connect(self._save_layout_preferences)
+        self.main_splitter.splitterMoved.connect(self._save_layout_preferences)
+
+    def _load_layout_preferences(self):
+        if self._preferences.get("fullscreen", True):
+            self.showMaximized()
+
+        top_sizes = self._preferences.get("top_splitter_sizes")
+        if isinstance(top_sizes, list) and len(top_sizes) == 2:
+            self.top_splitter.setSizes(top_sizes)
+
+        bottom_sizes = self._preferences.get("bottom_splitter_sizes")
+        if isinstance(bottom_sizes, list) and len(bottom_sizes) == 2:
+            self.bottom_splitter.setSizes(bottom_sizes)
+
+        main_sizes = self._preferences.get("main_splitter_sizes")
+        if isinstance(main_sizes, list) and len(main_sizes) == 2:
+            self.main_splitter.setSizes(main_sizes)
+
+    def _save_layout_preferences(self, *_):
+        self._preferences["fullscreen"] = self.isMaximized() or self.isFullScreen()
+        self._preferences["top_splitter_sizes"] = self.top_splitter.sizes()
+        self._preferences["bottom_splitter_sizes"] = self.bottom_splitter.sizes()
+        self._preferences["main_splitter_sizes"] = self.main_splitter.sizes()
+        save_preferences(self._preferences)
+
+    def closeEvent(self, event: QCloseEvent):
+        self._save_layout_preferences()
+        super().closeEvent(event)
 
     @staticmethod
     def _topbar():
