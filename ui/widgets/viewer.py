@@ -9,6 +9,7 @@ from utils.numbers import clamp
 
 class ViewerWidget(QWidget):
     framesLoaded = Signal(int)
+    folderLoaded = Signal(str, int)
 
     def __init__(self, total_frames: int, frame_store: FrameStore, parent=None):
         super().__init__(parent)
@@ -38,9 +39,11 @@ class ViewerWidget(QWidget):
         for url in ev.mimeData().urls():
             if not url.isLocalFile():
                 continue
-            frame_count = self.frame_store.load_folder(url.toLocalFile())
+            folder_path = url.toLocalFile()
+            frame_count = self.frame_store.load_folder(folder_path)
             if frame_count > 0:
                 self.framesLoaded.emit(frame_count)
+                self.folderLoaded.emit(folder_path, frame_count)
                 ev.acceptProposedAction()
                 return
         ev.ignore()

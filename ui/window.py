@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from pathlib import Path
 
 from app.frame_store import FrameStore
 from app.logic import ReviewState
@@ -22,6 +23,8 @@ from ui.preferences import load_preferences, save_preferences
 
 
 class MainWindow(QMainWindow):
+    MAX_RECENT_FOLDERS = 5
+
     def __init__(self, title: str, state: ReviewState):
         super().__init__()
         self.state = state
@@ -112,8 +115,7 @@ class MainWindow(QMainWindow):
         self._save_layout_preferences()
         super().closeEvent(event)
 
-    @staticmethod
-    def _topbar():
+    def _topbar(self):
         w = QWidget()
         w.setObjectName("TopBar")
         l = QHBoxLayout(w)
@@ -123,9 +125,56 @@ class MainWindow(QMainWindow):
         hint = QLabel("Arrastra una carpeta al viewer para cargar frames")
         hint.setObjectName("TopHint")
         l.addWidget(title)
+        self.recent_folders_bar = QWidget()
+        self.recent_folders_layout = QHBoxLayout(self.recent_folders_bar)
+        self.recent_folders_layout.setContentsMargins(0, 0, 0, 0)
+        self.recent_folders_layout.setSpacing(6)
+        l.addSpacing(12)
+        l.addWidget(self.recent_folders_bar)
         l.addStretch(1)
         l.addWidget(hint)
+        self._render_recent_folder_icons()
         return w
+
+    def _recent_folders(self) -> list[str]:
+        saved = self._preferences.get("recent_folders", [])
+        if not isinstance(saved, list):
+            return []
+        folders = [item for item in saved if isinstance(item, str) and item]
+        return folders[: self.MAX_RECENT_FOLDERS]
+
+    def _register_recent_folder(self, folder_path: str):
+        normalized = str(Path(folder_path).expanduser())
+        folders = [path for path in self._recent_folders() if path != normalized]
+        folders.insert(0, normalized)
+        self._preferences["recent_folders"] = folders[: self.MAX_RECENT_FOLDERS]
+        save_preferences(self._preferences)
+        self._render_recent_folder_icons()
+
+    def _load_recent_folder(self, folder_path: str):
+        frame_count = self.frame_store.load_folder(folder_path)
+        if frame_count <= 0:
+            return
+        self._register_recent_folder(folder_path)
+        self.on_frames_loaded(frame_count)
+
+    def _render_recent_folder_icons(self):
+        if not hasattr(self, "recent_folders_layout"):
+            return
+
+        while self.recent_folders_layout.count():
+            item = self.recent_folders_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for folder in self._recent_folders():
+            button = QPushButton("📁")
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.setObjectName("RecentFolderIcon")
+            button.setToolTip(folder)
+            button.clicked.connect(lambda _checked=False, path=folder: self._load_recent_folder(path))
+            self.recent_folders_layout.addWidget(button)
 
     @staticmethod
     def create_horizontal_layout(label: str, h_widgets: QWidget):
@@ -151,7 +200,7 @@ class MainWindow(QMainWindow):
         self.viewer_info.setObjectName("Muted")
         self.frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
         self.viewer = ViewerWidget(self.state.total_frames, frame_store=self.frame_store)
-        self.viewer.framesLoaded.connect(self.on_frames_loaded)
+        self.viewer.folderLoaded.connect(self._on_folder_loaded)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
         v.addWidget(self.viewer, 1)
@@ -215,6 +264,10 @@ class MainWindow(QMainWindow):
         label.setObjectName("FooterNote")
         v.addWidget(label)
         return panel
+
+    def _on_folder_loaded(self, folder_path: str, total_frames: int):
+        self._register_recent_folder(folder_path)
+        self.on_frames_loaded(total_frames)
 
     @staticmethod
     def _thumb(label: str, seed: int):
@@ -397,6 +450,13 @@ class MainWindow(QMainWindow):
         }
         QPushButton:hover { background: #344049; }
         QPushButton#PrimaryButton { border: 1px solid rgba(122,162,255,110); }
+        QPushButton#RecentFolderIcon {
+            min-width: 28px; max-width: 28px;
+            min-height: 28px; max-height: 28px;
+            border-radius: 14px;
+            padding: 0px;
+            font-size: 14px;
+        }
 
         QScrollArea#ScrollArea { border: none; background: transparent; }
         QScrollArea#ScrollArea QWidget { background: transparent; }
