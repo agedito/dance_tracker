@@ -9,12 +9,14 @@ class FrameStore:
     VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
     VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
-    def __init__(self, cache_radius: int):
+    def __init__(self, cache_radius: int, enable_cuda: bool = False):
         self.cache_radius = cache_radius
+        self.enable_cuda = enable_cuda
         self._frame_files: list[Path] = []
         self._proxy_files: list[Path] = []
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
         self._base_sizes: dict[int, tuple[int, int]] = {}
+        self._cuda_available: bool | None = None
 
     @property
     def total_frames(self) -> int:
@@ -23,6 +25,33 @@ class FrameStore:
     @property
     def has_proxy_frames(self) -> bool:
         return bool(self._proxy_files)
+
+    @property
+    def cuda_active(self) -> bool:
+        return self.enable_cuda and self.cuda_available
+
+    @property
+    def cuda_available(self) -> bool:
+        if self._cuda_available is not None:
+            return self._cuda_available
+
+        self._cuda_available = self._detect_cuda_support()
+        return self._cuda_available
+
+    @staticmethod
+    def _detect_cuda_support() -> bool:
+        try:
+            import cv2
+        except ModuleNotFoundError:
+            return False
+
+        if not hasattr(cv2, "cuda"):
+            return False
+
+        try:
+            return cv2.cuda.getCudaEnabledDeviceCount() > 0
+        except Exception:
+            return False
 
     def load_folder(self, folder_path: str) -> int:
         folder = Path(folder_path)
@@ -81,6 +110,7 @@ class FrameStore:
         if not capture.isOpened():
             return None, 0
 
+        use_cuda_resize = self.cuda_active and hasattr(cv2, "cuda") and hasattr(cv2.cuda, "resize")
         frame_idx = 0
         while True:
             ok, frame = capture.read()
@@ -95,7 +125,13 @@ class FrameStore:
             scale = 1.0 if max_dim <= 320 else 320.0 / max_dim
             scaled_w = max(1, int(round(w * scale)))
             scaled_h = max(1, int(round(h * scale)))
-            resized = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
+            resized = self._resize_proxy_frame(
+                cv2=cv2,
+                frame=frame,
+                width=scaled_w,
+                height=scaled_h,
+                use_cuda_resize=use_cuda_resize,
+            )
             cv2.imwrite(str(frames_mino_dir / out_name), resized)
 
             frame_idx += 1
@@ -106,6 +142,19 @@ class FrameStore:
             return None, 0
 
         return str(frames_dir), frame_idx
+
+    @staticmethod
+    def _resize_proxy_frame(cv2, frame, width: int, height: int, use_cuda_resize: bool):
+        if not use_cuda_resize:
+            return cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+
+        try:
+            gpu_frame = cv2.cuda_GpuMat()
+            gpu_frame.upload(frame)
+            gpu_resized = cv2.cuda.resize(gpu_frame, (width, height), interpolation=cv2.INTER_AREA)
+            return gpu_resized.download()
+        except Exception:
+            return cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
 
     @staticmethod
     def _natural_sort_key(path: Path):

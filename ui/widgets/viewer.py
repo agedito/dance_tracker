@@ -29,6 +29,7 @@ class ViewerWidget(QWidget):
         self._dragging_menu = False
         self._last_drag_angle = 0.0
         self._use_proxy_frames = False
+        self._scrubbing_timeline = False
 
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
@@ -39,8 +40,13 @@ class ViewerWidget(QWidget):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
 
-    def set_proxy_frames_enabled(self, enabled: bool):
-        use_proxy = enabled and self.frame_store.has_proxy_frames
+    def set_timeline_scrubbing(self, scrubbing: bool):
+        self._scrubbing_timeline = scrubbing
+        self._refresh_frame_source_mode()
+
+    def _refresh_frame_source_mode(self):
+        # During timeline scrub we only use proxy frames when CUDA is unavailable.
+        use_proxy = self._scrubbing_timeline and (not self.frame_store.cuda_active) and self.frame_store.has_proxy_frames
         if self._use_proxy_frames == use_proxy:
             return
         self._use_proxy_frames = use_proxy

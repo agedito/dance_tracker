@@ -244,7 +244,10 @@ class MainWindow(QMainWindow):
     def _viewer_block(self):
         self.viewer_info = QLabel("Frame: 0")
         self.viewer_info.setObjectName("Muted")
-        self.frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
+        self.frame_store = FrameStore(
+            cache_radius=self.state.config.frame_cache_radius,
+            enable_cuda=self.state.config.enable_cuda,
+        )
         self.viewer = ViewerWidget(self.state.total_frames, frame_store=self.frame_store)
         self.viewer.folderLoaded.connect(self._on_folder_loaded)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
@@ -349,8 +352,8 @@ class MainWindow(QMainWindow):
             name.setFixedWidth(160)
             track = TimelineTrack(self.state.total_frames, layer.segments)
             track.frameChanged.connect(self.set_frame)
-            track.scrubStarted.connect(lambda: self.viewer.set_proxy_frames_enabled(True))
-            track.scrubFinished.connect(lambda: self.viewer.set_proxy_frames_enabled(False))
+            track.scrubStarted.connect(lambda: self.viewer.set_timeline_scrubbing(True))
+            track.scrubFinished.connect(lambda: self.viewer.set_timeline_scrubbing(False))
             self.track_widgets.append(track)
             rl.addWidget(name)
             rl.addWidget(track, 1)
@@ -420,7 +423,7 @@ class MainWindow(QMainWindow):
 
     def on_frames_loaded(self, total_frames: int):
         self.pause()
-        self.viewer.set_proxy_frames_enabled(False)
+        self.viewer.set_timeline_scrubbing(False)
         self.state.set_total_frames(total_frames)
         self.viewer.set_total_frames(total_frames)
         for tr in self.track_widgets:
