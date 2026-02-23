@@ -91,7 +91,4 @@ def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int):
     p.setPen(QColor(255, 255, 255, 170))
     p.drawText(x, y, wm_text)
 
-    xph = int((frame / max(1, total_frames - 1)) * w)
-    p.setPen(QPen(QColor(255, 80, 80, 230), 2))
-    p.drawLine(xph, 0, xph, h)
     p.end()
