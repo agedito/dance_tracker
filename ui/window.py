@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         l.setContentsMargins(12, 10, 12, 10)
         title = QLabel("MAIN VIEWER")
         title.setObjectName("TopTitle")
-        hint = QLabel("Mock UI · Fixed frames· Click en timelines")
+        hint = QLabel("Mock UI · Fixed frames · Click/drag en timelines")
         hint.setObjectName("TopHint")
         l.addWidget(title)
         l.addStretch(1)

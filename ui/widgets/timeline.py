@@ -27,6 +27,10 @@ class TimelineTrack(QWidget):
         self.setFixedHeight(20)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
+    def _frame_from_pos(self, x: float) -> int:
+        norm_x = clamp(x, 0, self.width())
+        return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
+
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
@@ -34,9 +38,12 @@ class TimelineTrack(QWidget):
     def mousePressEvent(self, ev):
         if ev.button() != Qt.MouseButton.LeftButton:
             return
-        x = clamp(ev.position().x(), 0, self.width())
-        f = int(round((x / max(1, self.width())) * (self.total_frames - 1)))
-        self.frameChanged.emit(f)
+        self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
+
+    def mouseMoveEvent(self, ev):
+        if not (ev.buttons() & Qt.MouseButton.LeftButton):
+            return
+        self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def paintEvent(self, ev):
         w, h = self.width(), self.height()
