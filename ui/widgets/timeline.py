@@ -2,16 +2,16 @@ from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from app.layers import Segment
+from app.layers import ResultState, Segment
 from utils.numbers import clamp
 
 
-def status_color(t: str) -> QColor:
-    if t == "ok":
+def status_color(t: ResultState) -> QColor:
+    if t == ResultState.ok:
         return QColor(46, 204, 113, 190)
-    if t == "warn":
+    if t == ResultState.Warning:
         return QColor(241, 196, 15, 200)
-    if t == "err":
+    if t == ResultState.Error:
         return QColor(231, 76, 60, 220)
     return QColor(120, 120, 120, 180)
 
