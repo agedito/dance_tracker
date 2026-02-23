@@ -110,11 +110,6 @@ class ViewerWidget(QWidget):
 
         if self.menu_expanded:
             ring_distance = math.hypot(click_pos.x() - center.x(), click_pos.y() - center.y())
-            if 72 <= ring_distance <= 144:
-                self._dragging_menu = True
-                self._last_drag_angle = self._angle_from_center(click_pos, center)
-                ev.accept()
-                return
 
             for index, icon_center in enumerate(self._menu_item_centers(center)):
                 if self._point_in_circle(click_pos, icon_center, 20) and video_rect.contains(icon_center):
@@ -122,6 +117,12 @@ class ViewerWidget(QWidget):
                     self.update()
                     ev.accept()
                     return
+
+            if 32 <= ring_distance <= 144:
+                self._dragging_menu = True
+                self._last_drag_angle = self._angle_from_center(click_pos, center)
+                ev.accept()
+                return
 
         super().mousePressEvent(ev)
 
