@@ -18,6 +18,8 @@ def status_color(t: str) -> QColor:
 
 class TimelineTrack(QWidget):
     frameChanged = Signal(int)
+    scrubStarted = Signal()
+    scrubFinished = Signal()
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -43,12 +45,18 @@ class TimelineTrack(QWidget):
     def mousePressEvent(self, ev):
         if ev.button() != Qt.MouseButton.LeftButton:
             return
+        self.scrubStarted.emit()
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def mouseMoveEvent(self, ev):
         if not (ev.buttons() & Qt.MouseButton.LeftButton):
             return
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self.scrubFinished.emit()
+        super().mouseReleaseEvent(ev)
 
     def paintEvent(self, ev):
         w, h = self.width(), self.height()

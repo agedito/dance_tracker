@@ -28,6 +28,7 @@ class ViewerWidget(QWidget):
         self.selected_icon = 0
         self._dragging_menu = False
         self._last_drag_angle = 0.0
+        self._use_proxy_frames = False
 
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
@@ -38,14 +39,32 @@ class ViewerWidget(QWidget):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
 
+    def set_proxy_frames_enabled(self, enabled: bool):
+        use_proxy = enabled and self.frame_store.has_proxy_frames
+        if self._use_proxy_frames == use_proxy:
+            return
+        self._use_proxy_frames = use_proxy
+        self.update()
+
     @staticmethod
     def _angle_from_center(pos: QPointF, center: QPointF) -> float:
         return math.atan2(pos.y() - center.y(), pos.x() - center.x())
 
     def _video_rect(self) -> QRectF:
-        pixmap = self.frame_store.get_frame(self.frame)
+        pixmap = self.frame_store.get_frame(self.frame, use_proxy=self._use_proxy_frames)
         if pixmap is None:
             return QRectF(self.rect().adjusted(16, 16, -16, -16))
+
+        display_size = self.frame_store.get_display_size(self.frame)
+        if display_size is None:
+            display_size = (pixmap.width(), pixmap.height())
+
+        pixmap = pixmap.scaled(
+            display_size[0],
+            display_size[1],
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
 
         scaled = pixmap.scaled(
             self.size(),
@@ -154,11 +173,21 @@ class ViewerWidget(QWidget):
         super().mouseReleaseEvent(ev)
 
     def paintEvent(self, ev):
-        pixmap = self.frame_store.get_frame(self.frame)
+        pixmap = self.frame_store.get_frame(self.frame, use_proxy=self._use_proxy_frames)
         video_rect = self._video_rect()
         if pixmap is not None:
             painter = QPainter(self)
             painter.fillRect(self.rect(), Qt.GlobalColor.black)
+
+            display_size = self.frame_store.get_display_size(self.frame)
+            if display_size is not None:
+                pixmap = pixmap.scaled(
+                    display_size[0],
+                    display_size[1],
+                    Qt.AspectRatioMode.IgnoreAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+
             scaled = pixmap.scaled(
                 self.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,

@@ -349,6 +349,8 @@ class MainWindow(QMainWindow):
             name.setFixedWidth(160)
             track = TimelineTrack(self.state.total_frames, layer.segments)
             track.frameChanged.connect(self.set_frame)
+            track.scrubStarted.connect(lambda: self.viewer.set_proxy_frames_enabled(True))
+            track.scrubFinished.connect(lambda: self.viewer.set_proxy_frames_enabled(False))
             self.track_widgets.append(track)
             rl.addWidget(name)
             rl.addWidget(track, 1)
@@ -418,6 +420,7 @@ class MainWindow(QMainWindow):
 
     def on_frames_loaded(self, total_frames: int):
         self.pause()
+        self.viewer.set_proxy_frames_enabled(False)
         self.state.set_total_frames(total_frames)
         self.viewer.set_total_frames(total_frames)
         for tr in self.track_widgets:
