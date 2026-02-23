@@ -19,9 +19,10 @@ from ui.widgets.viewer import ViewerWidget
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, title: str, state: ReviewState):
+    def __init__(self, title: str, state: ReviewState, frame_cache_radius: int):
         super().__init__()
         self.state = state
+        self.frame_cache_radius = frame_cache_radius
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(1000 / self.state.fps))
@@ -39,6 +40,7 @@ class MainWindow(QMainWindow):
         outer.setSpacing(10)
 
         outer.addWidget(self._topbar())
+        self.frame_source_info = "Mock source"
 
         self.viewer_block = self._viewer_block()
         self.right_panel = self._right_panel()
@@ -73,19 +75,18 @@ class MainWindow(QMainWindow):
 
         self.set_frame(0)
 
-    @staticmethod
-    def _topbar():
+    def _topbar(self):
         w = QWidget()
         w.setObjectName("TopBar")
         l = QHBoxLayout(w)
         l.setContentsMargins(12, 10, 12, 10)
         title = QLabel("MAIN VIEWER")
         title.setObjectName("TopTitle")
-        hint = QLabel("Mock UI · Fixed frames · Click/drag en timelines")
-        hint.setObjectName("TopHint")
+        self.top_hint = QLabel("Arrastra una carpeta de frames sobre el viewer principal")
+        self.top_hint.setObjectName("TopHint")
         l.addWidget(title)
         l.addStretch(1)
-        l.addWidget(hint)
+        l.addWidget(self.top_hint)
         return w
 
     @staticmethod
@@ -110,7 +111,8 @@ class MainWindow(QMainWindow):
     def _viewer_block(self):
         self.viewer_info = QLabel("Frame: 0")
         self.viewer_info.setObjectName("Muted")
-        self.viewer = ViewerWidget(self.state.total_frames)
+        self.viewer = ViewerWidget(self.state.total_frames, frame_cache_radius=self.frame_cache_radius)
+        self.viewer.frameFolderLoaded.connect(self._on_frame_folder_loaded)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
         v.addWidget(self.viewer, 1)
@@ -281,7 +283,7 @@ class MainWindow(QMainWindow):
         self.viewer.set_frame(self.state.cur_frame)
         for tr in self.track_widgets:
             tr.set_frame(self.state.cur_frame)
-        self.viewer_info.setText(f"Frame: {self.state.cur_frame}")
+        self.viewer_info.setText(f"Frame: {self.state.cur_frame} · {self.frame_source_info}")
         self.time_info.setText(
             f"Total frames: {self.state.total_frames} · Error frames: {len(self.state.error_frames)}"
         )
@@ -316,6 +318,17 @@ class MainWindow(QMainWindow):
         updated = self.state.prev_error_frame()
         if updated is not None:
             self.set_frame(updated)
+
+    def _on_frame_folder_loaded(self, total_frames: int, folder: str):
+        self.pause()
+        self.state.set_total_frames(total_frames)
+        for tr in self.track_widgets:
+            tr.set_total_frames(total_frames)
+        self.frame_source_info = f"Frames: {folder}"
+        self.top_hint.setText(
+            f"Carpeta cargada ({total_frames} frames) · cache ±{self.frame_cache_radius}"
+        )
+        self.set_frame(0)
 
     @staticmethod
     def _qss():

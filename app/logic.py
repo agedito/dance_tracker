@@ -14,8 +14,13 @@ class ReviewState:
         self.playing = False
 
     def set_frame(self, frame: int) -> int:
-        self.cur_frame = clamp(frame, 0, self.total_frames - 1)
+        self.cur_frame = clamp(frame, 0, max(0, self.total_frames - 1))
         return self.cur_frame
+
+    def set_total_frames(self, total_frames: int):
+        self.total_frames = max(1, total_frames)
+        self.error_frames = [frame for frame in self.error_frames if frame < self.total_frames]
+        self.set_frame(self.cur_frame)
 
     def next_frame(self) -> int:
         return self.set_frame(self.cur_frame + 1)

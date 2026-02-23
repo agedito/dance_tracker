@@ -31,6 +31,11 @@ class TimelineTrack(QWidget):
         norm_x = clamp(x, 0, self.width())
         return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
 
+    def set_total_frames(self, total_frames: int):
+        self.total_frames = max(1, total_frames)
+        self.frame = clamp(self.frame, 0, self.total_frames - 1)
+        self.update()
+
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
