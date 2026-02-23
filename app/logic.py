@@ -1,17 +1,24 @@
 from typing import List
 
+from app.config import AppConfig
 from app.layers import Layer
 from utils.numbers import clamp
 
 
 class ReviewState:
-    def __init__(self, total_frames: int, fps: int, layers: List[Layer]):
+    def __init__(self, total_frames: int, fps: int, layers: List[Layer], config: AppConfig):
         self.total_frames = total_frames
         self.fps = fps
         self.layers = layers
+        self.config = config
         self.error_frames = self._compute_error_frames()
         self.cur_frame = 0
         self.playing = False
+
+    def set_total_frames(self, total_frames: int):
+        self.total_frames = max(1, total_frames)
+        self.error_frames = [frame for frame in self._compute_error_frames() if frame < self.total_frames]
+        self.cur_frame = clamp(self.cur_frame, 0, self.total_frames - 1)
 
     def set_frame(self, frame: int) -> int:
         self.cur_frame = clamp(frame, 0, self.total_frames - 1)

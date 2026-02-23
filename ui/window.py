@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.frame_store import FrameStore
 from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
@@ -119,7 +120,7 @@ class MainWindow(QMainWindow):
         l.setContentsMargins(12, 10, 12, 10)
         title = QLabel("MAIN VIEWER")
         title.setObjectName("TopTitle")
-        hint = QLabel("Mock UI · Fixed frames · Click/drag en timelines")
+        hint = QLabel("Arrastra una carpeta al viewer para cargar frames")
         hint.setObjectName("TopHint")
         l.addWidget(title)
         l.addStretch(1)
@@ -148,7 +149,9 @@ class MainWindow(QMainWindow):
     def _viewer_block(self):
         self.viewer_info = QLabel("Frame: 0")
         self.viewer_info.setObjectName("Muted")
-        self.viewer = ViewerWidget(self.state.total_frames)
+        self.frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
+        self.viewer = ViewerWidget(self.state.total_frames, frame_store=self.frame_store)
+        self.viewer.framesLoaded.connect(self.on_frames_loaded)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
         v.addWidget(self.viewer, 1)
@@ -313,6 +316,14 @@ class MainWindow(QMainWindow):
 
         v.addStretch(1)
         return panel
+
+    def on_frames_loaded(self, total_frames: int):
+        self.pause()
+        self.state.set_total_frames(total_frames)
+        self.viewer.set_total_frames(total_frames)
+        for tr in self.track_widgets:
+            tr.set_total_frames(total_frames)
+        self.set_frame(0)
 
     def set_frame(self, frame: int):
         self.state.set_frame(frame)
