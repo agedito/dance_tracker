@@ -1,5 +1,5 @@
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -77,8 +77,27 @@ class MainWindow(QMainWindow):
 
         self._load_layout_preferences()
         self._connect_layout_persistence()
+        self._setup_shortcuts()
 
         self.set_frame(0)
+
+    def _setup_shortcuts(self):
+        shortcuts = [
+            (QKeySequence(Qt.Key_Left), lambda: self.set_frame(self.state.cur_frame - 1)),
+            (QKeySequence(Qt.Key_Right), lambda: self.set_frame(self.state.cur_frame + 1)),
+            (QKeySequence(Qt.Key_Home), lambda: self.set_frame(0)),
+            (
+                QKeySequence(Qt.Key_End),
+                lambda: self.set_frame(max(0, self.state.total_frames - 1)),
+            ),
+        ]
+
+        self._shortcuts = []
+        for key_sequence, callback in shortcuts:
+            shortcut = QShortcut(key_sequence, self)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(callback)
+            self._shortcuts.append(shortcut)
 
     def _connect_layout_persistence(self):
         self.top_splitter.splitterMoved.connect(self._save_layout_preferences)
