@@ -21,6 +21,7 @@ from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
+from ui.widgets.status_light import StatusLight
 from ui.preferences import load_preferences, save_preferences
 
 
@@ -368,9 +369,20 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(10, 10, 10, 10)
         v.setSpacing(12)
 
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(8)
         label = QLabel("STATUS BAR")
         label.setObjectName("SectionTitle")
-        v.addWidget(label)
+        self.status_light = StatusLight("gray", diameter=18)
+        self.status_text = QLabel("gray")
+        self.status_text.setObjectName("Muted")
+        header_layout.addWidget(label)
+        header_layout.addWidget(self.status_light)
+        header_layout.addWidget(self.status_text)
+        header_layout.addStretch(1)
+        v.addWidget(header)
         self.stat_total = QLabel("-")
         self.stat_total.setObjectName("BoldValue")
         self.stat_err = QLabel("-")
@@ -441,15 +453,29 @@ class MainWindow(QMainWindow):
         self.stat_cur.setText(str(self.state.cur_frame))
         self.frame_big.setText(str(self.state.cur_frame))
 
+        if self.state.total_frames <= 1:
+            status = "gray"
+        elif self.state.cur_frame in self.state.error_frames:
+            status = "red"
+        elif self.state.playing:
+            status = "yellow"
+        else:
+            status = "green"
+
+        self.status_light.set_status(status)
+        self.status_text.setText(status)
+
     def play(self):
         if self.state.playing:
             return
         self.state.playing = True
+        self.set_frame(self.state.cur_frame)
         self.timer.start()
 
     def pause(self):
         self.state.playing = False
         self.timer.stop()
+        self.set_frame(self.state.cur_frame)
 
     def _tick(self):
         advanced = self.state.advance_if_playing()
