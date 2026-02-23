@@ -1,7 +1,7 @@
 import math
 
 from PySide6.QtCore import QRectF
-from PySide6.QtGui import QColor, QPainter, QBrush, QRadialGradient, Qt, QLinearGradient, QFont, QPen
+from PySide6.QtGui import QColor, QPainter, QBrush, QRadialGradient, Qt, QLinearGradient, QFont, QPen, QPixmap
 from PySide6.QtWidgets import QWidget
 
 text_font = "Segoe UI"
@@ -16,9 +16,7 @@ def draw_ellipse(painter: QPainter, px: int, py: int, radius: int, alpha: int):
     painter.drawEllipse(px - radius, py - radius, 2 * radius, 2 * radius)
 
 
-def draw_thumbnail_frame(widget: QWidget, seed: int, label: str):
-    p = QPainter(widget)
-    rect = widget.rect()
+def _paint_thumbnail(p: QPainter, rect: QRectF, seed: int, label: str):
     w, h = rect.width(), rect.height()
 
     p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -46,7 +44,22 @@ def draw_thumbnail_frame(widget: QWidget, seed: int, label: str):
     p.setPen(QPen(QColor(43, 52, 59), 1))
     p.setBrush(Qt.BrushStyle.NoBrush)
     p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 8, 8)
+
+
+def draw_thumbnail_frame(widget: QWidget, seed: int, label: str):
+    p = QPainter(widget)
+    rect = widget.rect()
+    _paint_thumbnail(p, rect, seed, label)
     p.end()
+
+
+def build_thumbnail_pixmap(width: int, height: int, seed: int, label: str) -> QPixmap:
+    pix = QPixmap(max(1, width), max(1, height))
+    pix.fill(QColor(0, 0, 0, 0))
+    p = QPainter(pix)
+    _paint_thumbnail(p, QRectF(0, 0, pix.width(), pix.height()), seed, label)
+    p.end()
+    return pix
 
 
 def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int):
