@@ -4,13 +4,11 @@ from PySide6.QtWidgets import QWidget
 
 
 class BeatMarkerWidget(QWidget):
-    """Widget de 8 pulsos musicales con selección opcional.
+    """Widget de 8 pulsos musicales de solo visualización.
 
     - Muestra los números del 1 al 8.
     - Puede tener un pulso activo (1..8) o ninguno (None).
-    - Al hacer click sobre un número:
-      - Si estaba inactivo, se activa.
-      - Si ya estaba activo, se desactiva (None).
+    - El estado se actualiza únicamente por código con ``set_active_beat``.
     """
 
     beatChanged = Signal(object)
@@ -20,7 +18,7 @@ class BeatMarkerWidget(QWidget):
         self.beats = max(1, beats)
         self._active_beat: int | None = None
         self.setMinimumHeight(42)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setCursor(Qt.CursorShape.ArrowCursor)
 
     @property
     def active_beat(self) -> int | None:
@@ -46,26 +44,6 @@ class BeatMarkerWidget(QWidget):
         y = 2
         h = max(30, self.height() - 4)
         return QRectF(x, y, slot_w, h)
-
-    def _beat_from_pos(self, x: float, y: float) -> int | None:
-        for idx in range(self.beats):
-            rect = self._slot_rect(idx)
-            if rect.contains(x, y):
-                return idx + 1
-        return None
-
-    def mousePressEvent(self, ev):
-        if ev.button() != Qt.MouseButton.LeftButton:
-            return
-        clicked = self._beat_from_pos(ev.position().x(), ev.position().y())
-        if clicked is None:
-            self.clear_active_beat()
-            return
-
-        if self._active_beat == clicked:
-            self.clear_active_beat()
-        else:
-            self.set_active_beat(clicked)
 
     def paintEvent(self, ev):
         p = QPainter(self)
