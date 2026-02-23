@@ -1,226 +1,30 @@
 import sys
-from dataclasses import dataclass
-from typing import List
 
-from PySide6.QtCore import Qt, QTimer, QRectF, Signal, QSize
-from PySide6.QtGui import (
-    QColor, QFont, QPainter, QPen, QBrush, QLinearGradient, QRadialGradient
-)
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QHBoxLayout, QVBoxLayout,
-    QGridLayout, QFrame, QSizePolicy, QScrollArea
+    QApplication,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
-
-@dataclass(frozen=True)
-class Segment:
-    a: int
-    b: int
-    t: str  # "ok" | "warn" | "err"
-
-
-@dataclass(frozen=True)
-class Layer:
-    name: str
-    segments: List[Segment]
-
-
-def clamp(n: int, a: int, b: int) -> int:
-    return max(a, min(b, n))
-
-
-def status_color(t: str) -> QColor:
-    if t == "ok":
-        return QColor(46, 204, 113, 190)
-    if t == "warn":
-        return QColor(241, 196, 15, 200)
-    if t == "err":
-        return QColor(231, 76, 60, 220)
-    return QColor(120, 120, 120, 180)
-
-
-class ViewerWidget(QWidget):
-    def __init__(self, total_frames: int, parent=None):
-        super().__init__(parent)
-        self.total_frames = total_frames
-        self.frame = 0
-        self.setMinimumHeight(320)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-
-    def set_frame(self, f: int):
-        self.frame = clamp(f, 0, self.total_frames - 1)
-        self.update()
-
-    def paintEvent(self, ev):
-        import math
-        w, h = self.width(), self.height()
-        f = self.frame
-        t = f / max(1, (self.total_frames - 1))
-
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        p.fillRect(self.rect(), QColor(12, 14, 16))
-
-        g = QLinearGradient(0, 0, w, h)
-        g.setColorAt(0.0, QColor(20, 45, 25, 240))
-        g.setColorAt(1.0, QColor(80, 70, 20, 180))
-        p.fillRect(self.rect(), QBrush(g))
-
-        for i in range(18):
-            px = int((0.5 + 0.5 * math.sin((i * 999) + t * 8.0)) * w)
-            py = int((0.5 + 0.5 * math.cos((i * 777) + t * 6.0)) * h)
-            r = int((0.05 + (i % 5) * 0.02) * min(w, h))
-            rg = QRadialGradient(px, py, r)
-            alpha = 18 + (i % 4) * 6
-            rg.setColorAt(0.0, QColor(255, 255, 255, alpha))
-            rg.setColorAt(1.0, QColor(255, 255, 255, 0))
-            p.setBrush(QBrush(rg))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(px - r, py - r, 2 * r, 2 * r)
-
-        vg = QRadialGradient(int(w * 0.5), int(h * 0.55), int(min(w, h) * 0.75))
-        vg.setColorAt(0.0, QColor(0, 0, 0, 0))
-        vg.setColorAt(1.0, QColor(0, 0, 0, 160))
-        p.fillRect(self.rect(), QBrush(vg))
-
-        p.setPen(QColor(255, 255, 255, 190))
-        p.setFont(QFont("Segoe UI", max(10, int(h * 0.05)), QFont.Weight.DemiBold))
-        p.drawText(20, int(h * 0.15), f"Frame {f}")
-
-        p.setFont(QFont("Segoe UI", max(9, int(h * 0.04)), QFont.Weight.DemiBold))
-        p.setPen(QColor(255, 255, 255, 170))
-        wm_text = "NATIONAL GEOGRAPHIC"
-        text_w = p.fontMetrics().horizontalAdvance(wm_text)
-        x = w - text_w - 20
-        y = h - 18
-        p.setPen(QPen(QColor(255, 210, 74), 3))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRect(x - 28, y - 14, 18, 18)
-        p.setPen(QColor(255, 255, 255, 170))
-        p.drawText(x, y, wm_text)
-
-        xph = int((f / max(1, self.total_frames - 1)) * w)
-        p.setPen(QPen(QColor(255, 80, 80, 230), 2))
-        p.drawLine(xph, 0, xph, h)
-        p.end()
-
-
-class ThumbnailWidget(QWidget):
-    def __init__(self, label: str, seed: int = 1, parent=None):
-        super().__init__(parent)
-        self.label = label
-        self.seed = seed
-        self.setMinimumHeight(90)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-
-    def paintEvent(self, ev):
-        import math
-        w, h = self.width(), self.height()
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        p.fillRect(self.rect(), QColor(12, 15, 18))
-        g = QLinearGradient(0, 0, w, h)
-        g.setColorAt(0.0, QColor(40 + (self.seed % 50), 70 + (self.seed % 80), 40 + (self.seed % 60), 235))
-        g.setColorAt(1.0, QColor(110 + (self.seed % 60), 95 + (self.seed % 40), 30 + (self.seed % 30), 180))
-        p.fillRect(self.rect(), QBrush(g))
-
-        for i in range(10):
-            px = int((0.5 + 0.5 * math.sin((self.seed + i) * 3.1)) * w)
-            py = int((0.5 + 0.5 * math.cos((self.seed + i) * 2.3)) * h)
-            r = int((0.12 + (i % 4) * 0.05) * min(w, h))
-            rg = QRadialGradient(px, py, r)
-            alpha = 16 + (i % 3) * 12
-            rg.setColorAt(0.0, QColor(255, 255, 255, alpha))
-            rg.setColorAt(1.0, QColor(255, 255, 255, 0))
-            p.setBrush(QBrush(rg))
-            p.setPen(Qt.PenStyle.NoPen)
-            p.drawEllipse(px - r, py - r, 2 * r, 2 * r)
-
-        p.setPen(QPen(QColor(255, 80, 80, 210), max(2, int(min(w, h) * 0.05))))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawLine(int(w * 0.18), int(h * 0.65), int(w * 0.82), int(h * 0.55))
-
-        p.setPen(QColor(255, 255, 255, 190))
-        p.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
-        p.drawText(10, 18, self.label)
-
-        p.setPen(QPen(QColor(43, 52, 59), 1))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 8, 8)
-        p.end()
-
-
-class TimelineTrack(QWidget):
-    frameChanged = Signal(int)
-
-    def __init__(self, total_frames: int, segments: List[Segment], parent=None):
-        super().__init__(parent)
-        self.total_frames = total_frames
-        self.segments = segments
-        self.frame = 0
-        self.setFixedHeight(20)
-        self.setCursor(Qt.CursorShape.CrossCursor)
-
-    def set_frame(self, f: int):
-        self.frame = clamp(f, 0, self.total_frames - 1)
-        self.update()
-
-    def mousePressEvent(self, ev):
-        if ev.button() != Qt.MouseButton.LeftButton:
-            return
-        x = clamp(ev.position().x(), 0, self.width())
-        f = int(round((x / max(1, self.width())) * (self.total_frames - 1)))
-        self.frameChanged.emit(f)
-
-    def paintEvent(self, ev):
-        w, h = self.width(), self.height()
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        p.setBrush(QColor(12, 15, 18))
-        p.setPen(QPen(QColor(43, 52, 59), 1))
-        p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 9, 9)
-
-        for s in self.segments:
-            left = int((s.a / self.total_frames) * w)
-            right = int((s.b / self.total_frames) * w)
-            seg_w = max(1, right - left)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(status_color(s.t))
-            p.drawRect(QRectF(left, 1, seg_w, h - 2))
-
-        xph = int((self.frame / max(1, self.total_frames - 1)) * w)
-        p.setPen(QPen(QColor(255, 80, 80, 240), 2))
-        p.drawLine(xph, -4, xph, h + 4)
-        p.end()
+from app_logic import ReviewState, default_layers
+from widgets import ThumbnailWidget, TimelineTrack, ViewerWidget
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.total_frames = 1200
-        self.fps = 30
-        self.layers = [
-            Layer("Layer 0: Master Video", [
-                Segment(0, 220, "ok"), Segment(220, 420, "warn"), Segment(420, 520, "ok"),
-                Segment(520, 560, "err"), Segment(560, 980, "warn"), Segment(980, 1200, "ok"),
-            ]),
-            Layer("Layer 1: Color Grade", [
-                Segment(0, 120, "ok"), Segment(120, 240, "warn"), Segment(240, 760, "ok"),
-                Segment(760, 820, "err"), Segment(820, 1200, "ok"),
-            ]),
-            Layer("Layer 2: Object Mask", [
-                Segment(0, 430, "ok"), Segment(430, 470, "err"), Segment(470, 900, "ok"),
-                Segment(900, 980, "warn"), Segment(980, 1200, "ok"),
-            ]),
-        ]
-        self.error_frames = self._compute_error_frames()
-        self.cur_frame = 0
-        self.playing = False
+        self.state = ReviewState(total_frames=1200, fps=30, layers=default_layers())
 
         self.timer = QTimer(self)
-        self.timer.setInterval(int(1000 / self.fps))
+        self.timer.setInterval(int(1000 / self.state.fps))
         self.timer.timeout.connect(self._tick)
 
         self.setWindowTitle("Frame Review UI (PySide6 mock)")
@@ -284,7 +88,7 @@ class MainWindow(QMainWindow):
         hl.addWidget(self.viewer_info)
         v.addWidget(header)
 
-        self.viewer = ViewerWidget(self.total_frames)
+        self.viewer = ViewerWidget(self.state.total_frames)
         v.addWidget(self.viewer, 1)
 
         footer = QWidget(objectName="PanelFooter")
@@ -300,8 +104,8 @@ class MainWindow(QMainWindow):
 
         btn_play.clicked.connect(self.play)
         btn_pause.clicked.connect(self.pause)
-        btn_back.clicked.connect(lambda: self.set_frame(self.cur_frame - 1))
-        btn_fwd.clicked.connect(lambda: self.set_frame(self.cur_frame + 1))
+        btn_back.clicked.connect(lambda: self.set_frame(self.state.cur_frame - 1))
+        btn_fwd.clicked.connect(lambda: self.set_frame(self.state.cur_frame + 1))
         btn_next.clicked.connect(self.next_error)
 
         fl.addWidget(btn_play)
@@ -369,14 +173,14 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(10)
 
-        for layer in self.layers:
+        for layer in self.state.layers:
             row = QWidget()
             rl = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(10)
             name = QLabel(layer.name, objectName="LayerName")
             name.setFixedWidth(160)
-            track = TimelineTrack(self.total_frames, layer.segments)
+            track = TimelineTrack(self.state.total_frames, layer.segments)
             track.frameChanged.connect(self.set_frame)
             self.track_widgets.append(track)
             rl.addWidget(name)
@@ -404,9 +208,12 @@ class MainWindow(QMainWindow):
         a = QLabel("Total frames", objectName="Muted")
         b = QLabel("Error frames", objectName="Muted")
         c = QLabel("Current frame", objectName="Muted")
-        grid.addWidget(a, 0, 0); grid.addWidget(self.stat_total, 0, 1)
-        grid.addWidget(b, 1, 0); grid.addWidget(self.stat_err, 1, 1)
-        grid.addWidget(c, 2, 0); grid.addWidget(self.stat_cur, 2, 1)
+        grid.addWidget(a, 0, 0)
+        grid.addWidget(self.stat_total, 0, 1)
+        grid.addWidget(b, 1, 0)
+        grid.addWidget(self.stat_err, 1, 1)
+        grid.addWidget(c, 2, 0)
+        grid.addWidget(self.stat_cur, 2, 1)
         v.addLayout(grid)
 
         nav = QWidget()
@@ -429,56 +236,46 @@ class MainWindow(QMainWindow):
         v.addStretch(1)
         return panel
 
-    def set_frame(self, f: int):
-        self.cur_frame = clamp(f, 0, self.total_frames - 1)
-        self.viewer.set_frame(self.cur_frame)
+    def set_frame(self, frame: int):
+        self.state.set_frame(frame)
+        self.viewer.set_frame(self.state.cur_frame)
         for tr in self.track_widgets:
-            tr.set_frame(self.cur_frame)
-        self.viewer_info.setText(f"Frame: {self.cur_frame}")
-        self.time_info.setText(f"Total frames: {self.total_frames} · Error frames: {len(self.error_frames)}")
-        self.stat_total.setText(str(self.total_frames))
-        self.stat_err.setText(str(len(self.error_frames)))
-        self.stat_cur.setText(str(self.cur_frame))
-        self.frame_big.setText(str(self.cur_frame))
+            tr.set_frame(self.state.cur_frame)
+        self.viewer_info.setText(f"Frame: {self.state.cur_frame}")
+        self.time_info.setText(
+            f"Total frames: {self.state.total_frames} · Error frames: {len(self.state.error_frames)}"
+        )
+        self.stat_total.setText(str(self.state.total_frames))
+        self.stat_err.setText(str(len(self.state.error_frames)))
+        self.stat_cur.setText(str(self.state.cur_frame))
+        self.frame_big.setText(str(self.state.cur_frame))
 
     def play(self):
-        if self.playing:
+        if self.state.playing:
             return
-        self.playing = True
+        self.state.playing = True
         self.timer.start()
 
     def pause(self):
-        self.playing = False
+        self.state.playing = False
         self.timer.stop()
 
     def _tick(self):
-        if not self.playing:
+        advanced = self.state.advance_if_playing()
+        if not advanced and not self.state.playing:
+            self.timer.stop()
             return
-        if self.cur_frame >= self.total_frames - 1:
-            self.pause()
-            return
-        self.set_frame(self.cur_frame + 1)
+        self.set_frame(self.state.cur_frame)
 
     def next_error(self):
-        for f in self.error_frames:
-            if f > self.cur_frame:
-                self.set_frame(f)
-                return
+        updated = self.state.next_error_frame()
+        if updated is not None:
+            self.set_frame(updated)
 
     def prev_error(self):
-        for f in reversed(self.error_frames):
-            if f < self.cur_frame:
-                self.set_frame(f)
-                return
-
-    def _compute_error_frames(self):
-        s = set()
-        for L in self.layers:
-            for seg in L.segments:
-                if seg.t == "err":
-                    for f in range(seg.a, seg.b):
-                        s.add(f)
-        return sorted(s)
+        updated = self.state.prev_error_frame()
+        if updated is not None:
+            self.set_frame(updated)
 
     def _qss(self):
         return """
