@@ -19,6 +19,7 @@ from pathlib import Path
 from app.frame_store import FrameStore
 from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
+from ui.widgets.beat_marker import BeatMarkerWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
 from ui.preferences import load_preferences, save_preferences
@@ -415,8 +416,25 @@ class MainWindow(QMainWindow):
         self.frame_big.setObjectName("FrameBig")
         v.addWidget(self.frame_big)
 
+        beat_label = QLabel("MUSICAL BEATS (1-8)")
+        beat_label.setObjectName("SectionTitle")
+        v.addWidget(beat_label)
+
+        self.beat_marker = BeatMarkerWidget(beats=8)
+        self.beat_info = QLabel("Pulso activo: ninguno")
+        self.beat_info.setObjectName("Muted")
+        self.beat_marker.beatChanged.connect(self._on_beat_changed)
+        v.addWidget(self.beat_marker)
+        v.addWidget(self.beat_info)
+
         v.addStretch(1)
         return panel
+
+    def _on_beat_changed(self, beat: int | None):
+        if beat is None:
+            self.beat_info.setText("Pulso activo: ninguno")
+            return
+        self.beat_info.setText(f"Pulso activo: {beat}")
 
     def on_frames_loaded(self, total_frames: int):
         self.pause()
