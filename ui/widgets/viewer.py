@@ -12,9 +12,17 @@ from ui.frames_mock import draw_viewer_frame
 class ViewerWidget(QWidget):
     frameFolderLoaded = Signal(int, str)
 
-    def __init__(self, total_frames: int, cache_radius: int = 25, parent=None):
+    def __init__(
+        self,
+        total_frames: int,
+        cache_radius: int = 25,
+        frame_cache_radius: int | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.total_frames = total_frames
+        if frame_cache_radius is not None:
+            cache_radius = frame_cache_radius
         self.cache_radius = max(0, cache_radius)
         self.frame = 0
         self.frame_paths: list[Path] = []
