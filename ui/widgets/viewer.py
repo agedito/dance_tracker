@@ -2,7 +2,7 @@ import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QPushButton, QSizePolicy, QWidget
 
 from app.frame_store import FrameStore
 from ui.frames_mock import draw_viewer_frame
@@ -29,14 +29,59 @@ class ViewerWidget(QWidget):
         self._dragging_menu = False
         self._last_drag_angle = 0.0
 
+        self.overlay_icon_buttons: list[QPushButton] = []
+        self._create_overlay_icons()
+
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
         self.frame = clamp(self.frame, 0, self.total_frames - 1)
+        self._layout_overlay_icons()
         self.update()
 
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
+        self._layout_overlay_icons()
         self.update()
+
+    def _create_overlay_icons(self):
+        for idx in range(8):
+            icon = QPushButton(f"{idx + 1}", self)
+            icon.setObjectName("VideoToggleIcon")
+            icon.setCheckable(True)
+            icon.setChecked(True)
+            icon.setCursor(Qt.CursorShape.PointingHandCursor)
+            icon.raise_()
+            self.overlay_icon_buttons.append(icon)
+        self._layout_overlay_icons()
+
+    def _layout_overlay_icons(self):
+        if not self.overlay_icon_buttons:
+            return
+
+        video_rect = self._video_rect()
+        icon_size = 28
+        default_gap = 6
+        horizontal_padding = 12
+        available_width = max(0, int(video_rect.width()) - (2 * horizontal_padding))
+        total_icons_width = len(self.overlay_icon_buttons) * icon_size
+        if len(self.overlay_icon_buttons) > 1:
+            max_gap = (available_width - total_icons_width) // (len(self.overlay_icon_buttons) - 1)
+            gap = max(2, min(default_gap, max_gap))
+        else:
+            gap = default_gap
+
+        left = int(video_rect.left()) + horizontal_padding
+        top = int(video_rect.top()) + 12
+
+        for idx, icon in enumerate(self.overlay_icon_buttons):
+            x = left + idx * (icon_size + gap)
+            y = top
+            icon.setGeometry(x, y, icon_size, icon_size)
+            icon.raise_()
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._layout_overlay_icons()
 
     @staticmethod
     def _angle_from_center(pos: QPointF, center: QPointF) -> float:
@@ -159,6 +204,8 @@ class ViewerWidget(QWidget):
             painter.drawPixmap(x, y, scaled)
             self._draw_radial_menu(painter, video_rect)
             painter.end()
+            for button in self.overlay_icon_buttons:
+                button.raise_()
             return
 
         draw_viewer_frame(self, self.frame, self.total_frames)
@@ -166,6 +213,8 @@ class ViewerWidget(QWidget):
         painter = QPainter(self)
         self._draw_radial_menu(painter, video_rect)
         painter.end()
+        for button in self.overlay_icon_buttons:
+            button.raise_()
 
     def _draw_radial_menu(self, painter: QPainter, video_rect: QRectF):
         center = self._menu_center(video_rect)

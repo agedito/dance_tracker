@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
         self.frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
         self.viewer = ViewerWidget(self.state.total_frames, frame_store=self.frame_store)
         self.viewer.folderLoaded.connect(self._on_folder_loaded)
-        block, v = self.create_horizontal_layout("Viewer", self._viewer_header_actions())
+        block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
         v.addWidget(self.viewer, 1)
 
@@ -252,43 +252,6 @@ class MainWindow(QMainWindow):
 
         v.addWidget(footer)
         return block
-
-    def _viewer_header_actions(self):
-        actions = QWidget()
-        actions.setObjectName("ViewerHeaderActions")
-        layout = QHBoxLayout(actions)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        layout.addWidget(self._video_icon_strip())
-        layout.addWidget(self.viewer_info)
-        return actions
-
-    def _video_icon_strip(self):
-        bar = QWidget()
-        bar.setObjectName("VideoIconStrip")
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(10, 8, 10, 8)
-        layout.setSpacing(8)
-
-        self.video_icon_buttons: list[QPushButton] = []
-        for idx in range(8):
-            icon = QPushButton(f"{idx + 1}")
-            icon.setObjectName("VideoToggleIcon")
-            icon.setCheckable(True)
-            icon.setChecked(True)
-            icon.setCursor(Qt.CursorShape.PointingHandCursor)
-            icon.clicked.connect(lambda _checked=False, button=icon: self._refresh_video_icon(button))
-            self.video_icon_buttons.append(icon)
-            layout.addWidget(icon)
-
-        layout.addStretch(1)
-        return bar
-
-    @staticmethod
-    def _refresh_video_icon(button: QPushButton):
-        button.style().unpolish(button)
-        button.style().polish(button)
-        button.update()
 
     def _right_panel(self):
         panel = QFrame()
@@ -492,13 +455,6 @@ class MainWindow(QMainWindow):
             background: #14181C; border-top: 1px solid #2B343B;
             border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
         }
-        QWidget#ViewerHeaderActions { background: transparent; }
-        QWidget#VideoIconStrip {
-            background: #101418;
-            border: 1px solid #2B343B;
-            border-radius: 8px;
-        }
-
         QLabel#Muted { color: #A7B3BD; }
         QLabel#SectionTitle { color: #A7B3BD; font-weight: 700; letter-spacing: 0.3px; }
         QLabel#LayerName { color: #A7B3BD; }
