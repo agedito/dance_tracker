@@ -1,8 +1,5 @@
-import sys
-
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
-    QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -14,22 +11,22 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app_logic import ReviewState, default_layers
-from widgets.thumbnail import ThumbnailWidget
-from widgets.timeline import TimelineTrack
-from widgets.viewer import ViewerWidget
+from app.logic import ReviewState
+from ui.widgets.thumbnail import ThumbnailWidget
+from ui.widgets.timeline import TimelineTrack
+from ui.widgets.viewer import ViewerWidget
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, title: str, state: ReviewState):
         super().__init__()
-        self.state = ReviewState(total_frames=1200, fps=30, layers=default_layers())
+        self.state = state
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(1000 / self.state.fps))
         self.timer.timeout.connect(self._tick)
 
-        self.setWindowTitle("Frame Review UI (PySide6 mock)")
+        self.setWindowTitle(title)
         self.resize(1200, 780)
 
         root = QWidget()
@@ -64,41 +61,56 @@ class MainWindow(QMainWindow):
 
         self.set_frame(0)
 
-    def _topbar(self):
-        w = QWidget(objectName="TopBar")
+    @staticmethod
+    def _topbar():
+        w = QWidget()
+        w.setObjectName("TopBar")
         l = QHBoxLayout(w)
         l.setContentsMargins(12, 10, 12, 10)
-        title = QLabel("MAIN VIEWER", objectName="TopTitle")
-        hint = QLabel("Mock UI · Frames fijos · Click en timelines", objectName="TopHint")
+        title = QLabel("MAIN VIEWER")
+        title.setObjectName("TopTitle")
+        hint = QLabel("Mock UI · Fixed frames· Click en timelines")
+        hint.setObjectName("TopHint")
         l.addWidget(title)
         l.addStretch(1)
         l.addWidget(hint)
         return w
 
-    def _viewer_block(self):
-        block = QFrame(objectName="Panel")
+    @staticmethod
+    def create_horizontal_layout(label: str, h_widgets: QWidget):
+        block = QFrame()
+        block.setObjectName("Panel")
         v = QVBoxLayout(block)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        header = QWidget(objectName="PanelHeader")
+        header = QWidget()
+        header.setObjectName("PanelHeader")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(10, 8, 10, 8)
-        hl.addWidget(QLabel("Viewer"))
+        hl.addWidget(QLabel(label))
         hl.addStretch(1)
-        self.viewer_info = QLabel("Frame: 0", objectName="Muted")
-        hl.addWidget(self.viewer_info)
+        hl.addWidget(h_widgets)
         v.addWidget(header)
 
+        return block, v
+
+    def _viewer_block(self):
+        self.viewer_info = QLabel("Frame: 0")
+        self.viewer_info.setObjectName("Muted")
         self.viewer = ViewerWidget(self.state.total_frames)
+        block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
+
         v.addWidget(self.viewer, 1)
 
-        footer = QWidget(objectName="PanelFooter")
+        footer = QWidget()
+        footer.setObjectName("PanelFooter")
         fl = QHBoxLayout(footer)
         fl.setContentsMargins(10, 10, 10, 10)
         fl.setSpacing(8)
 
-        btn_play = QPushButton("PLAY", objectName="PrimaryButton")
+        btn_play = QPushButton("PLAY")
+        btn_play.setObjectName("PrimaryButton")
         btn_pause = QPushButton("PAUSE")
         btn_back = QPushButton("STEP BACK")
         btn_fwd = QPushButton("STEP FORWARD")
@@ -121,19 +133,24 @@ class MainWindow(QMainWindow):
         return block
 
     def _right_panel(self):
-        panel = QFrame(objectName="Panel")
+        panel = QFrame()
+        panel.setObjectName("Panel")
         v = QVBoxLayout(panel)
         v.setContentsMargins(10, 10, 10, 10)
         v.setSpacing(10)
 
-        v.addWidget(QLabel("LAYER VIEWERS", objectName="SectionTitle"))
+        label = QLabel("LAYER VIEWERS")
+        label.setObjectName("SectionTitle")
+        v.addWidget(label)
         grid = QGridLayout()
         grid.setSpacing(8)
         grid.addWidget(self._thumb("Layer 1: Color Grade", 10), 0, 0)
         grid.addWidget(self._thumb("Layer 1: Output", 17), 0, 1)
         v.addLayout(grid)
 
-        v.addWidget(QLabel("LAYER 2: OBJECT MASK", objectName="SectionTitle"))
+        label = QLabel("LAYER 2: OBJECT MASK")
+        label.setObjectName("SectionTitle")
+        v.addWidget(label)
         grid2 = QGridLayout()
         grid2.setSpacing(8)
         grid2.addWidget(self._thumb("Layer 2: Mask", 24), 0, 0)
@@ -141,32 +158,27 @@ class MainWindow(QMainWindow):
         v.addLayout(grid2)
 
         v.addStretch(1)
-        v.addWidget(QLabel("Mock: thumbnails procedurales.", objectName="FooterNote"))
+        label = QLabel("Mock: thumbnails procedural.")
+        label.setObjectName("FooterNote")
+        v.addWidget(label)
         return panel
 
-    def _thumb(self, label: str, seed: int):
-        f = QFrame(objectName="ThumbFrame")
+    @staticmethod
+    def _thumb(label: str, seed: int):
+        f = QFrame()
+        f.setObjectName("ThumbFrame")
         l = QVBoxLayout(f)
         l.setContentsMargins(0, 0, 0, 0)
         l.addWidget(ThumbnailWidget(label, seed))
         return f
 
     def _timeline_panel(self):
-        panel = QFrame(objectName="Panel")
-        v = QVBoxLayout(panel)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
+        self.time_info = QLabel("")
+        self.time_info.setObjectName("Muted")
+        panel, v = self.create_horizontal_layout("MASTER TIMELINE", self.time_info)
 
-        header = QWidget(objectName="PanelHeader")
-        hl = QHBoxLayout(header)
-        hl.setContentsMargins(10, 8, 10, 8)
-        hl.addWidget(QLabel("MASTER TIMELINE"))
-        hl.addStretch(1)
-        self.time_info = QLabel("", objectName="Muted")
-        hl.addWidget(self.time_info)
-        v.addWidget(header)
-
-        scroll = QScrollArea(objectName="ScrollArea")
+        scroll = QScrollArea()
+        scroll.setObjectName("ScrollArea")
         scroll.setWidgetResizable(True)
         content = QWidget()
         self.track_widgets = []
@@ -180,7 +192,8 @@ class MainWindow(QMainWindow):
             rl = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(10)
-            name = QLabel(layer.name, objectName="LayerName")
+            name = QLabel(layer.name)
+            name.setObjectName("LayerName")
             name.setFixedWidth(160)
             track = TimelineTrack(self.state.total_frames, layer.segments)
             track.frameChanged.connect(self.set_frame)
@@ -195,21 +208,30 @@ class MainWindow(QMainWindow):
         return panel
 
     def _status_panel(self):
-        panel = QFrame(objectName="Panel")
+        panel = QFrame()
+        panel.setObjectName("Panel")
         v = QVBoxLayout(panel)
         v.setContentsMargins(10, 10, 10, 10)
         v.setSpacing(12)
 
-        v.addWidget(QLabel("STATUS BAR", objectName="SectionTitle"))
-        self.stat_total = QLabel("-", objectName="BoldValue")
-        self.stat_err = QLabel("-", objectName="BoldValue")
-        self.stat_cur = QLabel("-", objectName="BoldValue")
+        label = QLabel("STATUS BAR")
+        label.setObjectName("SectionTitle")
+        v.addWidget(label)
+        self.stat_total = QLabel("-")
+        self.stat_total.setObjectName("BoldValue")
+        self.stat_err = QLabel("-")
+        self.stat_err.setObjectName("BoldValue")
+        self.stat_cur = QLabel("-")
+        self.stat_cur.setObjectName("BoldValue")
 
         grid = QGridLayout()
         grid.setSpacing(6)
-        a = QLabel("Total frames", objectName="Muted")
-        b = QLabel("Error frames", objectName="Muted")
-        c = QLabel("Current frame", objectName="Muted")
+        a = QLabel("Total frames")
+        a.setObjectName("Muted")
+        b = QLabel("Error frames")
+        b.setObjectName("Muted")
+        c = QLabel("Current frame")
+        c.setObjectName("Muted")
         grid.addWidget(a, 0, 0)
         grid.addWidget(self.stat_total, 0, 1)
         grid.addWidget(b, 1, 0)
@@ -228,11 +250,15 @@ class MainWindow(QMainWindow):
         next_btn.clicked.connect(self.next_error)
         nl.addWidget(prev_btn)
         nl.addWidget(next_btn)
-        v.addWidget(QLabel("FRAME NAVIGATOR", objectName="SectionTitle"))
+        label = QLabel("FRAME NAVIGATOR")
+        label.setObjectName("SectionTitle")
+        v.addWidget(label)
         v.addWidget(nav)
-
-        v.addWidget(QLabel("FRAME", objectName="Muted"))
-        self.frame_big = QLabel("0", objectName="FrameBig")
+        label = QLabel("FRAME")
+        label.setObjectName("Muted")
+        v.addWidget(label)
+        self.frame_big = QLabel("0")
+        self.frame_big.setObjectName("FrameBig")
         v.addWidget(self.frame_big)
 
         v.addStretch(1)
@@ -279,7 +305,8 @@ class MainWindow(QMainWindow):
         if updated is not None:
             self.set_frame(updated)
 
-    def _qss(self):
+    @staticmethod
+    def _qss():
         return """
         QWidget { background: #121416; color: #E7EDF2; font-family: Segoe UI, Arial; font-size: 12px; }
         #TopBar { background: #0F1113; border: 1px solid #2B343B; border-radius: 10px; }
@@ -315,14 +342,3 @@ class MainWindow(QMainWindow):
 
         QFrame#ThumbFrame { background: #0C0F12; border: 1px solid #2B343B; border-radius: 10px; }
         """
-
-
-def main():
-    app = QApplication(sys.argv)
-    w = MainWindow()
-    w.show()
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

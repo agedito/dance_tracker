@@ -2,7 +2,8 @@ from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
-from app_logic import Segment, clamp
+from app.layers import Segment
+from utils.numbers import clamp
 
 
 def status_color(t: str) -> QColor:
