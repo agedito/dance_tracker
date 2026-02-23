@@ -21,6 +21,7 @@ from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
+from ui.widgets.log_widget import LogWidget
 from ui.preferences import load_preferences, save_preferences
 
 
@@ -415,11 +416,19 @@ class MainWindow(QMainWindow):
         self.frame_big.setObjectName("FrameBig")
         v.addWidget(self.frame_big)
 
+        log_title = QLabel("LOGS")
+        log_title.setObjectName("SectionTitle")
+        v.addWidget(log_title)
+
+        self.log_widget = LogWidget(display_ms=3000, history_limit=8)
+        v.addWidget(self.log_widget)
+
         v.addStretch(1)
         return panel
 
     def on_frames_loaded(self, total_frames: int):
         self.pause()
+        self.loguear(f"Frames cargados: {total_frames}")
         self.viewer.set_proxy_frames_enabled(False)
         self.state.set_total_frames(total_frames)
         self.viewer.set_total_frames(total_frames)
@@ -446,10 +455,12 @@ class MainWindow(QMainWindow):
             return
         self.state.playing = True
         self.timer.start()
+        self.loguear("Reproducción iniciada")
 
     def pause(self):
         self.state.playing = False
         self.timer.stop()
+        self.loguear("Reproducción pausada")
 
     def _tick(self):
         advanced = self.state.advance_if_playing()
@@ -467,6 +478,9 @@ class MainWindow(QMainWindow):
         updated = self.state.prev_error_frame()
         if updated is not None:
             self.set_frame(updated)
+
+    def loguear(self, texto: str):
+        self.log_widget.loguear(texto)
 
     @staticmethod
     def _qss():
@@ -505,6 +519,32 @@ class MainWindow(QMainWindow):
             border-radius: 14px;
             padding: 0px;
             font-size: 14px;
+        }
+
+        QListWidget#LogHistoryList {
+            background: #14181C;
+            border: 1px solid #2B343B;
+            border-radius: 8px;
+            padding: 4px;
+        }
+        QLabel#LogCurrent { color: #CDE3F8; }
+        QFrame#LogWidget {
+            background: #11161A;
+            border: 1px solid #2B343B;
+            border-radius: 8px;
+            padding: 6px;
+        }
+        QToolButton#LogHistoryButton {
+            background: #2A3238;
+            border: 1px solid #2B343B;
+            border-radius: 12px;
+            min-width: 24px;
+            max-width: 24px;
+            min-height: 24px;
+            max-height: 24px;
+        }
+        QToolButton#LogHistoryButton:checked {
+            background: #344049;
         }
 
         QScrollArea#ScrollArea { border: none; background: transparent; }
