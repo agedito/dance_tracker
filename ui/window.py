@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         l.setContentsMargins(12, 10, 12, 10)
         title = QLabel("MAIN VIEWER")
         title.setObjectName("TopTitle")
-        hint = QLabel("Arrastra una carpeta al viewer para cargar frames")
+        hint = QLabel("Arrastra una carpeta o video al viewer para cargar frames")
         hint.setObjectName("TopHint")
         l.addWidget(title)
         self.recent_folders_bar = QWidget()

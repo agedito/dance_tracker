@@ -7,6 +7,7 @@ from PySide6.QtGui import QPixmap
 
 class FrameStore:
     VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+    VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
     def __init__(self, cache_radius: int):
         self.cache_radius = cache_radius
@@ -32,6 +33,55 @@ class FrameStore:
         self._frame_files = files
         self._cache.clear()
         return len(files)
+
+    def extract_video_frames(self, video_path: str) -> tuple[str | None, int]:
+        try:
+            import cv2
+        except ModuleNotFoundError:
+            return None, 0
+
+        source = Path(video_path)
+        if not source.exists() or not source.is_file() or source.suffix.lower() not in self.VIDEO_SUFFIXES:
+            return None, 0
+
+        frames_dir = source.parent / "frames"
+        frames_mino_dir = source.parent / "frames_mino"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        frames_mino_dir.mkdir(parents=True, exist_ok=True)
+        for output_dir in (frames_dir, frames_mino_dir):
+            for item in output_dir.iterdir():
+                if item.is_file() and item.suffix.lower() in self.VALID_SUFFIXES:
+                    item.unlink()
+
+        capture = cv2.VideoCapture(str(source))
+        if not capture.isOpened():
+            return None, 0
+
+        frame_idx = 0
+        while True:
+            ok, frame = capture.read()
+            if not ok:
+                break
+
+            out_name = f"frame_{frame_idx:06d}.jpg"
+            cv2.imwrite(str(frames_dir / out_name), frame)
+
+            h, w = frame.shape[:2]
+            max_dim = max(w, h)
+            scale = 1.0 if max_dim <= 320 else 320.0 / max_dim
+            scaled_w = max(1, int(round(w * scale)))
+            scaled_h = max(1, int(round(h * scale)))
+            resized = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
+            cv2.imwrite(str(frames_mino_dir / out_name), resized)
+
+            frame_idx += 1
+
+        capture.release()
+
+        if frame_idx == 0:
+            return None, 0
+
+        return str(frames_dir), frame_idx
 
     @staticmethod
     def _natural_sort_key(path: Path):
