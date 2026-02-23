@@ -220,9 +220,8 @@ class MainWindow(QMainWindow):
         self.frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
         self.viewer = ViewerWidget(self.state.total_frames, frame_store=self.frame_store)
         self.viewer.folderLoaded.connect(self._on_folder_loaded)
-        block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
+        block, v = self.create_horizontal_layout("Viewer", self._viewer_header_actions())
 
-        v.addWidget(self._video_icon_strip())
         v.addWidget(self.viewer, 1)
 
         footer = QWidget()
@@ -253,6 +252,16 @@ class MainWindow(QMainWindow):
 
         v.addWidget(footer)
         return block
+
+    def _viewer_header_actions(self):
+        actions = QWidget()
+        actions.setObjectName("ViewerHeaderActions")
+        layout = QHBoxLayout(actions)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        layout.addWidget(self._video_icon_strip())
+        layout.addWidget(self.viewer_info)
+        return actions
 
     def _video_icon_strip(self):
         bar = QWidget()
@@ -483,10 +492,11 @@ class MainWindow(QMainWindow):
             background: #14181C; border-top: 1px solid #2B343B;
             border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
         }
+        QWidget#ViewerHeaderActions { background: transparent; }
         QWidget#VideoIconStrip {
-            background: #14181C;
-            border-top: 1px solid #2B343B;
-            border-bottom: 1px solid #2B343B;
+            background: #101418;
+            border: 1px solid #2B343B;
+            border-radius: 8px;
         }
 
         QLabel#Muted { color: #A7B3BD; }
