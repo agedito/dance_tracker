@@ -56,7 +56,7 @@ class ViewerWidget(QWidget):
         return QRectF(x, y, scaled.width(), scaled.height())
 
     def _menu_center(self, video_rect: QRectF) -> QPointF:
-        return QPointF(video_rect.right() - 32, video_rect.bottom() - 32)
+        return QPointF(video_rect.right() - 38, video_rect.bottom() - 38)
 
     def _menu_item_centers(self, center: QPointF):
         radius = 102.0
@@ -99,7 +99,7 @@ class ViewerWidget(QWidget):
         center = self._menu_center(video_rect)
         click_pos = QPointF(ev.position())
 
-        if self._point_in_circle(click_pos, center, 22):
+        if self._point_in_circle(click_pos, center, 28):
             self.menu_expanded = not self.menu_expanded
             self._dragging_menu = False
             self.update()
@@ -107,14 +107,14 @@ class ViewerWidget(QWidget):
 
         if self.menu_expanded:
             ring_distance = math.hypot(click_pos.x() - center.x(), click_pos.y() - center.y())
-            if 70 <= ring_distance <= 130:
+            if 72 <= ring_distance <= 144:
                 self._dragging_menu = True
                 self._last_drag_angle = self._angle_from_center(click_pos, center)
                 ev.accept()
                 return
 
             for index, icon_center in enumerate(self._menu_item_centers(center)):
-                if self._point_in_circle(click_pos, icon_center, 16) and video_rect.contains(icon_center):
+                if self._point_in_circle(click_pos, icon_center, 20) and video_rect.contains(icon_center):
                     self.selected_icon = index
                     self.update()
                     ev.accept()
@@ -183,10 +183,10 @@ class ViewerWidget(QWidget):
                 border = QColor(157, 210, 255, 240) if is_selected else QColor(120, 160, 190, 180)
                 painter.setPen(QPen(border, 1.5))
                 painter.setBrush(bg)
-                painter.drawEllipse(icon_center, 16, 16)
+                painter.drawEllipse(icon_center, 20, 20)
 
                 painter.setPen(QColor(239, 246, 255))
-                text_rect = QRectF(icon_center.x() - 8, icon_center.y() - 8, 16, 16)
+                text_rect = QRectF(icon_center.x() - 10, icon_center.y() - 10, 20, 20)
                 painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, symbols[index])
 
             painter.restore()
@@ -195,10 +195,10 @@ class ViewerWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(QPen(QColor(170, 220, 255), 1.5))
         painter.setBrush(QColor(35, 52, 71, 225))
-        painter.drawEllipse(center, 22, 22)
+        painter.drawEllipse(center, 28, 28)
         painter.setPen(QColor(234, 247, 255))
         painter.drawText(
-            QRectF(center.x() - 12, center.y() - 12, 24, 24),
+            QRectF(center.x() - 15, center.y() - 15, 30, 30),
             Qt.AlignmentFlag.AlignCenter,
             "☰" if not self.menu_expanded else "×",
         )
