@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
 )
 
 from app_logic import ReviewState, default_layers
-from widgets import ThumbnailWidget, TimelineTrack, ViewerWidget
+from widgets.thumbnail import ThumbnailWidget
+from widgets.timeline import TimelineTrack
+from widgets.viewer import ViewerWidget
 
 
 class MainWindow(QMainWindow):
