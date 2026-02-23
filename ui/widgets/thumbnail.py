@@ -1,5 +1,4 @@
-from PySide6.QtCore import QPoint, Qt
-from PySide6.QtCore import QMimeData
+from PySide6.QtCore import QPoint, QMimeData, Qt
 from PySide6.QtGui import QDrag, QMouseEvent
 from PySide6.QtWidgets import QWidget, QSizePolicy
 
@@ -35,6 +34,7 @@ class ThumbnailWidget(QWidget):
         mime_data = QMimeData()
         mime_data.setData(self.MIME_TYPE, f"{self.label}|{self.seed}".encode("utf-8"))
         drag.setMimeData(mime_data)
+        drag.setPixmap(self.grab())
         drag.setHotSpot(ev.position().toPoint())
         drag.exec(Qt.DropAction.CopyAction)
 
