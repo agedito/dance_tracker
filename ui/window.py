@@ -222,6 +222,7 @@ class MainWindow(QMainWindow):
         self.viewer.folderLoaded.connect(self._on_folder_loaded)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
+        v.addWidget(self._video_icon_strip())
         v.addWidget(self.viewer, 1)
 
         footer = QWidget()
@@ -252,6 +253,33 @@ class MainWindow(QMainWindow):
 
         v.addWidget(footer)
         return block
+
+    def _video_icon_strip(self):
+        bar = QWidget()
+        bar.setObjectName("VideoIconStrip")
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
+
+        self.video_icon_buttons: list[QPushButton] = []
+        for idx in range(8):
+            icon = QPushButton(f"{idx + 1}")
+            icon.setObjectName("VideoToggleIcon")
+            icon.setCheckable(True)
+            icon.setChecked(True)
+            icon.setCursor(Qt.CursorShape.PointingHandCursor)
+            icon.clicked.connect(lambda _checked=False, button=icon: self._refresh_video_icon(button))
+            self.video_icon_buttons.append(icon)
+            layout.addWidget(icon)
+
+        layout.addStretch(1)
+        return bar
+
+    @staticmethod
+    def _refresh_video_icon(button: QPushButton):
+        button.style().unpolish(button)
+        button.style().polish(button)
+        button.update()
 
     def _right_panel(self):
         panel = QFrame()
@@ -455,6 +483,11 @@ class MainWindow(QMainWindow):
             background: #14181C; border-top: 1px solid #2B343B;
             border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
         }
+        QWidget#VideoIconStrip {
+            background: #14181C;
+            border-top: 1px solid #2B343B;
+            border-bottom: 1px solid #2B343B;
+        }
 
         QLabel#Muted { color: #A7B3BD; }
         QLabel#SectionTitle { color: #A7B3BD; font-weight: 700; letter-spacing: 0.3px; }
@@ -475,6 +508,26 @@ class MainWindow(QMainWindow):
             border-radius: 14px;
             padding: 0px;
             font-size: 14px;
+        }
+        QPushButton#VideoToggleIcon {
+            min-width: 30px; max-width: 30px;
+            min-height: 30px; max-height: 30px;
+            border-radius: 15px;
+            font-weight: 700;
+            padding: 0px;
+            background: #2C4F36;
+            border: 1px solid #427B54;
+            color: #D9F3DF;
+        }
+        QPushButton#VideoToggleIcon:checked {
+            background: #2C4F36;
+            border: 1px solid #427B54;
+            color: #D9F3DF;
+        }
+        QPushButton#VideoToggleIcon:!checked {
+            background: #4A2A2A;
+            border: 1px solid #7B4242;
+            color: #F3D9D9;
         }
 
         QScrollArea#ScrollArea { border: none; background: transparent; }
