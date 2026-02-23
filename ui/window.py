@@ -1,4 +1,5 @@
 from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QAction
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QFrame,
@@ -7,6 +8,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QMenu,
     QScrollArea,
     QSplitter,
     QVBoxLayout,
@@ -177,6 +179,12 @@ class MainWindow(QMainWindow):
         self._register_recent_folder(folder_path)
         self.on_frames_loaded(frame_count)
 
+    def _remove_recent_folder(self, folder_path: str):
+        folders = [path for path in self._recent_folders() if path != folder_path]
+        self._preferences["recent_folders"] = folders[: self.MAX_RECENT_FOLDERS]
+        save_preferences(self._preferences)
+        self._render_recent_folder_icons()
+
     def _render_recent_folder_icons(self):
         if not hasattr(self, "recent_folders_layout"):
             return
@@ -188,12 +196,31 @@ class MainWindow(QMainWindow):
                 widget.deleteLater()
 
         for folder in self._recent_folders():
-            button = QPushButton("📁")
+            folder_name = Path(folder).name or Path(folder).anchor or folder
+            button = QPushButton(folder_name)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setObjectName("RecentFolderIcon")
             button.setToolTip(folder)
             button.clicked.connect(lambda _checked=False, path=folder: self._load_recent_folder(path))
+
+            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            button.customContextMenuRequested.connect(
+                lambda pos, path=folder, current_button=button: self._show_recent_folder_menu(
+                    path,
+                    current_button.mapToGlobal(pos),
+                )
+            )
+
             self.recent_folders_layout.addWidget(button)
+
+    def _show_recent_folder_menu(self, folder_path: str, global_pos):
+        menu = QMenu(self)
+        remove_action = QAction("Eliminar carpeta", self)
+        remove_action.triggered.connect(
+            lambda _checked=False, path=folder_path: self._remove_recent_folder(path)
+        )
+        menu.addAction(remove_action)
+        menu.exec(global_pos)
 
     @staticmethod
     def create_horizontal_layout(label: str, h_widgets: QWidget):
