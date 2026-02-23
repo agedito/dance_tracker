@@ -84,11 +84,21 @@ class ViewerWidget(QWidget):
         for url in ev.mimeData().urls():
             if not url.isLocalFile():
                 continue
-            folder_path = url.toLocalFile()
-            frame_count = self.frame_store.load_folder(folder_path)
+            dropped_path = url.toLocalFile()
+
+            frames_folder, extracted_count = self.frame_store.extract_video_frames(dropped_path)
+            if extracted_count > 0 and frames_folder is not None:
+                loaded_count = self.frame_store.load_folder(frames_folder)
+                if loaded_count > 0:
+                    self.framesLoaded.emit(loaded_count)
+                    self.folderLoaded.emit(frames_folder, loaded_count)
+                    ev.acceptProposedAction()
+                    return
+
+            frame_count = self.frame_store.load_folder(dropped_path)
             if frame_count > 0:
                 self.framesLoaded.emit(frame_count)
-                self.folderLoaded.emit(folder_path, frame_count)
+                self.folderLoaded.emit(dropped_path, frame_count)
                 ev.acceptProposedAction()
                 return
         ev.ignore()
