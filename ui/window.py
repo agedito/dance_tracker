@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         l.setContentsMargins(12, 10, 12, 10)
         title = QLabel("MAIN VIEWER")
         title.setObjectName("TopTitle")
-        hint = QLabel("Mock UI · Fixed frames· Click en timelines")
+        hint = QLabel("Mock UI · Click timelines · Drag thumbnails to Viewer")
         hint.setObjectName("TopHint")
         l.addWidget(title)
         l.addStretch(1)
@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         self.viewer_info = QLabel("Frame: 0")
         self.viewer_info.setObjectName("Muted")
         self.viewer = ViewerWidget(self.state.total_frames)
+        self.viewer.layerDropped.connect(self._on_viewer_layer_dropped)
         block, v = self.create_horizontal_layout("Viewer", self.viewer_info)
 
         v.addWidget(self.viewer, 1)
@@ -269,7 +270,7 @@ class MainWindow(QMainWindow):
         self.viewer.set_frame(self.state.cur_frame)
         for tr in self.track_widgets:
             tr.set_frame(self.state.cur_frame)
-        self.viewer_info.setText(f"Frame: {self.state.cur_frame}")
+        self.viewer_info.setText(f"Frame: {self.state.cur_frame} · Layer: {self.viewer.layer_label}")
         self.time_info.setText(
             f"Total frames: {self.state.total_frames} · Error frames: {len(self.state.error_frames)}"
         )
@@ -277,6 +278,10 @@ class MainWindow(QMainWindow):
         self.stat_err.setText(str(len(self.state.error_frames)))
         self.stat_cur.setText(str(self.state.cur_frame))
         self.frame_big.setText(str(self.state.cur_frame))
+
+    def _on_viewer_layer_dropped(self, label: str, seed: int):
+        self.viewer.set_layer_preview(label, seed)
+        self.viewer_info.setText(f"Frame: {self.state.cur_frame} · Layer: {label}")
 
     def play(self):
         if self.state.playing:

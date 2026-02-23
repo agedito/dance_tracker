@@ -49,7 +49,7 @@ def draw_thumbnail_frame(widget: QWidget, seed: int, label: str):
     p.end()
 
 
-def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int):
+def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int, layer_label: str, layer_seed: int):
     import math
     w, h = widget.width(), widget.height()
     t = frame / max(1, (total_frames - 1))
@@ -59,13 +59,19 @@ def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int):
     p.fillRect(widget.rect(), QColor(12, 14, 16))
 
     g = QLinearGradient(0, 0, w, h)
-    g.setColorAt(0.0, QColor(20, 45, 25, 240))
-    g.setColorAt(1.0, QColor(80, 70, 20, 180))
+    g.setColorAt(
+        0.0,
+        QColor(20 + (layer_seed % 70), 30 + (layer_seed % 40), 25 + (layer_seed % 50), 240),
+    )
+    g.setColorAt(
+        1.0,
+        QColor(70 + (layer_seed % 90), 55 + (layer_seed % 80), 20 + (layer_seed % 45), 180),
+    )
     p.fillRect(widget.rect(), QBrush(g))
 
     for i in range(18):
-        px = int((0.5 + 0.5 * math.sin((i * 999) + t * 8.0)) * w)
-        py = int((0.5 + 0.5 * math.cos((i * 777) + t * 6.0)) * h)
+        px = int((0.5 + 0.5 * math.sin((i * 999) + t * 8.0 + layer_seed)) * w)
+        py = int((0.5 + 0.5 * math.cos((i * 777) + t * 6.0 + layer_seed)) * h)
         r = int((0.05 + (i % 5) * 0.02) * min(w, h))
         alpha = 18 + (i % 4) * 6
         draw_ellipse(p, px, py, r, alpha)
@@ -78,6 +84,10 @@ def draw_viewer_frame(widget: QWidget, frame: int, total_frames: int):
     p.setPen(QColor(255, 255, 255, 190))
     p.setFont(QFont(text_font, max(10, int(h * 0.05)), QFont.Weight.DemiBold))
     p.drawText(20, int(h * 0.15), f"Frame {frame}")
+
+    p.setPen(QColor(255, 255, 255, 170))
+    p.setFont(QFont(text_font, max(9, int(h * 0.035)), QFont.Weight.DemiBold))
+    p.drawText(20, int(h * 0.23), layer_label)
 
     p.setFont(QFont(text_font, max(9, int(h * 0.04)), QFont.Weight.DemiBold))
     p.setPen(QColor(255, 255, 255, 170))
