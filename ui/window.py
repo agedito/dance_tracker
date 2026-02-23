@@ -1,4 +1,4 @@
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -46,23 +46,30 @@ class MainWindow(QMainWindow):
         self.timeline_panel = self._timeline_panel()
         self.status_panel = self._status_panel()
 
-        self.top_splitter = QSplitter()
+        self.top_splitter = QSplitter(Qt.Horizontal)
         self.top_splitter.setChildrenCollapsible(False)
         self.top_splitter.addWidget(self.viewer_block)
         self.top_splitter.addWidget(self.right_panel)
         self.top_splitter.setStretchFactor(0, 3)
         self.top_splitter.setStretchFactor(1, 2)
         self.top_splitter.setSizes([720, 480])
-        outer.addWidget(self.top_splitter, 3)
 
-        self.bottom_splitter = QSplitter()
+        self.bottom_splitter = QSplitter(Qt.Horizontal)
         self.bottom_splitter.setChildrenCollapsible(False)
         self.bottom_splitter.addWidget(self.timeline_panel)
         self.bottom_splitter.addWidget(self.status_panel)
         self.bottom_splitter.setStretchFactor(0, 4)
         self.bottom_splitter.setStretchFactor(1, 2)
         self.bottom_splitter.setSizes([800, 400])
-        outer.addWidget(self.bottom_splitter, 2)
+
+        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.setChildrenCollapsible(False)
+        self.main_splitter.addWidget(self.top_splitter)
+        self.main_splitter.addWidget(self.bottom_splitter)
+        self.main_splitter.setStretchFactor(0, 3)
+        self.main_splitter.setStretchFactor(1, 2)
+        self.main_splitter.setSizes([470, 300])
+        outer.addWidget(self.main_splitter, 1)
 
         self.set_frame(0)
 
