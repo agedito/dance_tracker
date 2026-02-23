@@ -1,5 +1,3 @@
-import math
-
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
@@ -24,10 +22,8 @@ class ViewerWidget(QWidget):
 
         self.menu_expanded = False
         self.menu_icon_count = 8
-        self.menu_rotation = 0.0
-        self.selected_icon = 0
-        self._dragging_menu = False
-        self._last_drag_angle = 0.0
+        self.icon_states = [False for _ in range(self.menu_icon_count)]
+        self.icon_symbols = ["♪", "⏺", "⚑", "✂", "⏱", "↺", "★", "◎"]
 
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
@@ -37,10 +33,6 @@ class ViewerWidget(QWidget):
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
-
-    @staticmethod
-    def _angle_from_center(pos: QPointF, center: QPointF) -> float:
-        return math.atan2(pos.y() - center.y(), pos.x() - center.x())
 
     def _video_rect(self) -> QRectF:
         pixmap = self.frame_store.get_frame(self.frame)
@@ -57,15 +49,15 @@ class ViewerWidget(QWidget):
         return QRectF(x, y, scaled.width(), scaled.height())
 
     def _menu_center(self, video_rect: QRectF) -> QPointF:
-        return QPointF(video_rect.right() - 38, video_rect.bottom() - 38)
+        return QPointF(video_rect.right() - 24, video_rect.top() + 24)
 
     def _menu_item_centers(self, center: QPointF):
-        radius = 102.0
-        step = (2 * math.pi) / self.menu_icon_count
+        icon_radius = 16
+        spacing = 8
+        step = (icon_radius * 2) + spacing
         points = []
         for i in range(self.menu_icon_count):
-            angle = self.menu_rotation + (i * step)
-            points.append(QPointF(center.x() + math.cos(angle) * radius, center.y() + math.sin(angle) * radius))
+            points.append(QPointF(center.x(), center.y() + i * step))
         return points
 
     @staticmethod
@@ -104,43 +96,23 @@ class ViewerWidget(QWidget):
 
         if self._point_in_circle(click_pos, center, 28):
             self.menu_expanded = not self.menu_expanded
-            self._dragging_menu = False
             self.update()
             return
 
         if self.menu_expanded:
-            ring_distance = math.hypot(click_pos.x() - center.x(), click_pos.y() - center.y())
-
             for index, icon_center in enumerate(self._menu_item_centers(center)):
                 if self._point_in_circle(click_pos, icon_center, 20) and video_rect.contains(icon_center):
-                    self.selected_icon = index
+                    self.icon_states[index] = not self.icon_states[index]
                     self.update()
                     ev.accept()
                     return
 
-            if 32 <= ring_distance <= 144:
-                self._dragging_menu = True
-                self._last_drag_angle = self._angle_from_center(click_pos, center)
-                ev.accept()
-                return
-
         super().mousePressEvent(ev)
 
     def mouseMoveEvent(self, ev):
-        if not self.menu_expanded or not self._dragging_menu:
-            super().mouseMoveEvent(ev)
-            return
-
-        center = self._menu_center(self._video_rect())
-        current_angle = self._angle_from_center(QPointF(ev.position()), center)
-        self.menu_rotation += current_angle - self._last_drag_angle
-        self._last_drag_angle = current_angle
-        self.update()
-        ev.accept()
+        super().mouseMoveEvent(ev)
 
     def mouseReleaseEvent(self, ev):
-        if ev.button() == Qt.MouseButton.LeftButton:
-            self._dragging_menu = False
         super().mouseReleaseEvent(ev)
 
     def paintEvent(self, ev):
@@ -178,20 +150,17 @@ class ViewerWidget(QWidget):
             wheel_pen = QPen(QColor(116, 200, 255, 145), 2)
             painter.setPen(wheel_pen)
             painter.setBrush(QColor(22, 30, 38, 80))
-            painter.drawEllipse(center, 103, 103)
-
-            symbols = ["♪", "⏺", "⚑", "✂", "⏱", "↺", "★", "◎"]
             for index, icon_center in enumerate(self._menu_item_centers(center)):
-                is_selected = index == self.selected_icon
-                bg = QColor(65, 122, 214, 220) if is_selected else QColor(27, 33, 42, 210)
-                border = QColor(157, 210, 255, 240) if is_selected else QColor(120, 160, 190, 180)
+                is_active = self.icon_states[index]
+                bg = QColor(65, 122, 214, 220) if is_active else QColor(27, 33, 42, 210)
+                border = QColor(157, 210, 255, 240) if is_active else QColor(120, 160, 190, 180)
                 painter.setPen(QPen(border, 1.5))
                 painter.setBrush(bg)
-                painter.drawEllipse(icon_center, 20, 20)
+                painter.drawEllipse(icon_center, 16, 16)
 
                 painter.setPen(QColor(239, 246, 255))
-                text_rect = QRectF(icon_center.x() - 10, icon_center.y() - 10, 20, 20)
-                painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, symbols[index])
+                text_rect = QRectF(icon_center.x() - 8, icon_center.y() - 8, 16, 16)
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, self.icon_symbols[index])
 
             painter.restore()
 
