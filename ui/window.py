@@ -1,3 +1,4 @@
+import math
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
@@ -21,6 +22,7 @@ from app.logic import ReviewState
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.beat_marker import BeatMarkerWidget
 from ui.widgets.timeline import TimelineTrack
+from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.viewer import ViewerWidget
 from ui.widgets.status_light import StatusLight
 from ui.preferences import load_preferences, save_preferences
@@ -307,11 +309,53 @@ class MainWindow(QMainWindow):
         grid2.addWidget(self._thumb("Layer 2: Overlay", 31), 0, 1)
         v.addLayout(grid2)
 
+        label = QLabel("POSES 3D")
+        label.setObjectName("SectionTitle")
+        v.addWidget(label)
+        self.pose_3d_viewer = Pose3DViewerWidget()
+        v.addWidget(self.pose_3d_viewer, 1)
+
         v.addStretch(1)
-        label = QLabel("Mock: thumbnails procedural.")
+        label = QLabel("Mock: thumbnails procedural + poses YOLO 3D.")
         label.setObjectName("FooterNote")
         v.addWidget(label)
         return panel
+
+    @staticmethod
+    def _mock_yolo_pose_detections(frame: int) -> list[dict]:
+        t = frame * 0.08
+
+        def person(cx: float, arm_offset: float, confidence: float = 0.95):
+            kp = [
+                [cx, 0.25, confidence],
+                [cx - 0.03, 0.24, confidence],
+                [cx + 0.03, 0.24, confidence],
+                [cx - 0.06, 0.27, confidence],
+                [cx + 0.06, 0.27, confidence],
+                [cx - 0.10, 0.36, confidence],
+                [cx + 0.10, 0.36, confidence],
+                [cx - 0.16 - arm_offset, 0.46, confidence],
+                [cx + 0.16 + arm_offset, 0.46, confidence],
+                [cx - 0.20 - arm_offset, 0.56, confidence],
+                [cx + 0.20 + arm_offset, 0.56, confidence],
+                [cx - 0.08, 0.60, confidence],
+                [cx + 0.08, 0.60, confidence],
+                [cx - 0.09, 0.77, confidence],
+                [cx + 0.09, 0.77, confidence],
+                [cx - 0.09, 0.95, confidence],
+                [cx + 0.09, 0.95, confidence],
+            ]
+            return {"keypoints": kp}
+
+        characters = frame % 3
+        if characters == 0:
+            return []
+        if characters == 1:
+            return [person(0.5, 0.04 * math.sin(t))]
+        return [
+            person(0.36, 0.04 * math.sin(t)),
+            person(0.64, 0.04 * math.cos(t + 0.5)),
+        ]
 
     def _on_folder_loaded(self, folder_path: str, total_frames: int):
         self._register_recent_folder(folder_path)
@@ -470,6 +514,8 @@ class MainWindow(QMainWindow):
         self.stat_err.setText(str(len(self.state.error_frames)))
         self.stat_cur.setText(str(self.state.cur_frame))
         self.frame_big.setText(str(self.state.cur_frame))
+        if hasattr(self, "pose_3d_viewer"):
+            self.pose_3d_viewer.set_detections(self._mock_yolo_pose_detections(self.state.cur_frame))
 
         if self.state.total_frames <= 1:
             status = "gray"
