@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QScrollArea,
+    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -39,25 +40,29 @@ class MainWindow(QMainWindow):
 
         outer.addWidget(self._topbar())
 
-        main = QHBoxLayout()
-        main.setSpacing(10)
-        outer.addLayout(main, 3)
-
         self.viewer_block = self._viewer_block()
         self.right_panel = self._right_panel()
-
-        main.addWidget(self.viewer_block, 3)
-        main.addWidget(self.right_panel, 2)
-
-        bottom = QHBoxLayout()
-        bottom.setSpacing(10)
-        outer.addLayout(bottom, 2)
 
         self.timeline_panel = self._timeline_panel()
         self.status_panel = self._status_panel()
 
-        bottom.addWidget(self.timeline_panel, 4)
-        bottom.addWidget(self.status_panel, 2)
+        self.top_splitter = QSplitter()
+        self.top_splitter.setChildrenCollapsible(False)
+        self.top_splitter.addWidget(self.viewer_block)
+        self.top_splitter.addWidget(self.right_panel)
+        self.top_splitter.setStretchFactor(0, 3)
+        self.top_splitter.setStretchFactor(1, 2)
+        self.top_splitter.setSizes([720, 480])
+        outer.addWidget(self.top_splitter, 3)
+
+        self.bottom_splitter = QSplitter()
+        self.bottom_splitter.setChildrenCollapsible(False)
+        self.bottom_splitter.addWidget(self.timeline_panel)
+        self.bottom_splitter.addWidget(self.status_panel)
+        self.bottom_splitter.setStretchFactor(0, 4)
+        self.bottom_splitter.setStretchFactor(1, 2)
+        self.bottom_splitter.setSizes([800, 400])
+        outer.addWidget(self.bottom_splitter, 2)
 
         self.set_frame(0)
 
