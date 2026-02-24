@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from ui.window.preferences import load_preferences, save_preferences
@@ -36,12 +37,28 @@ class PreferencesManager:
         folders.insert(0, normalized)
         self._prefs["recent_folders"] = folders[: self._max_recent]
         self._prefs["last_opened_folder"] = normalized
+        self._remember_folder_thumbnail(normalized)
         self.save()
 
     def remove_recent_folder(self, folder_path: str):
         folders = [p for p in self.recent_folders() if p != folder_path]
         self._prefs["recent_folders"] = folders[: self._max_recent]
+        thumbnails = self._prefs.get("recent_folder_thumbnails", {})
+        if isinstance(thumbnails, dict):
+            thumbnails.pop(folder_path, None)
+            self._prefs["recent_folder_thumbnails"] = thumbnails
         self.save()
+
+    def thumbnail_for_folder(self, folder_path: str) -> str | None:
+        thumbnails = self._prefs.get("recent_folder_thumbnails", {})
+        if not isinstance(thumbnails, dict):
+            return None
+
+        thumbnail = thumbnails.get(folder_path)
+        if not isinstance(thumbnail, str) or not thumbnail:
+            return None
+
+        return thumbnail if Path(thumbnail).is_file() else None
 
     def last_opened_folder(self) -> str | None:
         val = self._prefs.get("last_opened_folder")
@@ -80,3 +97,40 @@ class PreferencesManager:
 
     def save_fullscreen(self, is_fullscreen: bool):
         self._prefs["fullscreen"] = is_fullscreen
+
+    # ── Recent folder thumbnails ────────────────────────────────────
+
+    def _remember_folder_thumbnail(self, folder_path: str):
+        thumbnail = self._thumbnail_from_frame(folder_path)
+        thumbnails = self._prefs.get("recent_folder_thumbnails", {})
+        if not isinstance(thumbnails, dict):
+            thumbnails = {}
+
+        if thumbnail is None:
+            thumbnails.pop(folder_path, None)
+        else:
+            thumbnails[folder_path] = thumbnail
+
+        self._prefs["recent_folder_thumbnails"] = thumbnails
+
+    def _thumbnail_from_frame(self, folder_path: str) -> str | None:
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            return None
+
+        valid_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+        frame_files = [
+            file
+            for file in sorted(folder.iterdir(), key=self._natural_sort_key)
+            if file.is_file() and file.suffix.lower() in valid_suffixes
+        ]
+        if not frame_files:
+            return None
+
+        target_idx = 300 if len(frame_files) > 300 else len(frame_files) // 2
+        return str(frame_files[target_idx])
+
+    @staticmethod
+    def _natural_sort_key(path: Path):
+        chunks = re.split(r"(\d+)", path.name.lower())
+        return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]

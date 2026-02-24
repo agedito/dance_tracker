@@ -1,8 +1,8 @@
 from pathlib import Path
 from typing import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
 
 from ui.window.sections.preferences_manager import PreferencesManager
@@ -67,6 +67,12 @@ class TopBar(QWidget):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setObjectName("RecentFolderIcon")
             btn.setToolTip(folder)
+
+            thumbnail = self._prefs.thumbnail_for_folder(folder)
+            if thumbnail:
+                btn.setIcon(QIcon(thumbnail))
+                btn.setIconSize(QSize(42, 42))
+
             btn.clicked.connect(lambda _=False, p=folder: self._on_folder_clicked(p))
 
             btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
