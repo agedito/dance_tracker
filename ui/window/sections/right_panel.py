@@ -1,13 +1,13 @@
 import math
 
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QTabWidget, QVBoxLayout, QWidget
 
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.thumbnail import ThumbnailWidget
 
 
 class RightPanel(QFrame):
-    """Single responsibility: display layer thumbnails and 3D pose viewer."""
+    """Single responsibility: display right-side tools grouped in tabs."""
 
     def __init__(self):
         super().__init__()
@@ -17,28 +17,13 @@ class RightPanel(QFrame):
         v.setContentsMargins(10, 10, 10, 10)
         v.setSpacing(10)
 
-        v.addWidget(self._section_label("LAYER VIEWERS"))
-        grid1 = QGridLayout()
-        grid1.setSpacing(8)
-        grid1.addWidget(self._thumb("Layer 1: Color Grade", 10), 0, 0)
-        grid1.addWidget(self._thumb("Layer 1: Output", 17), 0, 1)
-        v.addLayout(grid1)
+        tabs = QTabWidget()
+        tabs.addTab(self._build_layer_viewers_tab(), "Layer viewers")
 
-        v.addWidget(self._section_label("LAYER 2: OBJECT MASK"))
-        grid2 = QGridLayout()
-        grid2.setSpacing(8)
-        grid2.addWidget(self._thumb("Layer 2: Mask", 24), 0, 0)
-        grid2.addWidget(self._thumb("Layer 2: Overlay", 31), 0, 1)
-        v.addLayout(grid2)
-
-        v.addWidget(self._section_label("POSES 3D"))
         self.pose_3d_viewer = Pose3DViewerWidget()
-        v.addWidget(self.pose_3d_viewer, 1)
-
-        v.addStretch(1)
-        footer = QLabel("Mock: thumbnails procedural + poses YOLO 3D.")
-        footer.setObjectName("FooterNote")
-        v.addWidget(footer)
+        tabs.addTab(self.pose_3d_viewer, "Visor 3D")
+        tabs.addTab(self._build_music_tab(), "Music")
+        v.addWidget(tabs, 1)
 
     def update_pose(self, frame: int):
         detections = self._mock_yolo_pose_detections(frame)
@@ -51,6 +36,40 @@ class RightPanel(QFrame):
         label = QLabel(text)
         label.setObjectName("SectionTitle")
         return label
+
+    def _build_layer_viewers_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        layout.addWidget(self._section_label("LAYER VIEWERS"))
+        grid1 = QGridLayout()
+        grid1.setSpacing(8)
+        grid1.addWidget(self._thumb("Layer 1: Color Grade", 10), 0, 0)
+        grid1.addWidget(self._thumb("Layer 1: Output", 17), 0, 1)
+        layout.addLayout(grid1)
+
+        layout.addWidget(self._section_label("LAYER 2: OBJECT MASK"))
+        grid2 = QGridLayout()
+        grid2.setSpacing(8)
+        grid2.addWidget(self._thumb("Layer 2: Mask", 24), 0, 0)
+        grid2.addWidget(self._thumb("Layer 2: Overlay", 31), 0, 1)
+        layout.addLayout(grid2)
+
+        footer = QLabel("Mock: thumbnails procedural + poses YOLO 3D.")
+        footer.setObjectName("FooterNote")
+        layout.addWidget(footer)
+        layout.addStretch(1)
+        return tab
+
+    def _build_music_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._section_label("Music"))
+        layout.addStretch(1)
+        return tab
 
     @staticmethod
     def _thumb(label: str, seed: int) -> QFrame:
