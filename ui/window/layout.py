@@ -1,25 +1,34 @@
+## Main layout without widgets
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QSplitter, QVBoxLayout, QWidget
 
 
 class MainWindowLayout:
-    """Estructura base del layout principal sin lógica de widgets."""
+    """basic layout for the main window"""
 
-    def __init__(self, parent):
+    def __init__(self, parent, css: str):
         self.root = QWidget(parent)
+        self._create_layout()
+        self.root.setStyleSheet(css)
 
+    def _create_layout(self):
         self.outer = QVBoxLayout(self.root)
         self.outer.setContentsMargins(10, 10, 10, 10)
         self.outer.setSpacing(10)
 
-        self.top_splitter = QSplitter(Qt.Horizontal)
+        self.top_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.top_splitter.setChildrenCollapsible(False)
 
-        self.bottom_splitter = QSplitter(Qt.Horizontal)
+        self.bottom_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.bottom_splitter.setChildrenCollapsible(False)
 
-        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter = QSplitter(Qt.Orientation.Vertical)
         self.main_splitter.setChildrenCollapsible(False)
+
+        self._set_main_splitter()
+
+    def _set_main_splitter(self):
         self.main_splitter.addWidget(self.top_splitter)
         self.main_splitter.addWidget(self.bottom_splitter)
         self.main_splitter.setStretchFactor(0, 3)

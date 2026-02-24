@@ -4,18 +4,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import (
-    QFrame,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QMainWindow,
-    QPushButton,
-    QMenu,
-    QScrollArea,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QMainWindow, QPushButton, QMenu, QScrollArea, QVBoxLayout, QWidget
 
 from app.frame_state.frame_store import FrameStore
 from app.main_app import DanceTrackerApp
@@ -26,15 +15,14 @@ from ui.widgets.status_light import StatusLight
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.widgets.timeline import TimelineTrack
 from ui.widgets.viewer import ViewerWidget
-from ui.window.main_window_layout import MainWindowLayout
+from ui.window.layout import MainWindowLayout
 from ui.window.preferences import load_preferences, save_preferences
 
 
 class MainWindow(QMainWindow):
-    MAX_RECENT_FOLDERS = 5
-
     def __init__(self, cfg: Config, app: DanceTrackerApp):
         super().__init__()
+        self.cfg = cfg
         self.state = app.states_manager
 
         self.timer = QTimer(self)
@@ -46,10 +34,15 @@ class MainWindow(QMainWindow):
         self._preferences = load_preferences()
         self._current_folder_path: str | None = None
 
-        self.main_window_layout = MainWindowLayout(self)
-        self.setCentralWidget(self.main_window_layout.root)
-        self.main_window_layout.root.setStyleSheet(self._qss())
-        self.main_window_layout.set_topbar(self._topbar())
+        self.layout = MainWindowLayout(self, cfg.get_css())
+
+        self._create_widgets()
+        self._restore_last_session()
+
+    def _create_widgets(self):
+        self.setCentralWidget(self.layout.root)
+
+        self.layout.set_topbar(self._topbar())
 
         self.viewer_block = self._viewer_block()
         self.right_panel = self._right_panel()
@@ -57,19 +50,17 @@ class MainWindow(QMainWindow):
         self.timeline_panel = self._timeline_panel()
         self.status_panel = self._status_panel()
 
-        self.main_window_layout.set_top_content(self.viewer_block, self.right_panel)
-        self.main_window_layout.set_bottom_content(self.timeline_panel, self.status_panel)
-        self.main_window_layout.finalize()
+        self.layout.set_top_content(self.viewer_block, self.right_panel)
+        self.layout.set_bottom_content(self.timeline_panel, self.status_panel)
+        self.layout.finalize()
 
-        self.top_splitter = self.main_window_layout.top_splitter
-        self.bottom_splitter = self.main_window_layout.bottom_splitter
-        self.main_splitter = self.main_window_layout.main_splitter
+        self.top_splitter = self.layout.top_splitter
+        self.bottom_splitter = self.layout.bottom_splitter
+        self.main_splitter = self.layout.main_splitter
 
         self._load_layout_preferences()
         self._connect_layout_persistence()
         self._setup_shortcuts()
-
-        self._restore_last_session()
 
     def _setup_shortcuts(self):
         shortcuts = [
@@ -155,13 +146,13 @@ class MainWindow(QMainWindow):
         if not isinstance(saved, list):
             return []
         folders = [item for item in saved if isinstance(item, str) and item]
-        return folders[: self.MAX_RECENT_FOLDERS]
+        return folders[: self.cfg.max_recent_folders] or []
 
     def _register_recent_folder(self, folder_path: str):
         normalized = str(Path(folder_path).expanduser())
         folders = [path for path in self._recent_folders() if path != normalized]
         folders.insert(0, normalized)
-        self._preferences["recent_folders"] = folders[: self.MAX_RECENT_FOLDERS]
+        self._preferences["recent_folders"] = folders[: self.cfg.max_recent_folders]
         self._preferences["last_opened_folder"] = normalized
         save_preferences(self._preferences)
         self._render_recent_folder_icons()
@@ -208,7 +199,7 @@ class MainWindow(QMainWindow):
 
     def _remove_recent_folder(self, folder_path: str):
         folders = [path for path in self._recent_folders() if path != folder_path]
-        self._preferences["recent_folders"] = folders[: self.MAX_RECENT_FOLDERS]
+        self._preferences["recent_folders"] = folders[: self.cfg.max_recent_folders]
         save_preferences(self._preferences)
         self._render_recent_folder_icons()
 
@@ -582,60 +573,3 @@ class MainWindow(QMainWindow):
         updated = self.state.prev_error_frame()
         if updated is not None:
             self.set_frame(updated)
-
-    @staticmethod
-    def _qss():
-        return """
-        QWidget { background: #121416; color: #E7EDF2; font-family: Segoe UI, Arial; font-size: 12px; }
-        #TopBar { background: #0F1113; border: 1px solid #2B343B; border-radius: 10px; }
-        #TopTitle { font-weight: 700; letter-spacing: 0.5px; }
-        #TopHint { color: #A7B3BD; }
-
-        QFrame#Panel { background: #1A1F23; border: 1px solid #2B343B; border-radius: 10px; }
-        QWidget#PanelHeader {
-            background: #161B1F; border-bottom: 1px solid #2B343B;
-            border-top-left-radius: 10px; border-top-right-radius: 10px;
-        }
-        QWidget#PanelFooter {
-            background: #14181C; border-top: 1px solid #2B343B;
-            border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;
-        }
-
-        QLabel#Muted { color: #A7B3BD; }
-        QLabel#SectionTitle { color: #A7B3BD; font-weight: 700; letter-spacing: 0.3px; }
-        QLabel#LayerName { color: #A7B3BD; }
-        QLabel#BoldValue { color: #E7EDF2; font-weight: 700; }
-        QLabel#FrameBig { font-size: 20px; font-weight: 800; }
-        QLabel#FooterNote { color: rgba(255,255,255,0.55); font-size: 11px; }
-
-        QPushButton {
-            background: #2A3238; border: 1px solid #2B343B;
-            padding: 8px 10px; border-radius: 8px;
-        }
-        QPushButton:hover { background: #344049; }
-        QPushButton#PrimaryButton { border: 1px solid rgba(122,162,255,110); }
-        QPushButton#RecentFolderIcon {
-            min-width: 28px; max-width: 28px;
-            min-height: 28px; max-height: 28px;
-            border-radius: 14px;
-            padding: 0px;
-            font-size: 14px;
-        }
-        QPushButton#TopCloseButton {
-            min-width: 28px; max-width: 28px;
-            min-height: 28px; max-height: 28px;
-            border-radius: 14px;
-            padding: 0px;
-            font-size: 14px;
-            background: #402125;
-            border: 1px solid #67343A;
-        }
-        QPushButton#TopCloseButton:hover {
-            background: #7A2E38;
-        }
-
-        QScrollArea#ScrollArea { border: none; background: transparent; }
-        QScrollArea#ScrollArea QWidget { background: transparent; }
-
-        QFrame#ThumbFrame { background: #0C0F12; border: 1px solid #2B343B; border-radius: 10px; }
-        """
