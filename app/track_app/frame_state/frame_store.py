@@ -15,6 +15,7 @@ class FrameStore:
         self._proxy_files: list[Path] = []
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
         self._base_sizes: dict[int, tuple[int, int]] = {}
+        self._proxy_cache_loaded = False
 
     @property
     def total_frames(self) -> int:
@@ -31,6 +32,7 @@ class FrameStore:
             self._proxy_files = []
             self._cache.clear()
             self._base_sizes.clear()
+            self._proxy_cache_loaded = False
             return 0
 
         files = [
@@ -42,6 +44,8 @@ class FrameStore:
         self._proxy_files = self._find_proxy_files(folder, len(files))
         self._cache.clear()
         self._base_sizes.clear()
+        self._proxy_cache_loaded = False
+        self._preload_proxy_cache()
         return len(files)
 
     def _find_proxy_files(self, folder: Path, expected_count: int) -> list[Path]:
@@ -57,6 +61,18 @@ class FrameStore:
         if len(proxy_files) != expected_count:
             return []
         return proxy_files
+
+    def _preload_proxy_cache(self):
+        if not self._proxy_files or self._proxy_cache_loaded:
+            return
+
+        for idx, path in enumerate(self._proxy_files):
+            pix = QPixmap(str(path))
+            if pix.isNull():
+                continue
+            self._cache[(True, idx)] = pix
+
+        self._proxy_cache_loaded = True
 
     @staticmethod
     def _natural_sort_key(path: Path):
@@ -133,13 +149,15 @@ class FrameStore:
         self._enforce_cache_limit(center_frame)
 
     def _enforce_cache_limit(self, center_frame: int):
-        max_items = (self.cache_radius * 2) + 1
-        if self._proxy_files:
-            max_items *= 2
-        if max_items <= 0:
+        max_base_items = (self.cache_radius * 2) + 1
+        if max_base_items <= 0:
             self._cache.clear()
             return
 
-        while len(self._cache) > max_items:
-            farthest_idx = max(self._cache.keys(), key=lambda key: abs(key[1] - center_frame))
+        while True:
+            base_keys = [key for key in self._cache.keys() if not key[0]]
+            if len(base_keys) <= max_base_items:
+                break
+
+            farthest_idx = max(base_keys, key=lambda key: abs(key[1] - center_frame))
             self._cache.pop(farthest_idx, None)
