@@ -69,9 +69,7 @@ class MainWindow(QMainWindow):
     # ── UI construction ──────────────────────────────────────────────
 
     def on_frames_loaded(self, path: str) -> None:
-        frames_count = self._frame_store.load_folder(path)
-        self._viewer_panel.viewer.set_total_frames(frames_count)
-        self._timeline.set_total_frames(frames_count)
+        self._folder_session.load_folder(path)
 
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
