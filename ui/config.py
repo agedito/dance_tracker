@@ -5,4 +5,4 @@ class Config(BaseSettings):
     fullscreen: bool = True
     title: str = "Dance Tracker app"
 
-    model_config = SettingsConfigDict(frozen=True, env_file="ui.env")
+    model_config = SettingsConfigDict(frozen=True, env_file="preferences/ui.env")
