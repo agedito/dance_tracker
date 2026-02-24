@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(title)
         self.resize(1200, 780)
         self._preferences = load_preferences()
+        self._current_folder_path: str | None = None
 
         self.main_window_layout = MainWindowLayout(self)
         self.setCentralWidget(self.main_window_layout.root)
@@ -66,7 +67,7 @@ class MainWindow(QMainWindow):
         self._connect_layout_persistence()
         self._setup_shortcuts()
 
-        self.set_frame(0)
+        self._restore_last_session()
 
     def _setup_shortcuts(self):
         shortcuts = [
@@ -115,6 +116,7 @@ class MainWindow(QMainWindow):
         save_preferences(self._preferences)
 
     def closeEvent(self, event: QCloseEvent):
+        self._remember_current_frame()
         self._save_layout_preferences()
         super().closeEvent(event)
 
@@ -158,15 +160,49 @@ class MainWindow(QMainWindow):
         folders = [path for path in self._recent_folders() if path != normalized]
         folders.insert(0, normalized)
         self._preferences["recent_folders"] = folders[: self.MAX_RECENT_FOLDERS]
+        self._preferences["last_opened_folder"] = normalized
         save_preferences(self._preferences)
         self._render_recent_folder_icons()
 
-    def _load_recent_folder(self, folder_path: str):
+    def _saved_frame_for_folder(self, folder_path: str) -> int:
+        frames = self._preferences.get("last_frame_by_folder", {})
+        if not isinstance(frames, dict):
+            return 0
+        frame = frames.get(folder_path, 0)
+        return frame if isinstance(frame, int) else 0
+
+    def _remember_current_frame(self):
+        if not self._current_folder_path:
+            return
+        frames = self._preferences.get("last_frame_by_folder", {})
+        if not isinstance(frames, dict):
+            frames = {}
+        frames[self._current_folder_path] = self.state.cur_frame
+        self._preferences["last_frame_by_folder"] = frames
+        self._preferences["last_opened_folder"] = self._current_folder_path
+        save_preferences(self._preferences)
+
+    def _load_recent_folder(self, folder_path: str, target_frame: int | None = None):
+        self._remember_current_frame()
         frame_count = self.frame_store.load_folder(folder_path)
         if frame_count <= 0:
             return
+        normalized = str(Path(folder_path).expanduser())
+        self._current_folder_path = normalized
         self._register_recent_folder(folder_path)
-        self.on_frames_loaded(frame_count)
+        frame_to_restore = self._saved_frame_for_folder(normalized) if target_frame is None else target_frame
+        self.on_frames_loaded(frame_count, initial_frame=frame_to_restore)
+
+    def _restore_last_session(self):
+        last_folder = self._preferences.get("last_opened_folder")
+        if not isinstance(last_folder, str) or not last_folder:
+            recent = self._recent_folders()
+            last_folder = recent[0] if recent else None
+        if last_folder:
+            target_frame = self._saved_frame_for_folder(last_folder)
+            self._load_recent_folder(last_folder, target_frame=target_frame)
+            return
+        self.set_frame(0)
 
     def _remove_recent_folder(self, folder_path: str):
         folders = [path for path in self._recent_folders() if path != folder_path]
@@ -343,8 +379,10 @@ class MainWindow(QMainWindow):
         ]
 
     def _on_folder_loaded(self, folder_path: str, total_frames: int):
+        self._remember_current_frame()
+        self._current_folder_path = str(Path(folder_path).expanduser())
         self._register_recent_folder(folder_path)
-        self.on_frames_loaded(total_frames)
+        self.on_frames_loaded(total_frames, initial_frame=self._saved_frame_for_folder(self._current_folder_path))
 
     @staticmethod
     def _thumb(label: str, seed: int):
@@ -477,14 +515,14 @@ class MainWindow(QMainWindow):
             return
         self.beat_info.setText(f"Pulso activo: {beat}")
 
-    def on_frames_loaded(self, total_frames: int):
+    def on_frames_loaded(self, total_frames: int, initial_frame: int = 0):
         self.pause()
         self.viewer.set_proxy_frames_enabled(False)
         self.state.set_total_frames(total_frames)
         self.viewer.set_total_frames(total_frames)
         for tr in self.track_widgets:
             tr.set_total_frames(total_frames)
-        self.set_frame(0)
+        self.set_frame(initial_frame)
 
     def set_frame(self, frame: int):
         self.state.set_frame(frame)
