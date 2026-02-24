@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QMenu,
     QScrollArea,
-    QSplitter,
     QVBoxLayout,
     QWidget,
 )
@@ -26,6 +25,7 @@ from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.viewer import ViewerWidget
 from ui.widgets.status_light import StatusLight
 from ui.preferences import load_preferences, save_preferences
+from ui.main_window_layout import MainWindowLayout
 
 
 class MainWindow(QMainWindow):
@@ -43,15 +43,10 @@ class MainWindow(QMainWindow):
         self.resize(1200, 780)
         self._preferences = load_preferences()
 
-        root = QWidget()
-        self.setCentralWidget(root)
-        root.setStyleSheet(self._qss())
-
-        outer = QVBoxLayout(root)
-        outer.setContentsMargins(10, 10, 10, 10)
-        outer.setSpacing(10)
-
-        outer.addWidget(self._topbar())
+        self.main_window_layout = MainWindowLayout(self)
+        self.setCentralWidget(self.main_window_layout.root)
+        self.main_window_layout.root.setStyleSheet(self._qss())
+        self.main_window_layout.set_topbar(self._topbar())
 
         self.viewer_block = self._viewer_block()
         self.right_panel = self._right_panel()
@@ -59,30 +54,13 @@ class MainWindow(QMainWindow):
         self.timeline_panel = self._timeline_panel()
         self.status_panel = self._status_panel()
 
-        self.top_splitter = QSplitter(Qt.Horizontal)
-        self.top_splitter.setChildrenCollapsible(False)
-        self.top_splitter.addWidget(self.viewer_block)
-        self.top_splitter.addWidget(self.right_panel)
-        self.top_splitter.setStretchFactor(0, 3)
-        self.top_splitter.setStretchFactor(1, 2)
-        self.top_splitter.setSizes([720, 480])
+        self.main_window_layout.set_top_content(self.viewer_block, self.right_panel)
+        self.main_window_layout.set_bottom_content(self.timeline_panel, self.status_panel)
+        self.main_window_layout.finalize()
 
-        self.bottom_splitter = QSplitter(Qt.Horizontal)
-        self.bottom_splitter.setChildrenCollapsible(False)
-        self.bottom_splitter.addWidget(self.timeline_panel)
-        self.bottom_splitter.addWidget(self.status_panel)
-        self.bottom_splitter.setStretchFactor(0, 4)
-        self.bottom_splitter.setStretchFactor(1, 2)
-        self.bottom_splitter.setSizes([800, 400])
-
-        self.main_splitter = QSplitter(Qt.Vertical)
-        self.main_splitter.setChildrenCollapsible(False)
-        self.main_splitter.addWidget(self.top_splitter)
-        self.main_splitter.addWidget(self.bottom_splitter)
-        self.main_splitter.setStretchFactor(0, 3)
-        self.main_splitter.setStretchFactor(1, 2)
-        self.main_splitter.setSizes([470, 300])
-        outer.addWidget(self.main_splitter, 1)
+        self.top_splitter = self.main_window_layout.top_splitter
+        self.bottom_splitter = self.main_window_layout.bottom_splitter
+        self.main_splitter = self.main_window_layout.main_splitter
 
         self._load_layout_preferences()
         self._connect_layout_persistence()
