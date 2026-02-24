@@ -7,7 +7,8 @@ QWidget {
 
 #TopBar {
     background: #0F1113;
-    border: 1px solid #2B343B;
+    border: 1px #2B343B;
+    border-style: solid;
     border-radius: 10px;
 }
 
@@ -22,20 +23,23 @@ QWidget {
 
 QFrame#Panel {
     background: #1A1F23;
-    border: 1px solid #2B343B;
+    border: 1px #2B343B;
+    border-style: solid;
     border-radius: 10px;
 }
 
 QWidget#PanelHeader {
     background: #161B1F;
-    border-bottom: 1px solid #2B343B;
+    border-bottom: 1px #2B343B;
+    border-style: solid;
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
 }
 
 QWidget#PanelFooter {
     background: #14181C;
-    border-top: 1px solid #2B343B;
+    border-top: 1px #2B343B;
+    border-style: solid;
     border-bottom-left-radius: 10px;
     border-bottom-right-radius: 10px;
 }
@@ -71,7 +75,8 @@ QLabel#FooterNote {
 
 QPushButton {
     background: #2A3238;
-    border: 1px solid #2B343B;
+    border: 1px #2B343B;
+    border-style: solid;
     padding: 8px 10px;
     border-radius: 8px;
 }
@@ -81,7 +86,8 @@ QPushButton:hover {
 }
 
 QPushButton#PrimaryButton {
-    border: 1px solid rgba(122, 162, 255, 110);
+    border: 1px rgba(122, 162, 255, 110);
+    border-style: solid;
 }
 
 QPushButton#RecentFolderIcon {
@@ -103,7 +109,8 @@ QPushButton#TopCloseButton {
     padding: 0px;
     font-size: 14px;
     background: #402125;
-    border: 1px solid #67343A;
+    border: 1px #67343A;
+    border-style: solid;
 }
 
 QPushButton#TopCloseButton:hover {
@@ -121,6 +128,7 @@ QScrollArea#ScrollArea QWidget {
 
 QFrame#ThumbFrame {
     background: #0C0F12;
-    border: 1px solid #2B343B;
+    border: 1px #2B343B;
+    border-style: solid;
     border-radius: 10px;
 }

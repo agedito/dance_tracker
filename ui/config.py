@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 env_file = "preferences/ui.env"
-css_file = "preferences/ui.css"
+css_file = "preferences/ui.qss"
 
 
 class Config(BaseSettings):
