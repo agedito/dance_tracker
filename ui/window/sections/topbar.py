@@ -29,7 +29,7 @@ class TopBar(QWidget):
         title.setObjectName("TopTitle")
         layout.addWidget(title)
 
-        hint = QLabel("Arrastra una carpeta o video al viewer para cargar frames")
+        hint = QLabel("Drop folder or video to load frames")
         hint.setObjectName("TopHint")
 
         # Recent folders container
@@ -45,7 +45,7 @@ class TopBar(QWidget):
 
         close_button = QPushButton("✕")
         close_button.setObjectName("TopCloseButton")
-        close_button.setToolTip("Cerrar aplicación")
+        close_button.setToolTip("Close app")
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         close_button.clicked.connect(on_close)
         layout.addSpacing(10)
@@ -77,7 +77,7 @@ class TopBar(QWidget):
 
     def _show_context_menu(self, folder_path: str, global_pos):
         menu = QMenu(self)
-        remove = QAction("Eliminar carpeta", self)
+        remove = QAction("Remove folder", self)
         remove.triggered.connect(lambda _=False, p=folder_path: self._remove_folder(p))
         menu.addAction(remove)
         menu.exec(global_pos)

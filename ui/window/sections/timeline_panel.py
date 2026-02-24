@@ -1,7 +1,7 @@
 from typing import Callable
 
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+    QFrame, QHBoxLayout, QLabel, QScrollArea,
     QVBoxLayout, QWidget,
 )
 
@@ -12,12 +12,12 @@ class TimelinePanel(QFrame):
     """Single responsibility: display timeline tracks for all layers."""
 
     def __init__(
-        self,
-        total_frames: int,
-        layers: list,
-        on_frame_changed: Callable[[int], None],
-        on_scrub_start: Callable,
-        on_scrub_end: Callable,
+            self,
+            total_frames: int,
+            layers: list,
+            on_frame_changed: Callable[[int], None],
+            on_scrub_start: Callable,
+            on_scrub_end: Callable,
     ):
         super().__init__()
         self.setObjectName("Panel")

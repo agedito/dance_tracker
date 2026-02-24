@@ -50,9 +50,9 @@ class StatusLight(QWidget):
         painter.setBrush(QColor(255, 255, 255, 80))
         highlight_radius = max(2.0, radius * 0.45)
         painter.drawEllipse(
-            center.x() - radius * 0.28,
-            center.y() - radius * 0.28,
-            highlight_radius,
-            highlight_radius,
+            int(center.x() - radius * 0.28),
+            int(center.y() - radius * 0.28),
+            int(highlight_radius),
+            int(highlight_radius),
         )
         painter.end()

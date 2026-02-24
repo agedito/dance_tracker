@@ -2,14 +2,14 @@
 MainWindow — thin orchestrator.
 
 Each concern lives in its own class:
-  - PreferencesManager   → persistence of user prefs / layout / session
-  - PlaybackController   → play / pause / timer tick / error navigation
+  - PreferencesManager → persistence of user prefs / layout / session
+  - PlaybackController → play / pause / timer tick / error navigation
   - FolderSessionManager → folder loading, session restore, frame memory
-  - TopBar               → top bar widget with recent-folder icons
-  - ViewerPanel          → main video viewer + transport buttons
-  - RightPanel           → layer thumbnails + 3D pose viewer
-  - TimelinePanel        → master timeline with layer tracks
-  - StatusPanel          → status light, stats grid, beat markers
+  - TopBar → top bar widget with recent-folder icons
+  - ViewerPanel → main video viewer and transport buttons
+  - RightPanel → layer thumbnails + 3D pose viewer
+  - TimelinePanel → master timeline with layer tracks
+  - StatusPanel → status light, stats grid, beat markers
 """
 
 from pathlib import Path
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
 
-        self._topbar = TopBar(preferences=self._prefs, on_folder_clicked=self._folder_session.load_folder, on_close=self.close)
+        self._topbar = TopBar(preferences=self._prefs, on_folder_clicked=self._folder_session.load_folder, on_close=self._close)
         self._layout.set_topbar(self._topbar)
 
         self._viewer_panel = ViewerPanel(
@@ -109,10 +109,10 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         bindings = [
-            (Qt.Key_Left, lambda: self._playback.step(-1)),
-            (Qt.Key_Right, lambda: self._playback.step(1)),
-            (Qt.Key_Home, self._playback.go_to_start),
-            (Qt.Key_End, self._playback.go_to_end),
+            (Qt.Key.Key_Left, lambda: self._playback.step(-1)),
+            (Qt.Key.Key_Right, lambda: self._playback.step(1)),
+            (Qt.Key.Key_Home, self._playback.go_to_start),
+            (Qt.Key.Key_End, self._playback.go_to_end),
         ]
         self._shortcuts = []
         for key, cb in bindings:
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
 
         self._right_panel.update_pose(cur)
 
-        self._status.update(
+        self._status.update_status(
             cur_frame=cur,
             total_frames=self.state.total_frames,
             error_count=len(self.state.error_frames),
@@ -188,3 +188,7 @@ class MainWindow(QMainWindow):
         self._folder_session.remember_current_frame(self.state.cur_frame)
         self._save_splitters()
         super().closeEvent(event)
+
+    def _close(self):
+        # to allow using that method as on_close param without warnings
+        self.close()

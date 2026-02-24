@@ -107,7 +107,7 @@ class Pose3DViewerWidget(QWidget):
         painter.drawText(
             12,
             20,
-            "Visor 3D · Arrastra para rotar · Rueda para zoom",
+            "Visor 3D · Drag to rotate, use mouse wheel to zoom",
         )
         painter.end()
 
@@ -194,16 +194,16 @@ class Pose3DViewerWidget(QWidget):
         max_z = max(a.z, b.z) + 0.05
         self._draw_box(painter, Vec3(min_x, min_y, min_z), Vec3(max_x, max_y, max_z), color)
 
-    def _draw_box(self, painter: QPainter, pmin: Vec3, pmax: Vec3, color: QColor):
+    def _draw_box(self, painter: QPainter, point_min: Vec3, point_max: Vec3, color: QColor):
         corners = [
-            Vec3(pmin.x, pmin.y, pmin.z),
-            Vec3(pmax.x, pmin.y, pmin.z),
-            Vec3(pmax.x, pmax.y, pmin.z),
-            Vec3(pmin.x, pmax.y, pmin.z),
-            Vec3(pmin.x, pmin.y, pmax.z),
-            Vec3(pmax.x, pmin.y, pmax.z),
-            Vec3(pmax.x, pmax.y, pmax.z),
-            Vec3(pmin.x, pmax.y, pmax.z),
+            Vec3(point_min.x, point_min.y, point_min.z),
+            Vec3(point_max.x, point_min.y, point_min.z),
+            Vec3(point_max.x, point_max.y, point_min.z),
+            Vec3(point_min.x, point_max.y, point_min.z),
+            Vec3(point_min.x, point_min.y, point_max.z),
+            Vec3(point_max.x, point_min.y, point_max.z),
+            Vec3(point_max.x, point_max.y, point_max.z),
+            Vec3(point_min.x, point_max.y, point_max.z),
         ]
 
         projected = []
@@ -224,7 +224,7 @@ class Pose3DViewerWidget(QWidget):
             (0, 3, 7, 4),
         ]
 
-        sorted_faces = sorted(faces, key=lambda face: sum(depths[i] for i in face) / 4, reverse=True)
+        sorted_faces = sorted(faces, key=lambda _face: sum(depths[i] for i in _face) / 4, reverse=True)
         for face in sorted_faces:
             poly = QPolygonF([projected[i] for i in face])
             shade = 0.65 + (sum(depths[i] for i in face) / (4 * max(depths))) * 0.35

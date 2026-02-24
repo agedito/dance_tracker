@@ -30,7 +30,7 @@ class TimelineTrack(QWidget):
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def _frame_from_pos(self, x: float) -> int:
-        norm_x = clamp(x, 0, self.width())
+        norm_x = clamp(int(x), 0, self.width())
         return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
 
     def set_total_frames(self, total_frames: int):

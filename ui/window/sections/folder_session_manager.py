@@ -43,7 +43,7 @@ class FolderSessionManager:
         self._prefs.remember_frame(self.current_folder_path, cur_frame)
 
     def restore_last_session(self) -> int | None:
-        """Try to restore last session. Returns target frame or None if nothing to restore."""
+        """Try to restore the last session. Returns target frame or None if nothing to restore."""
         last_folder = self._prefs.last_opened_folder()
         if not last_folder:
             recent = self._prefs.recent_folders()

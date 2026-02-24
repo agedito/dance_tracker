@@ -72,7 +72,7 @@ class StatusPanel(QFrame):
         # Beat markers
         v.addWidget(self._section_label("MUSICAL BEATS (1-8)"))
         self.beat_marker = BeatMarkerWidget(beats=8)
-        self.beat_info = QLabel("Pulso activo: ninguno")
+        self.beat_info = QLabel("Active pulse: none")
         self.beat_info.setObjectName("Muted")
         self.beat_marker.beatChanged.connect(self._on_beat_changed)
         v.addWidget(self.beat_marker)
@@ -80,8 +80,7 @@ class StatusPanel(QFrame):
 
         v.addStretch(1)
 
-    def update(self, cur_frame: int, total_frames: int, error_count: int,
-               is_error: bool, is_playing: bool):
+    def update_status(self, cur_frame: int, total_frames: int, error_count: int, is_error: bool, is_playing: bool):
         self.stat_total.setText(str(total_frames))
         self.stat_err.setText(str(error_count))
         self.stat_cur.setText(str(cur_frame))
@@ -101,9 +100,9 @@ class StatusPanel(QFrame):
 
     def _on_beat_changed(self, beat: int | None):
         if beat is None:
-            self.beat_info.setText("Pulso activo: ninguno")
+            self.beat_info.setText("Active pulse: none")
         else:
-            self.beat_info.setText(f"Pulso activo: {beat}")
+            self.beat_info.setText(f"Active pulse: {beat}")
 
     @staticmethod
     def _section_label(text: str) -> QLabel:

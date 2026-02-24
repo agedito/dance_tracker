@@ -27,7 +27,7 @@ class LogWidget(QFrame):
         self.history_button = QToolButton()
         self.history_button.setObjectName("LogHistoryButton")
         self.history_button.setText("🕘")
-        self.history_button.setToolTip("Mostrar historial")
+        self.history_button.setToolTip("Show history")
         self.history_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.history_button.setCheckable(True)
         self.history_button.toggled.connect(self._toggle_history)
@@ -46,7 +46,7 @@ class LogWidget(QFrame):
         self._clear_timer.setSingleShot(True)
         self._clear_timer.timeout.connect(self._clear_current)
 
-    def loguear(self, texto: str):
+    def log(self, texto: str):
         message = (texto or "").strip()
         if not message:
             return
@@ -61,7 +61,7 @@ class LogWidget(QFrame):
 
     def _toggle_history(self, show_history: bool):
         self.history_list.setVisible(show_history)
-        self.history_button.setToolTip("Ocultar historial" if show_history else "Mostrar historial")
+        self.history_button.setToolTip("Hide history" if show_history else "Show history")
 
     def _refresh_history(self):
         self.history_list.clear()

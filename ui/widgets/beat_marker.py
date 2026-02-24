@@ -4,14 +4,7 @@ from PySide6.QtWidgets import QWidget
 
 
 class BeatMarkerWidget(QWidget):
-    """Widget de 8 pulsos musicales con selección opcional.
-
-    - Muestra los números del 1 al 8.
-    - Puede tener un pulso activo (1..8) o ninguno (None).
-    - Al hacer click sobre un número:
-      - Si estaba inactivo, se activa.
-      - Si ya estaba activo, se desactiva (None).
-    """
+    """Widget to show 8 musical pulses.    """
 
     beatChanged = Signal(object)
 
@@ -41,7 +34,7 @@ class BeatMarkerWidget(QWidget):
     def _slot_rect(self, idx: int) -> QRectF:
         spacing = 8
         total_spacing = spacing * (self.beats - 1)
-        slot_w = max(28, (self.width() - total_spacing) / self.beats)
+        slot_w = max(28, (self.width() - total_spacing) // self.beats)
         x = idx * (slot_w + spacing)
         y = 2
         h = max(30, self.height() - 4)

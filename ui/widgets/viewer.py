@@ -82,7 +82,8 @@ class ViewerWidget(QWidget):
         y = (self.height() - scaled.height()) // 2
         return QRectF(x, y, scaled.width(), scaled.height())
 
-    def _menu_center(self, video_rect: QRectF) -> QPointF:
+    @staticmethod
+    def _menu_center(video_rect: QRectF) -> QPointF:
         return QPointF(video_rect.right() - 38, video_rect.bottom() - 38)
 
     def _menu_item_centers(self, center: QPointF):

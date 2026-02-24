@@ -7,16 +7,16 @@ from ui.widgets.viewer import ViewerWidget
 
 
 class ViewerPanel(QFrame):
-    """Single responsibility: viewer display + transport controls."""
+    """Single responsibility: viewer display and transport controls."""
 
     def __init__(
-        self,
-        total_frames: int,
-        frame_store: FrameStore,
-        on_play: Callable,
-        on_pause: Callable,
-        on_step: Callable[[int], None],
-        on_next_error: Callable,
+            self,
+            total_frames: int,
+            frame_store: FrameStore,
+            on_play: Callable,
+            on_pause: Callable,
+            on_step: Callable[[int], None],
+            on_next_error: Callable,
     ):
         super().__init__()
         self.setObjectName("Panel")
