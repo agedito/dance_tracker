@@ -114,8 +114,8 @@ class MainWindow(QMainWindow):
         self.main_splitter.splitterMoved.connect(self._save_layout_preferences)
 
     def _load_layout_preferences(self):
-        if self._preferences.get("fullscreen", True):
-            self.showMaximized()
+        # La app siempre debe arrancar en pantalla completa.
+        self.showFullScreen()
 
         top_sizes = self._preferences.get("top_splitter_sizes")
         if isinstance(top_sizes, list) and len(top_sizes) == 2:
@@ -130,7 +130,7 @@ class MainWindow(QMainWindow):
             self.main_splitter.setSizes(main_sizes)
 
     def _save_layout_preferences(self, *_):
-        self._preferences["fullscreen"] = self.isMaximized() or self.isFullScreen()
+        self._preferences["fullscreen"] = True
         self._preferences["top_splitter_sizes"] = self.top_splitter.sizes()
         self._preferences["bottom_splitter_sizes"] = self.bottom_splitter.sizes()
         self._preferences["main_splitter_sizes"] = self.main_splitter.sizes()

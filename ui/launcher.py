@@ -16,5 +16,5 @@ def launch():
 
     app = ReviewState(total_frames=1200, fps=30, layers=default_layers(), config=config)
     wnd = MainWindow(title, app)
-    wnd.show()
+    wnd.showFullScreen()
     sys.exit(main_app.exec())
