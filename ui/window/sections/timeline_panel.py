@@ -1,0 +1,88 @@
+from typing import Callable
+
+from PySide6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QScrollArea,
+    QVBoxLayout, QWidget,
+)
+
+from ui.widgets.timeline import TimelineTrack
+
+
+class TimelinePanel(QFrame):
+    """Single responsibility: display timeline tracks for all layers."""
+
+    def __init__(
+            self,
+            total_frames: int,
+            layers: list,
+            on_frame_changed: Callable[[int], None],
+            on_scrub_start: Callable,
+            on_scrub_end: Callable,
+    ):
+        super().__init__()
+        self.setObjectName("Panel")
+
+        self.time_info = QLabel("")
+        self.time_info.setObjectName("Muted")
+        self.track_widgets: list[TimelineTrack] = []
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # Header
+        header = QWidget()
+        header.setObjectName("PanelHeader")
+        hl = QHBoxLayout(header)
+        hl.setContentsMargins(10, 8, 10, 8)
+        hl.addWidget(QLabel("MASTER TIMELINE"))
+        hl.addStretch(1)
+        hl.addWidget(self.time_info)
+        root.addWidget(header)
+
+        # Scroll area with tracks
+        scroll = QScrollArea()
+        scroll.setObjectName("ScrollArea")
+        scroll.setWidgetResizable(True)
+
+        content = QWidget()
+        lay = QVBoxLayout(content)
+        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setSpacing(10)
+
+        for layer in layers:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.setSpacing(10)
+
+            name = QLabel(layer.name)
+            name.setObjectName("LayerName")
+            name.setFixedWidth(160)
+
+            track = TimelineTrack(total_frames, layer.segments)
+            track.frameChanged.connect(on_frame_changed)
+            track.scrubStarted.connect(on_scrub_start)
+            track.scrubFinished.connect(on_scrub_end)
+            self.track_widgets.append(track)
+
+            rl.addWidget(name)
+            rl.addWidget(track, 1)
+            lay.addWidget(row)
+
+        lay.addStretch(1)
+        scroll.setWidget(content)
+        root.addWidget(scroll, 1)
+
+    def set_frame(self, frame: int):
+        for track in self.track_widgets:
+            track.set_frame(frame)
+
+    def set_total_frames(self, total: int):
+        for track in self.track_widgets:
+            track.set_total_frames(total)
+
+    def update_info(self, total_frames: int, error_count: int):
+        self.time_info.setText(
+            f"Total frames: {total_frames} · Error frames: {error_count}"
+        )
