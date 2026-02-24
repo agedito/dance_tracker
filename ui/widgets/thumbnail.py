@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QSizePolicy
 
-from ui.frames_mock import draw_thumbnail_frame
+from ui.window.frames_mock import draw_thumbnail_frame
 
 
 class ThumbnailWidget(QWidget):

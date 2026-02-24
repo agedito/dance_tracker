@@ -2,6 +2,7 @@ from bootstrap.launcher import launch
 
 
 def main():
+    # ToDo: Create logger
     launch()
 
 

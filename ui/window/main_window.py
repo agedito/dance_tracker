@@ -1,4 +1,6 @@
 import math
+from pathlib import Path
+
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QAction
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
@@ -14,32 +16,32 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from pathlib import Path
 
-from app.frame_store import FrameStore
-from app.logic import ReviewState
-from ui.widgets.thumbnail import ThumbnailWidget
+from app.frame_state.frame_store import FrameStore
+from app.main_app import DanceTrackerApp
+from ui.config import Config
 from ui.widgets.beat_marker import BeatMarkerWidget
-from ui.widgets.timeline import TimelineTrack
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
-from ui.widgets.viewer import ViewerWidget
 from ui.widgets.status_light import StatusLight
-from ui.preferences import load_preferences, save_preferences
-from ui.main_window_layout import MainWindowLayout
+from ui.widgets.thumbnail import ThumbnailWidget
+from ui.widgets.timeline import TimelineTrack
+from ui.widgets.viewer import ViewerWidget
+from ui.window.main_window_layout import MainWindowLayout
+from ui.window.preferences import load_preferences, save_preferences
 
 
 class MainWindow(QMainWindow):
     MAX_RECENT_FOLDERS = 5
 
-    def __init__(self, title: str, state: ReviewState):
+    def __init__(self, cfg: Config, app: DanceTrackerApp):
         super().__init__()
-        self.state = state
+        self.state = app.states_manager
 
         self.timer = QTimer(self)
         self.timer.setInterval(int(1000 / self.state.fps))
         self.timer.timeout.connect(self._tick)
 
-        self.setWindowTitle(title)
+        self.setWindowTitle(cfg.title)
         self.resize(1200, 780)
         self._preferences = load_preferences()
         self._current_folder_path: str | None = None

@@ -1,7 +1,15 @@
-from bootstrap.config import AppConfig
-from ui.launcher import launch as ui_launch
+from app.config import Config as AppConfig
+from app.main_app import DanceTrackerApp
+from ui.config import Config as UiConfig
+from ui.main_app import GraphicApp
 
 
-def launch(cfg: AppConfig | None = None):
-    cfg = cfg or AppConfig()
-    ui_launch(cfg)
+def launch():
+    # Dance tracker app
+    app_cfg = AppConfig()
+    app = DanceTrackerApp(app_cfg)
+
+    # Graphic user interface
+    ui = GraphicApp(app)
+    ui_cfg = UiConfig()
+    ui.launch(ui_cfg)

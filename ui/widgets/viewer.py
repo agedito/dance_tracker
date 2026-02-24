@@ -4,8 +4,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from app.frame_store import FrameStore
-from ui.frames_mock import draw_viewer_frame
+from app.frame_state.frame_store import FrameStore
+from ui.window.frames_mock import draw_viewer_frame
 from utils.numbers import clamp
 
 
