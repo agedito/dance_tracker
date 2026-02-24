@@ -1,7 +1,13 @@
-from app.config import Config as AppConfig
-from app.main_app import DanceTrackerApp
+import sys
+
+from PySide6.QtWidgets import QApplication
+
+from app.interface.event_bus import EventBus
+from app.track_app.adapter import AppAdapter
+from app.track_app.config import Config as AppConfig
+from app.track_app.main_app import DanceTrackerApp
 from ui.config import Config as UiConfig
-from ui.main_app import GraphicApp
+from ui.window.main_window import MainWindow
 
 
 def launch():
@@ -9,7 +15,14 @@ def launch():
     app_cfg = AppConfig()
     app = DanceTrackerApp(app_cfg)
 
+    # create event buses
+    events = EventBus()
+    adapter = AppAdapter(app, events)
+
     # Graphic user interface
-    ui = GraphicApp(app)
     ui_cfg = UiConfig()
-    ui.launch(ui_cfg)
+    qt_app = QApplication(sys.argv)
+    window = MainWindow(ui_cfg, app, adapter)
+
+    events.connect(window)
+    sys.exit(qt_app.exec())

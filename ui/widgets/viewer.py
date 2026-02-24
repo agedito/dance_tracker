@@ -2,7 +2,8 @@ from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QResizeEvent
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from app.frame_state.frame_store import FrameStore
+from app.interface.application import DanceTrackerPort
+from app.track_app.frame_state.frame_store import FrameStore
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.radial_menu_widget import RadialMenuWidget
 from ui.window.frames_mock import draw_viewer_frame
@@ -19,12 +20,13 @@ class ViewerWidget(QWidget):
     framesLoaded = Signal(int)
     folderLoaded = Signal(str, int)
 
-    def __init__(self, total_frames: int, frame_store: FrameStore, parent=None):
+    def __init__(self, app: DanceTrackerPort, total_frames: int, frame_store: FrameStore, parent=None):
         super().__init__(parent)
         self._total_frames = max(1, total_frames)
         self._frame = 0
         self._frame_store = frame_store
         self._use_proxy = False
+        self._app = app
 
         self.setMinimumHeight(320)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -36,7 +38,7 @@ class ViewerWidget(QWidget):
         self._border_color = self._radial_menu.active_border_color
 
         # ── Drop handler ─────────────────────────────────────────────
-        self._drop_handler = DropHandler(frame_store, parent=self)
+        self._drop_handler = DropHandler(app.media, parent=self)
         self._drop_handler.framesLoaded.connect(self.framesLoaded)
         self._drop_handler.folderLoaded.connect(self.folderLoaded)
 

@@ -18,8 +18,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QMainWindow
 
-from app.frame_state.frame_store import FrameStore
-from app.main_app import DanceTrackerApp
+from app.interface.application import DanceTrackerPort
+from app.track_app.frame_state.frame_store import FrameStore
+from app.track_app.main_app import DanceTrackerApp
 from ui.config import Config
 from ui.window.layout import MainWindowLayout
 from ui.window.sections.folder_session_manager import FolderSessionManager
@@ -33,10 +34,11 @@ from ui.window.sections.viewer_panel import ViewerPanel
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, cfg: Config, app: DanceTrackerApp):
+    def __init__(self, cfg: Config, old_app: DanceTrackerApp, app: DanceTrackerPort):
         super().__init__()
         self.cfg = cfg
-        self.state = app.states_manager
+        self.state = old_app.states_manager
+        self._app = app
 
         # ── Collaborators ────────────────────────────────────────────
         self._prefs = PreferencesManager(cfg.max_recent_folders)
@@ -66,6 +68,11 @@ class MainWindow(QMainWindow):
 
     # ── UI construction ──────────────────────────────────────────────
 
+    def on_frames_loaded(self, path: str) -> None:
+        frames_count = self._frame_store.load_folder(path)
+        self._viewer_panel.viewer.set_total_frames(frames_count)
+        self._timeline.set_total_frames(frames_count)
+
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
 
@@ -73,6 +80,7 @@ class MainWindow(QMainWindow):
         self._layout.set_topbar(self._topbar)
 
         self._viewer_panel = ViewerPanel(
+            app=self._app,
             total_frames=self.state.total_frames,
             frame_store=self._frame_store,
             on_play=self._playback.play,

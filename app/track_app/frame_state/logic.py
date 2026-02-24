@@ -1,7 +1,7 @@
 from typing import List
 
-from app.config import Config as AppConfig
-from app.frame_state.layers import Layer
+from app.track_app.config import Config as AppConfig
+from app.track_app.frame_state.layers import Layer
 from utils.numbers import clamp
 
 

@@ -1,6 +1,6 @@
+import re
 from collections import OrderedDict
 from pathlib import Path
-import re
 
 from PySide6.QtGui import QPixmap
 
@@ -57,55 +57,6 @@ class FrameStore:
         if len(proxy_files) != expected_count:
             return []
         return proxy_files
-
-    def extract_video_frames(self, video_path: str) -> tuple[str | None, int]:
-        try:
-            import cv2
-        except ModuleNotFoundError:
-            return None, 0
-
-        source = Path(video_path)
-        if not source.exists() or not source.is_file() or source.suffix.lower() not in self.VIDEO_SUFFIXES:
-            return None, 0
-
-        frames_dir = source.parent / "frames"
-        frames_mino_dir = source.parent / "frames_mino"
-        frames_dir.mkdir(parents=True, exist_ok=True)
-        frames_mino_dir.mkdir(parents=True, exist_ok=True)
-        for output_dir in (frames_dir, frames_mino_dir):
-            for item in output_dir.iterdir():
-                if item.is_file() and item.suffix.lower() in self.VALID_SUFFIXES:
-                    item.unlink()
-
-        capture = cv2.VideoCapture(str(source))
-        if not capture.isOpened():
-            return None, 0
-
-        frame_idx = 0
-        while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
-
-            out_name = f"frame_{frame_idx:06d}.jpg"
-            cv2.imwrite(str(frames_dir / out_name), frame)
-
-            h, w = frame.shape[:2]
-            max_dim = max(w, h)
-            scale = 1.0 if max_dim <= 320 else 320.0 / max_dim
-            scaled_w = max(1, int(round(w * scale)))
-            scaled_h = max(1, int(round(h * scale)))
-            resized = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
-            cv2.imwrite(str(frames_mino_dir / out_name), resized)
-
-            frame_idx += 1
-
-        capture.release()
-
-        if frame_idx == 0:
-            return None, 0
-
-        return str(frames_dir), frame_idx
 
     @staticmethod
     def _natural_sort_key(path: Path):
@@ -166,8 +117,8 @@ class FrameStore:
         source_files = self._proxy_files if use_proxy and self._proxy_files else self._frame_files
         source_key = source_files is self._proxy_files
         for idx in range(
-            max(0, center_frame - self.cache_radius),
-            min(len(self._frame_files), center_frame + self.cache_radius + 1),
+                max(0, center_frame - self.cache_radius),
+                min(len(self._frame_files), center_frame + self.cache_radius + 1),
         ):
             key = (source_key, idx)
             if key in self._cache:

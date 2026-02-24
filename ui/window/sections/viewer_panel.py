@@ -2,7 +2,8 @@ from typing import Callable
 
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
-from app.frame_state.frame_store import FrameStore
+from app.interface.application import DanceTrackerPort
+from app.track_app.frame_state.frame_store import FrameStore
 from ui.widgets.viewer import ViewerWidget
 
 
@@ -11,6 +12,7 @@ class ViewerPanel(QFrame):
 
     def __init__(
             self,
+            app: DanceTrackerPort,
             total_frames: int,
             frame_store: FrameStore,
             on_play: Callable,
@@ -24,7 +26,7 @@ class ViewerPanel(QFrame):
         self.frame_info = QLabel("Frame: 0")
         self.frame_info.setObjectName("Muted")
 
-        self.viewer = ViewerWidget(total_frames, frame_store=frame_store)
+        self.viewer = ViewerWidget(app, total_frames, frame_store=frame_store)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)

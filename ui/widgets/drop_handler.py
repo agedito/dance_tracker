@@ -1,7 +1,7 @@
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
-from app.frame_state.frame_store import FrameStore
+from app.interface.media import MediaPort
 
 
 class DropHandler(QObject):
@@ -10,9 +10,9 @@ class DropHandler(QObject):
     folderLoaded = Signal(str, int)
     framesLoaded = Signal(int)
 
-    def __init__(self, frame_store: FrameStore, parent: QObject | None = None):
+    def __init__(self, media_manager: MediaPort, parent: QObject | None = None):
         super().__init__(parent)
-        self._frame_store = frame_store
+        self._media_manager = media_manager
 
     @staticmethod
     def can_accept(ev: QDragEnterEvent) -> bool:
@@ -25,21 +25,8 @@ class DropHandler(QObject):
             if not url.isLocalFile():
                 continue
             path = url.toLocalFile()
+            self._media_manager.load(path)
 
-            # Try video extraction first
-            frames_folder, extracted = self._frame_store.extract_video_frames(path)
-            if extracted > 0 and frames_folder is not None:
-                loaded = self._frame_store.load_folder(frames_folder)
-                if loaded > 0:
-                    self.framesLoaded.emit(loaded)
-                    self.folderLoaded.emit(frames_folder, loaded)
-                    return True
-
-            # Fall back to loading as the frame folder
-            loaded = self._frame_store.load_folder(path)
-            if loaded > 0:
-                self.framesLoaded.emit(loaded)
-                self.folderLoaded.emit(path, loaded)
-                return True
+            return True
 
         return False
