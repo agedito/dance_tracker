@@ -158,6 +158,13 @@ class MainWindow(QMainWindow):
         l.addWidget(self.recent_folders_bar)
         l.addStretch(1)
         l.addWidget(hint)
+        close_button = QPushButton("✕")
+        close_button.setObjectName("TopCloseButton")
+        close_button.setToolTip("Cerrar aplicación")
+        close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.clicked.connect(self.close)
+        l.addSpacing(10)
+        l.addWidget(close_button)
         self._render_recent_folder_icons()
         return w
 
@@ -595,6 +602,18 @@ class MainWindow(QMainWindow):
             border-radius: 14px;
             padding: 0px;
             font-size: 14px;
+        }
+        QPushButton#TopCloseButton {
+            min-width: 28px; max-width: 28px;
+            min-height: 28px; max-height: 28px;
+            border-radius: 14px;
+            padding: 0px;
+            font-size: 14px;
+            background: #402125;
+            border: 1px solid #67343A;
+        }
+        QPushButton#TopCloseButton:hover {
+            background: #7A2E38;
         }
 
         QScrollArea#ScrollArea { border: none; background: transparent; }
