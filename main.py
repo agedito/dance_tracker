@@ -1,4 +1,4 @@
-from ui.launcher import launch
+from bootstrap.launcher import launch
 
 
 def main():

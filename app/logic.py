@@ -1,7 +1,7 @@
 from typing import List
 
-from app.config import AppConfig
 from app.layers import Layer
+from bootstrap.config import AppConfig
 from utils.numbers import clamp
 
 
