@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
@@ -62,8 +61,7 @@ class TopBar(QWidget):
                 w.deleteLater()
 
         for folder in self._prefs.recent_folders():
-            folder_name = Path(folder).name or Path(folder).anchor or folder
-            btn = QPushButton(folder_name)
+            btn = QPushButton()
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setObjectName("RecentFolderIcon")
             btn.setToolTip(folder)
@@ -71,7 +69,8 @@ class TopBar(QWidget):
             thumbnail = self._prefs.thumbnail_for_folder(folder)
             if thumbnail:
                 btn.setIcon(QIcon(thumbnail))
-                btn.setIconSize(QSize(42, 42))
+            btn.setIconSize(QSize(42, 42))
+            btn.setFixedSize(QSize(46, 46))
 
             btn.clicked.connect(lambda _=False, p=folder: self._on_folder_clicked(p))
 

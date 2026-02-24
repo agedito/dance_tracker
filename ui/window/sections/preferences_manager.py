@@ -33,8 +33,9 @@ class PreferencesManager:
 
     def register_recent_folder(self, folder_path: str):
         normalized = str(Path(folder_path).expanduser())
-        folders = [p for p in self.recent_folders() if p != normalized]
-        folders.insert(0, normalized)
+        folders = self.recent_folders()
+        if normalized not in folders:
+            folders.append(normalized)
         self._prefs["recent_folders"] = folders[: self._max_recent]
         self._prefs["last_opened_folder"] = normalized
         self._remember_folder_thumbnail(normalized)
