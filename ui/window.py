@@ -114,8 +114,8 @@ class MainWindow(QMainWindow):
         self.main_splitter.splitterMoved.connect(self._save_layout_preferences)
 
     def _load_layout_preferences(self):
-        if self._preferences.get("fullscreen", True):
-            self.showFullScreen()
+        # La app siempre debe arrancar en pantalla completa.
+        self.showFullScreen()
 
         top_sizes = self._preferences.get("top_splitter_sizes")
         if isinstance(top_sizes, list) and len(top_sizes) == 2:
@@ -313,9 +313,9 @@ class MainWindow(QMainWindow):
         label.setObjectName("SectionTitle")
         v.addWidget(label)
         self.pose_3d_viewer = Pose3DViewerWidget()
-        v.addWidget(self.pose_3d_viewer, 3)
+        v.addWidget(self.pose_3d_viewer, 1)
 
-        v.addStretch(0)
+        v.addStretch(1)
         label = QLabel("Mock: thumbnails procedural + poses YOLO 3D.")
         label.setObjectName("FooterNote")
         v.addWidget(label)
