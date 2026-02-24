@@ -1,4 +1,5 @@
 import math
+import statistics
 from dataclasses import dataclass
 
 from PySide6.QtCore import QPointF, Qt
@@ -50,12 +51,41 @@ class Pose3DViewerWidget(QWidget):
         self._yaw = 0.9
         self._pitch = -0.45
         self._distance = 7.5
+        self._cam_height = 1.2
         self._dragging = False
         self._last_mouse = QPointF()
 
     def set_detections(self, detections: list[dict]):
         self._detections = detections
         self.update()
+
+    def sync_floor_to_frame(self) -> bool:
+        """Aligns 3D floor projection with the estimated floor line from current detections."""
+        candidates: list[float] = []
+        for detection in self._detections:
+            keypoints = self._extract_keypoints_2d(detection)
+            ankles = [y for idx, (_, y, conf) in keypoints.items() if idx in (15, 16) and conf >= 0.2]
+            if ankles:
+                candidates.extend(ankles)
+                continue
+
+            visible = [y for _, y, conf in keypoints.values() if conf >= 0.2]
+            if visible:
+                candidates.append(max(visible))
+
+        if not candidates:
+            return False
+
+        floor_norm = max(0.02, min(0.98, statistics.median(candidates)))
+        focal = min(self.width(), self.height()) * 0.75
+        if focal <= 0:
+            return False
+
+        target_floor_y = floor_norm * self.height()
+        estimated_height = ((target_floor_y - (self.height() / 2.0)) * self._distance) / focal
+        self._cam_height = max(0.1, min(3.0, estimated_height))
+        self.update()
+        return True
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -116,7 +146,7 @@ class Pose3DViewerWidget(QWidget):
         cp, sp = math.cos(self._pitch), math.sin(self._pitch)
 
         # Orbit camera looking at world origin.
-        cam = Vec3(0.0, 1.2, self._distance)
+        cam = Vec3(0.0, self._cam_height, self._distance)
         x1 = point.x * cy - point.z * sy
         z1 = point.x * sy + point.z * cy
         y1 = point.y
@@ -240,6 +270,18 @@ class Pose3DViewerWidget(QWidget):
 
     @staticmethod
     def _extract_keypoints(detection: dict) -> dict[int, Vec3]:
+        keypoints_2d = Pose3DViewerWidget._extract_keypoints_2d(detection)
+        points: dict[int, Vec3] = {}
+        for index, (x, y, _conf) in keypoints_2d.items():
+            world_x = (x - 0.5) * 3.2
+            world_y = (1.0 - y) * 2.2
+            world_z = 0.0
+            points[index] = Vec3(world_x, world_y, world_z)
+
+        return points
+
+    @staticmethod
+    def _extract_keypoints_2d(detection: dict) -> dict[int, tuple[float, float, float]]:
         keypoints = detection.get("keypoints", [])
         flat: list[float] = []
         if keypoints and isinstance(keypoints[0], (list, tuple)):
@@ -249,16 +291,13 @@ class Pose3DViewerWidget(QWidget):
         elif keypoints:
             flat = keypoints
 
-        points: dict[int, Vec3] = {}
+        points: dict[int, tuple[float, float, float]] = {}
         for index in range(min(17, len(flat) // 3)):
             x = float(flat[index * 3])
             y = float(flat[index * 3 + 1])
             conf = float(flat[index * 3 + 2])
             if conf < 0.2:
                 continue
-            world_x = (x - 0.5) * 3.2
-            world_y = (1.0 - y) * 2.2
-            world_z = 0.0
-            points[index] = Vec3(world_x, world_y, world_z)
+            points[index] = (x, y, conf)
 
         return points

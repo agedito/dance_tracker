@@ -312,6 +312,9 @@ class MainWindow(QMainWindow):
         label = QLabel("POSES 3D")
         label.setObjectName("SectionTitle")
         v.addWidget(label)
+        sync_btn = QPushButton("SYNC")
+        sync_btn.clicked.connect(self.pose_floor_sync)
+        v.addWidget(sync_btn)
         self.pose_3d_viewer = Pose3DViewerWidget()
         v.addWidget(self.pose_3d_viewer, 1)
 
@@ -557,6 +560,10 @@ class MainWindow(QMainWindow):
         updated = self.state.prev_error_frame()
         if updated is not None:
             self.set_frame(updated)
+
+    def pose_floor_sync(self):
+        if hasattr(self, "pose_3d_viewer"):
+            self.pose_3d_viewer.sync_floor_to_frame()
 
     @staticmethod
     def _qss():
