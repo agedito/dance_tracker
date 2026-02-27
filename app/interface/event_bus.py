@@ -3,17 +3,21 @@ from enum import Enum, auto
 from typing import Any, Callable, Protocol
 
 from app.interface.music import SongMetadata
+from app.interface.sequences import SequenceState
 
 
 class Event(Enum):
     FramesLoaded = auto()
     SongIdentified = auto()
+    SequencesChanged = auto()
 
 
 class EventsListener(Protocol):
     def on_frames_loaded(self, path: str) -> None: ...
 
     def on_song_identified(self, song: SongMetadata) -> None: ...
+
+    def on_sequences_changed(self, state: "SequenceState") -> None: ...
 
 
 class EventBus:
@@ -37,3 +41,4 @@ class EventBus:
     def connect(self, listener: EventsListener) -> None:
         self.on(Event.FramesLoaded, listener.on_frames_loaded)
         self.on(Event.SongIdentified, listener.on_song_identified)
+        self.on(Event.SequencesChanged, listener.on_sequences_changed)

@@ -1,9 +1,16 @@
-from pathlib import Path
+import json
+import re
+import shutil
 from collections.abc import Callable
+from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import SongMetadata, SongStatus
+from app.interface.sequences import SequenceItem, SequenceState
 from app.track_app.main_app import DanceTrackerApp
+from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
+
+_PREFS_PATH = Path.home() / ".dance_tracker_prefs.json"
 
 
 class MediaAdapter:
@@ -105,7 +112,7 @@ class MediaAdapter:
         song = SongMetadata(status=SongStatus.NOT_RUN)
         try:
             song = self._app.music_identifier.identify_from_video(path)
-        except Exception as err:  # Defensive: never break media load on music service errors.
+        except Exception as err:
             song = SongMetadata(
                 status=SongStatus.ERROR,
                 provider="music_identifier",
@@ -128,6 +135,194 @@ class MediaAdapter:
         return frames_path
 
 
+class SequencesAdapter:
+    def __init__(self, media: MediaAdapter, events: EventBus, max_recent_folders: int):
+        self._media = media
+        self._events = events
+        self._max_recent_folders = max_recent_folders
+        self._active_folder: str | None = self.last_opened_folder()
+        self._events.on(Event.FramesLoaded, self._on_frames_loaded)
+
+    def refresh(self) -> None:
+        self._emit_state()
+
+    def load(self, folder_path: str) -> None:
+        self._active_folder = self._normalize(folder_path)
+        self._emit_state()
+        self._media.load(folder_path)
+
+    def move(self, dragged_folder: str, target_folder: str, drop_after: bool) -> None:
+        dragged = self._normalize(dragged_folder)
+        target = self._normalize(target_folder)
+
+        folders = self._recent_folders()
+        if dragged not in folders or target not in folders or dragged == target:
+            return
+
+        updated = [folder for folder in folders if folder != dragged]
+        target_idx = updated.index(target)
+        if drop_after:
+            target_idx += 1
+        updated.insert(target_idx, dragged)
+
+        prefs = self._load_preferences()
+        prefs["recent_folders"] = updated[: self._max_recent_folders]
+        self._save_preferences(prefs)
+        self._emit_state()
+
+    def remove(self, folder_path: str) -> None:
+        normalized = self._normalize(folder_path)
+        prefs = self._load_preferences()
+
+        folders = [folder for folder in self._recent_folders(prefs) if folder != normalized]
+        prefs["recent_folders"] = folders[: self._max_recent_folders]
+
+        if prefs.get("last_opened_folder") == normalized:
+            prefs["last_opened_folder"] = folders[0] if folders else None
+
+        frames = prefs.get("last_frame_by_folder")
+        if isinstance(frames, dict):
+            frames.pop(normalized, None)
+            prefs["last_frame_by_folder"] = frames
+
+        thumbnails = prefs.get("recent_folder_thumbnails")
+        if isinstance(thumbnails, dict):
+            thumbnails.pop(normalized, None)
+            prefs["recent_folder_thumbnails"] = thumbnails
+
+        if self._active_folder == normalized:
+            self._active_folder = None
+
+        self._save_preferences(prefs)
+        self._emit_state()
+
+    def delete_video_and_frames(self, folder_path: str) -> None:
+        folder = Path(folder_path).expanduser()
+        video_file = self._find_video_for_frames(folder)
+
+        if folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+
+        if folder.name == "frames":
+            low_frames = folder.parent / "low_frames"
+            if low_frames.is_dir():
+                shutil.rmtree(low_frames, ignore_errors=True)
+
+            legacy_low_frames = folder.parent / "frames_mino"
+            if legacy_low_frames.is_dir():
+                shutil.rmtree(legacy_low_frames, ignore_errors=True)
+
+        if video_file and video_file.exists():
+            video_file.unlink(missing_ok=True)
+
+        self.remove(folder_path)
+
+    def last_opened_folder(self) -> str | None:
+        value = self._load_preferences().get("last_opened_folder")
+        return value if isinstance(value, str) and value else None
+
+    def _on_frames_loaded(self, path: str) -> None:
+        normalized = self._normalize(path)
+        prefs = self._load_preferences()
+        folders = self._recent_folders(prefs)
+
+        if normalized not in folders:
+            folders.append(normalized)
+
+        prefs["recent_folders"] = folders[: self._max_recent_folders]
+        prefs["last_opened_folder"] = normalized
+
+        thumbnails = prefs.get("recent_folder_thumbnails")
+        if not isinstance(thumbnails, dict):
+            thumbnails = {}
+
+        thumbnail = self._thumbnail_from_frame(normalized)
+        if thumbnail is None:
+            thumbnails.pop(normalized, None)
+        else:
+            thumbnails[normalized] = thumbnail
+        prefs["recent_folder_thumbnails"] = thumbnails
+
+        self._active_folder = normalized
+        self._save_preferences(prefs)
+        self._emit_state()
+
+    def _emit_state(self) -> None:
+        prefs = self._load_preferences()
+        thumbnails = prefs.get("recent_folder_thumbnails", {})
+        if not isinstance(thumbnails, dict):
+            thumbnails = {}
+
+        items = [
+            SequenceItem(folder_path=folder, thumbnail_path=thumbnails.get(folder))
+            for folder in self._recent_folders(prefs)
+        ]
+        self._events.emit(Event.SequencesChanged, SequenceState(items=items, active_folder=self._active_folder))
+
+    def _recent_folders(self, prefs: dict | None = None) -> list[str]:
+        payload = prefs or self._load_preferences()
+        folders = payload.get("recent_folders", [])
+        if not isinstance(folders, list):
+            return []
+        return [self._normalize(folder) for folder in folders if isinstance(folder, str) and folder][: self._max_recent_folders]
+
+    @staticmethod
+    def _find_video_for_frames(folder: Path) -> Path | None:
+        parent = folder.parent
+        if not parent.is_dir():
+            return None
+
+        videos = [
+            file
+            for file in sorted(parent.iterdir())
+            if file.is_file() and file.suffix.lower() in VIDEO_SUFFIXES
+        ]
+        return videos[0] if videos else None
+
+    @staticmethod
+    def _thumbnail_from_frame(folder_path: str) -> str | None:
+        folder = Path(folder_path)
+        if not folder.exists() or not folder.is_dir():
+            return None
+
+        valid_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+        frame_files = [
+            file
+            for file in sorted(folder.iterdir(), key=SequencesAdapter._natural_sort_key)
+            if file.is_file() and file.suffix.lower() in valid_suffixes
+        ]
+        if not frame_files:
+            return None
+
+        target_idx = 300 if len(frame_files) > 300 else len(frame_files) // 2
+        return str(frame_files[target_idx])
+
+    @staticmethod
+    def _natural_sort_key(path: Path):
+        chunks = re.split(r"(\d+)", path.name.lower())
+        return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+
+    @staticmethod
+    def _normalize(path: str) -> str:
+        return str(Path(path).expanduser())
+
+    @staticmethod
+    def _load_preferences() -> dict:
+        if not _PREFS_PATH.exists():
+            return {}
+        try:
+            payload = json.loads(_PREFS_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
+    @staticmethod
+    def _save_preferences(payload: dict) -> None:
+        _PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _PREFS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self.media = MediaAdapter(app, events)
+        self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
