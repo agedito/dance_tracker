@@ -14,7 +14,7 @@ Each concern lives in its own class:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QMainWindow
 
@@ -50,6 +50,18 @@ class MainWindow(QMainWindow):
             state=self.state,
             on_frame_changed=self.set_frame,
         )
+        self._scrubbing = False
+        self._pending_scrub_frame: int | None = None
+        self._scrub_timer = QTimer(self)
+        self._scrub_timer.setSingleShot(True)
+        self._scrub_timer.setInterval(16)
+        self._scrub_timer.timeout.connect(self._flush_scrub_frame)
+        self._loaded_count = 0
+        self._loaded_frames: set[int] = set()
+        self._active_preload_generation = 0
+        self._preload_done = False
+        self._frame_store.frame_preloaded.connect(self._on_frame_preloaded)
+        self._frame_store.preload_finished.connect(self._on_preload_finished)
 
         self._folder_session = FolderSessionManager(
             preferences=self._prefs,
@@ -93,9 +105,9 @@ class MainWindow(QMainWindow):
         self._timeline = TimelinePanel(
             total_frames=self.state.total_frames,
             layers=self.state.layers,
-            on_frame_changed=self.set_frame,
-            on_scrub_start=lambda: self._viewer_panel.viewer.set_proxy_frames_enabled(True),
-            on_scrub_end=lambda: self._viewer_panel.viewer.set_proxy_frames_enabled(False),
+            on_frame_changed=self._on_timeline_frame_changed,
+            on_scrub_start=self._on_scrub_start,
+            on_scrub_end=self._on_scrub_end,
         )
 
         self._status = StatusPanel(
@@ -117,6 +129,8 @@ class MainWindow(QMainWindow):
         bindings = [
             (Qt.Key.Key_Left, lambda: self._playback.step(-1)),
             (Qt.Key.Key_Right, lambda: self._playback.step(1)),
+            (Qt.Key.Key_PageUp, lambda: self._playback.step(-10)),
+            (Qt.Key.Key_PageDown, lambda: self._playback.step(10)),
             (Qt.Key.Key_Home, self._playback.go_to_start),
             (Qt.Key.Key_End, self._playback.go_to_end),
         ]
@@ -152,12 +166,18 @@ class MainWindow(QMainWindow):
     def set_frame(self, frame: int):
         self.state.set_frame(frame)
         cur = self.state.cur_frame
+        self._frame_store.request_preload_priority(cur)
 
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
 
         self._timeline.set_frame(cur)
-        self._timeline.update_info(self.state.total_frames, len(self.state.error_frames))
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
+        )
 
         self._right_panel.update_pose(cur)
 
@@ -169,6 +189,75 @@ class MainWindow(QMainWindow):
             is_playing=self.state.playing,
         )
 
+    def _set_frame_lightweight(self, frame: int):
+        self.state.set_frame(frame)
+        cur = self.state.cur_frame
+        self._frame_store.request_preload_priority(cur)
+        self._viewer_panel.viewer.set_frame(cur)
+        self._viewer_panel.update_frame_label(cur)
+        self._timeline.set_frame(cur)
+
+    def _on_timeline_frame_changed(self, frame: int):
+        if not self._scrubbing:
+            self.set_frame(frame)
+            return
+
+        self._pending_scrub_frame = frame
+        self._set_frame_lightweight(frame)
+        if not self._scrub_timer.isActive():
+            self._scrub_timer.start()
+
+    def _flush_scrub_frame(self):
+        if self._pending_scrub_frame is None:
+            return
+        self.set_frame(self._pending_scrub_frame)
+        self._pending_scrub_frame = None
+
+    def _on_scrub_start(self):
+        self._scrubbing = True
+        self._pending_scrub_frame = None
+        self._viewer_panel.viewer.set_proxy_frames_enabled(True)
+
+    def _on_scrub_end(self):
+        self._scrubbing = False
+        self._viewer_panel.viewer.set_proxy_frames_enabled(False)
+        self._flush_scrub_frame()
+
+
+    def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
+        if generation != self._active_preload_generation:
+            return
+        if frame < 0 or frame >= self.state.total_frames:
+            return
+
+        if loaded:
+            self._loaded_frames.add(frame)
+        else:
+            self._loaded_frames.discard(frame)
+
+        flags = self._frame_store.loaded_flags
+        self._loaded_frames = {i for i, is_loaded in enumerate(flags) if is_loaded}
+        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
+        self._timeline.set_frame_loaded(frame, loaded)
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
+        )
+
+    def _on_preload_finished(self, generation: int):
+        if generation != self._active_preload_generation:
+            return
+        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
+        self._preload_done = True
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
+        )
+
     # ── Folder / session events ──────────────────────────────────────
 
     def _on_frames_loaded(self, total_frames: int, initial_frame: int = 0):
@@ -177,6 +266,12 @@ class MainWindow(QMainWindow):
         self.state.set_total_frames(total_frames)
         self._viewer_panel.viewer.set_total_frames(total_frames)
         self._timeline.set_total_frames(total_frames)
+        loaded_flags = self._frame_store.loaded_flags
+        self._timeline.set_loaded_flags(loaded_flags)
+        self._loaded_frames = {i for i, loaded in enumerate(loaded_flags) if loaded}
+        self._loaded_count = min(total_frames, len(self._loaded_frames))
+        self._active_preload_generation = self._frame_store.preload_generation
+        self._preload_done = self._loaded_count >= total_frames
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
@@ -193,6 +288,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         self._folder_session.remember_current_frame(self.state.cur_frame)
         self._save_splitters()
+        self._frame_store.shutdown()
         super().closeEvent(event)
 
     def _close(self):
