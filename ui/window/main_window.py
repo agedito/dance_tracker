@@ -175,8 +175,12 @@ class MainWindow(QMainWindow):
             (QKeySequence(Qt.Key.Key_End), self._playback.go_to_end),
             (QKeySequence("Ctrl+A"), self._playback.go_to_start),
             (QKeySequence("Ctrl+D"), self._playback.go_to_end),
+            (QKeySequence("Ctrl+Left"), self._playback.go_to_start),
+            (QKeySequence("Ctrl+Right"), self._playback.go_to_end),
             (QKeySequence("Shift+A"), self._go_to_previous_bookmark),
             (QKeySequence("Shift+D"), self._go_to_next_bookmark),
+            (QKeySequence("Shift+Left"), self._go_to_previous_bookmark),
+            (QKeySequence("Shift+Right"), self._go_to_next_bookmark),
         ]
         self._shortcuts = []
         for shortcut, cb in bindings:
@@ -338,7 +342,7 @@ class MainWindow(QMainWindow):
             return
 
         bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        previous = [bookmark.frame for bookmark in bookmarks if bookmark.frame < self._frames.cur_frame]
+        previous = sorted(bookmark.frame for bookmark in bookmarks if bookmark.frame < self._frames.cur_frame)
         if previous:
             self.set_frame(previous[-1])
 
@@ -348,7 +352,7 @@ class MainWindow(QMainWindow):
             return
 
         bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        following = [bookmark.frame for bookmark in bookmarks if bookmark.frame > self._frames.cur_frame]
+        following = sorted(bookmark.frame for bookmark in bookmarks if bookmark.frame > self._frames.cur_frame)
         if following:
             self.set_frame(following[0])
 
