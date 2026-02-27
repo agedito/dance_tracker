@@ -142,16 +142,20 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         bindings = [
-            (Qt.Key.Key_Left, lambda: self._playback.step(-1)),
-            (Qt.Key.Key_Right, lambda: self._playback.step(1)),
-            (Qt.Key.Key_PageUp, lambda: self._playback.step(-10)),
-            (Qt.Key.Key_PageDown, lambda: self._playback.step(10)),
-            (Qt.Key.Key_Home, self._playback.go_to_start),
-            (Qt.Key.Key_End, self._playback.go_to_end),
+            (QKeySequence(Qt.Key.Key_Left), lambda: self._playback.step(-1)),
+            (QKeySequence(Qt.Key.Key_Right), lambda: self._playback.step(1)),
+            (QKeySequence(Qt.Key.Key_A), lambda: self._playback.step(-1)),
+            (QKeySequence(Qt.Key.Key_D), lambda: self._playback.step(1)),
+            (QKeySequence(Qt.Key.Key_PageUp), lambda: self._playback.step(-10)),
+            (QKeySequence(Qt.Key.Key_PageDown), lambda: self._playback.step(10)),
+            (QKeySequence(Qt.Key.Key_Home), self._playback.go_to_start),
+            (QKeySequence(Qt.Key.Key_End), self._playback.go_to_end),
+            (QKeySequence("Ctrl+A"), self._playback.go_to_start),
+            (QKeySequence("Ctrl+D"), self._playback.go_to_end),
         ]
         self._shortcuts = []
-        for key, cb in bindings:
-            sc = QShortcut(QKeySequence(key), self)
+        for shortcut, cb in bindings:
+            sc = QShortcut(shortcut, self)
             sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             sc.activated.connect(cb)
             self._shortcuts.append(sc)
