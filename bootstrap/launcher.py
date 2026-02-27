@@ -17,5 +17,5 @@ def launch():
 
     # Graphic user interface
     ui_cfg = UiConfig()
-    ui_app = GraphicApp(app, adapter)
+    ui_app = GraphicApp(adapter)
     ui_app.launch(ui_cfg, events)

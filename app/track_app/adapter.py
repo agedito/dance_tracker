@@ -322,7 +322,71 @@ class SequencesAdapter:
         _PREFS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+class FramesAdapter:
+    def __init__(self, app: DanceTrackerApp):
+        self._state = app.states_manager
+
+    @property
+    def fps(self) -> int:
+        return self._state.fps
+
+    @property
+    def total_frames(self) -> int:
+        return self._state.total_frames
+
+    @property
+    def layers(self) -> list:
+        return self._state.layers
+
+    @property
+    def error_frames(self) -> list[int]:
+        return self._state.error_frames
+
+    @property
+    def cur_frame(self) -> int:
+        return self._state.cur_frame
+
+    @property
+    def playing(self) -> bool:
+        return self._state.playing
+
+    @property
+    def frame_cache_radius(self) -> int:
+        return self._state.config.frame_cache_radius
+
+    def set_frame(self, frame: int) -> int:
+        return self._state.set_frame(frame)
+
+    def set_total_frames(self, total_frames: int) -> None:
+        self._state.set_total_frames(total_frames)
+
+    def play(self) -> None:
+        self._state.play()
+
+    def pause(self) -> None:
+        self._state.pause()
+
+    def step(self, delta: int) -> int:
+        return self._state.step(delta)
+
+    def go_to_start(self) -> int:
+        return self._state.go_to_start()
+
+    def go_to_end(self) -> int:
+        return self._state.go_to_end()
+
+    def next_error_frame(self) -> int | None:
+        return self._state.next_error_frame()
+
+    def prev_error_frame(self) -> int | None:
+        return self._state.prev_error_frame()
+
+    def advance_if_playing(self) -> bool:
+        return self._state.advance_if_playing()
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self.media = MediaAdapter(app, events)
         self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
+        self.frames = FramesAdapter(app)

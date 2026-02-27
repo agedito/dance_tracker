@@ -23,7 +23,6 @@ from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from app.interface.sequences import SequenceState
 from app.track_app.frame_state.frame_store import FrameStore
-from app.track_app.main_app import DanceTrackerApp
 from ui.config import Config
 from ui.window.layout import MainWindowLayout
 from ui.window.sections.folder_session_manager import FolderSessionManager
@@ -37,21 +36,21 @@ from ui.window.sections.viewer_panel import ViewerPanel
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, cfg: Config, old_app: DanceTrackerApp, app: DanceTrackerPort, events: EventBus):
+    def __init__(self, cfg: Config, app: DanceTrackerPort, events: EventBus):
         super().__init__()
         self.cfg = cfg
-        self.state = old_app.states_manager
         self._app = app
+        self._frames = app.frames
         self._events = events
 
         # ── Collaborators ────────────────────────────────────────────
         self._prefs = PreferencesManager(cfg.max_recent_folders)
 
-        self._frame_store = FrameStore(cache_radius=self.state.config.frame_cache_radius)
+        self._frame_store = FrameStore(cache_radius=self._frames.frame_cache_radius)
 
         self._playback = PlaybackController(
-            fps=self.state.fps,
-            state=self.state,
+            fps=self._frames.fps,
+            frames=self._frames,
             on_frame_changed=self.set_frame,
         )
         self._scrubbing = False
@@ -118,7 +117,7 @@ class MainWindow(QMainWindow):
 
         self._viewer_panel = ViewerPanel(
             app=self._app,
-            total_frames=self.state.total_frames,
+            total_frames=self._frames.total_frames,
             frame_store=self._frame_store,
             on_play=self._playback.play,
             on_pause=self._playback.pause,
@@ -134,8 +133,8 @@ class MainWindow(QMainWindow):
         )
 
         self._timeline = TimelinePanel(
-            total_frames=self.state.total_frames,
-            layers=self.state.layers,
+            total_frames=self._frames.total_frames,
+            layers=self._frames.layers,
             on_frame_changed=self._on_timeline_frame_changed,
             on_scrub_start=self._on_scrub_start,
             on_scrub_end=self._on_scrub_end,
@@ -178,7 +177,7 @@ class MainWindow(QMainWindow):
             self._shortcuts.append(sc)
 
     def _toggle_playback(self):
-        if self.state.playing:
+        if self._frames.playing:
             self._playback.pause()
             return
         self._playback.play()
@@ -218,8 +217,7 @@ class MainWindow(QMainWindow):
     # ── Frame update (the single "sync all widgets" point) ───────────
 
     def set_frame(self, frame: int):
-        self.state.set_frame(frame)
-        cur = self.state.cur_frame
+        cur = self._frames.set_frame(frame)
         self._frame_store.request_preload_priority(cur)
 
         self._viewer_panel.viewer.set_frame(cur)
@@ -227,8 +225,8 @@ class MainWindow(QMainWindow):
 
         self._timeline.set_frame(cur)
         self._timeline.update_info(
-            self.state.total_frames,
-            len(self.state.error_frames),
+            self._frames.total_frames,
+            len(self._frames.error_frames),
             loaded_count=self._loaded_count,
             preload_done=self._preload_done,
         )
@@ -237,15 +235,14 @@ class MainWindow(QMainWindow):
 
         self._status.update_status(
             cur_frame=cur,
-            total_frames=self.state.total_frames,
-            error_count=len(self.state.error_frames),
-            is_error=cur in self.state.error_frames,
-            is_playing=self.state.playing,
+            total_frames=self._frames.total_frames,
+            error_count=len(self._frames.error_frames),
+            is_error=cur in self._frames.error_frames,
+            is_playing=self._frames.playing,
         )
 
     def _set_frame_lightweight(self, frame: int):
-        self.state.set_frame(frame)
-        cur = self.state.cur_frame
+        cur = self._frames.set_frame(frame)
         self._frame_store.request_preload_priority(cur)
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
@@ -281,7 +278,7 @@ class MainWindow(QMainWindow):
     def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
         if generation != self._active_preload_generation:
             return
-        if frame < 0 or frame >= self.state.total_frames:
+        if frame < 0 or frame >= self._frames.total_frames:
             return
 
         if loaded:
@@ -291,11 +288,11 @@ class MainWindow(QMainWindow):
 
         flags = self._frame_store.loaded_flags
         self._loaded_frames = {i for i, is_loaded in enumerate(flags) if is_loaded}
-        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
+        self._loaded_count = min(self._frames.total_frames, len(self._loaded_frames))
         self._timeline.set_frame_loaded(frame, loaded)
         self._timeline.update_info(
-            self.state.total_frames,
-            len(self.state.error_frames),
+            self._frames.total_frames,
+            len(self._frames.error_frames),
             loaded_count=self._loaded_count,
             preload_done=self._preload_done,
         )
@@ -303,12 +300,12 @@ class MainWindow(QMainWindow):
     def _on_preload_finished(self, generation: int):
         if generation != self._active_preload_generation:
             return
-        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
+        self._loaded_count = min(self._frames.total_frames, len(self._loaded_frames))
         self._preload_done = True
         self._log_message("Frame cache completed.")
         self._timeline.update_info(
-            self.state.total_frames,
-            len(self.state.error_frames),
+            self._frames.total_frames,
+            len(self._frames.error_frames),
             loaded_count=self._loaded_count,
             preload_done=self._preload_done,
         )
@@ -318,7 +315,7 @@ class MainWindow(QMainWindow):
     def _on_frames_loaded(self, total_frames: int, initial_frame: int = 0):
         self._playback.pause()
         self._viewer_panel.viewer.set_proxy_frames_enabled(False)
-        self.state.set_total_frames(total_frames)
+        self._frames.set_total_frames(total_frames)
         self._viewer_panel.viewer.set_total_frames(total_frames)
         self._timeline.set_total_frames(total_frames)
         loaded_flags = self._frame_store.loaded_flags
@@ -332,7 +329,7 @@ class MainWindow(QMainWindow):
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
-        self._folder_session.on_folder_dropped(folder_path, self.state.cur_frame)
+        self._folder_session.on_folder_dropped(folder_path, self._frames.cur_frame)
         self._on_frames_loaded(
             total_frames,
             initial_frame=self._prefs.saved_frame_for_folder(
@@ -345,9 +342,9 @@ class MainWindow(QMainWindow):
         self._viewer_panel.viewer.set_proxy_frames_enabled(False)
         self._folder_session.current_folder_path = None
         self._frame_store.clear()
-        self.state.set_total_frames(1000)
-        self._viewer_panel.viewer.set_total_frames(self.state.total_frames)
-        self._timeline.set_total_frames(self.state.total_frames)
+        self._frames.set_total_frames(1000)
+        self._viewer_panel.viewer.set_total_frames(self._frames.total_frames)
+        self._timeline.set_total_frames(self._frames.total_frames)
         self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
         self._loaded_frames = set()
         self._loaded_count = 0
@@ -358,7 +355,7 @@ class MainWindow(QMainWindow):
     # ── Lifecycle ────────────────────────────────────────────────────
 
     def closeEvent(self, event: QCloseEvent):
-        self._folder_session.remember_current_frame(self.state.cur_frame)
+        self._folder_session.remember_current_frame(self._frames.cur_frame)
         current_screen = self.windowHandle().screen() if self.windowHandle() else None
         self._prefs.save_last_screen_name(current_screen.name() if current_screen else None)
         self._save_splitters()
