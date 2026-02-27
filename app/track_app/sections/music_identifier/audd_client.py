@@ -5,7 +5,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from app.track_app.sections.music_identifier.models import SongMetadata, SongStatus
+from app.interface.music import SongMetadata, SongStatus
 
 
 class AuddSongIdentifier:

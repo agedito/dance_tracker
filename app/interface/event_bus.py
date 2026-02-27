@@ -2,6 +2,8 @@ from collections import defaultdict
 from enum import Enum, auto
 from typing import Any, Callable, Protocol
 
+from app.interface.music import SongMetadata
+
 
 class Event(Enum):
     FramesLoaded = auto()
@@ -11,15 +13,7 @@ class Event(Enum):
 class EventsListener(Protocol):
     def on_frames_loaded(self, path: str) -> None: ...
 
-    def on_song_identified(
-            self,
-            status: str,
-            title: str,
-            artist: str,
-            album: str,
-            provider: str,
-            message: str,
-    ) -> None: ...
+    def on_song_identified(self, song: SongMetadata) -> None: ...
 
 
 class EventBus:

@@ -2,6 +2,7 @@ import math
 
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QTabWidget, QVBoxLayout, QWidget
 
+from app.interface.music import SongMetadata
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.thumbnail import ThumbnailWidget
 
@@ -29,13 +30,13 @@ class RightPanel(QFrame):
         detections = self._mock_yolo_pose_detections(frame)
         self.pose_3d_viewer.set_detections(detections)
 
-    def update_song_info(self, status: str, title: str, artist: str, album: str, provider: str, message: str):
-        self._music_status_value.setText(status)
-        self._music_title_value.setText(title or "—")
-        self._music_artist_value.setText(artist or "—")
-        self._music_album_value.setText(album or "—")
-        self._music_provider_value.setText(provider or "—")
-        self._music_message_value.setText(message or "")
+    def update_song_info(self, song: SongMetadata):
+        self._music_status_value.setText(song.status)
+        self._music_title_value.setText(song.title or "—")
+        self._music_artist_value.setText(song.artist or "—")
+        self._music_album_value.setText(song.album or "—")
+        self._music_provider_value.setText(song.provider or "—")
+        self._music_message_value.setText(song.message or "")
 
     # ── Private helpers ──────────────────────────────────────────────
 

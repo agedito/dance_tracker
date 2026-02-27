@@ -1,12 +1,15 @@
-from app.track_app.sections.music_identifier.audio_extractor import AudioExtractor
-from app.track_app.sections.music_identifier.audd_client import AuddSongIdentifier
-from app.track_app.sections.music_identifier.models import SongMetadata, SongStatus
+from app.interface.music import (
+    AudioSampleExtractorPort,
+    AudioSongRecognizerPort,
+    SongMetadata,
+    SongStatus,
+)
 
 
 class MusicIdentifierService:
     """Single responsibility: orchestrate extraction + identification for a video."""
 
-    def __init__(self, extractor: AudioExtractor, identifier: AuddSongIdentifier):
+    def __init__(self, extractor: AudioSampleExtractorPort, identifier: AudioSongRecognizerPort):
         self._extractor = extractor
         self._identifier = identifier
 

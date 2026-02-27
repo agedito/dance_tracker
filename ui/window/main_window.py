@@ -19,6 +19,7 @@ from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QMainWindow
 
 from app.interface.application import DanceTrackerPort
+from app.interface.music import SongMetadata
 from app.track_app.frame_state.frame_store import FrameStore
 from app.track_app.main_app import DanceTrackerApp
 from ui.config import Config
@@ -83,16 +84,8 @@ class MainWindow(QMainWindow):
     def on_frames_loaded(self, path: str) -> None:
         self._folder_session.load_folder(path)
 
-    def on_song_identified(
-            self,
-            status: str,
-            title: str,
-            artist: str,
-            album: str,
-            provider: str,
-            message: str,
-    ) -> None:
-        self._right_panel.update_song_info(status, title, artist, album, provider, message)
+    def on_song_identified(self, song: SongMetadata) -> None:
+        self._right_panel.update_song_info(song)
 
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)

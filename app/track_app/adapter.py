@@ -14,15 +14,7 @@ class MediaAdapter:
 
         if self._app.video_manager.is_video(path):
             song = self._app.music_identifier.identify_from_video(path)
-            self._events.emit(
-                Event.SongIdentified,
-                song.status,
-                song.title,
-                song.artist,
-                song.album,
-                song.provider,
-                song.message,
-            )
+            self._events.emit(Event.SongIdentified, song)
 
             path = self._app.video_manager.extract_frames(path)
             print("Video extracted at", path)

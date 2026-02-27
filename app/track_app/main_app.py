@@ -1,3 +1,4 @@
+from app.interface.music import MusicIdentifierPort
 from app.track_app.config import Config
 from app.track_app.frame_state.layers import default_layers
 from app.track_app.frame_state.logic import ReviewState
@@ -12,7 +13,7 @@ class DanceTrackerApp:
         self.cfg = cfg
         self.states_manager = ReviewState(total_frames=1200, fps=30, layers=default_layers(), config=cfg)
         self.video_manager = VideoManager()
-        self.music_identifier = MusicIdentifierService(
+        self.music_identifier: MusicIdentifierPort = MusicIdentifierService(
             extractor=AudioExtractor(sample_seconds=cfg.audio_sample_seconds),
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
         )
