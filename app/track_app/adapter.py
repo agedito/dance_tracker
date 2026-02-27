@@ -403,6 +403,9 @@ class SequenceDataAdapter:
     def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[int]:
         return self._service.move_bookmark(frames_folder_path, source_frame, target_frame)
 
+    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+        return self._service.remove_bookmark(frames_folder_path, frame)
+
 
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):

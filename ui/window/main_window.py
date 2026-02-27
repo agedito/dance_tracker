@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
             on_scrub_end=self._on_scrub_end,
             on_bookmark_requested=self._on_bookmark_requested,
             on_bookmark_moved=self._on_bookmark_moved,
+            on_bookmark_removed=self._on_bookmark_removed,
         )
 
         self._status = StatusPanel(
@@ -166,6 +167,8 @@ class MainWindow(QMainWindow):
             (QKeySequence(Qt.Key.Key_End), self._playback.go_to_end),
             (QKeySequence("Ctrl+A"), self._playback.go_to_start),
             (QKeySequence("Ctrl+D"), self._playback.go_to_end),
+            (QKeySequence("Shift+A"), self._go_to_previous_bookmark),
+            (QKeySequence("Shift+D"), self._go_to_next_bookmark),
         ]
         self._shortcuts = []
         for shortcut, cb in bindings:
@@ -304,6 +307,34 @@ class MainWindow(QMainWindow):
         safe_target = max(0, min(target_frame, self._frames.total_frames - 1))
         self._app.sequence_data.move_bookmark(folder_path, source_frame, safe_target)
         self._refresh_timeline_bookmarks()
+
+    def _on_bookmark_removed(self, frame: int):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        self._app.sequence_data.remove_bookmark(folder_path, frame)
+        self._refresh_timeline_bookmarks()
+
+    def _go_to_previous_bookmark(self):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
+        previous = [bookmark for bookmark in bookmarks if bookmark < self._frames.cur_frame]
+        if previous:
+            self.set_frame(previous[-1])
+
+    def _go_to_next_bookmark(self):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
+        following = [bookmark for bookmark in bookmarks if bookmark > self._frames.cur_frame]
+        if following:
+            self.set_frame(following[0])
 
     def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
         if generation != self._active_preload_generation:

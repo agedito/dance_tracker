@@ -20,6 +20,7 @@ class TimelinePanel(QFrame):
             on_scrub_end: Callable,
             on_bookmark_requested: Callable[[int], None],
             on_bookmark_moved: Callable[[int, int], None],
+            on_bookmark_removed: Callable[[int], None],
     ):
         super().__init__()
         self.setObjectName("Panel")
@@ -68,6 +69,7 @@ class TimelinePanel(QFrame):
             track.scrubFinished.connect(on_scrub_end)
             track.bookmarkRequested.connect(on_bookmark_requested)
             track.bookmarkMoved.connect(on_bookmark_moved)
+            track.bookmarkRemoved.connect(on_bookmark_removed)
             self.track_widgets.append(track)
 
             rl.addWidget(name)

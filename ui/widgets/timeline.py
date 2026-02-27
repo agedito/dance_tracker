@@ -1,6 +1,6 @@
-from PySide6.QtCore import Qt, QRectF, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QPointF, Qt, QRectF, Signal
+from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtWidgets import QMenu, QWidget
 
 from app.track_app.frame_state.layers import Segment
 from utils.numbers import clamp
@@ -17,6 +17,7 @@ class TimelineTrack(QWidget):
     scrubFinished = Signal()
     bookmarkRequested = Signal(int)
     bookmarkMoved = Signal(int, int)
+    bookmarkRemoved = Signal(int)
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -88,6 +89,10 @@ class TimelineTrack(QWidget):
             self.bookmarkRequested.emit(self._frame_from_pos(ev.position().x()))
             return
 
+        if ev.button() == Qt.MouseButton.RightButton:
+            self._show_bookmark_context_menu(ev)
+            return
+
         if ev.button() != Qt.MouseButton.LeftButton:
             return
 
@@ -130,6 +135,17 @@ class TimelineTrack(QWidget):
             self.scrubFinished.emit()
         super().mouseReleaseEvent(ev)
 
+    def _show_bookmark_context_menu(self, ev) -> None:
+        bookmark = self._bookmark_near_pos(ev.position().x())
+        if bookmark is None:
+            return
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete bookmark")
+        chosen_action = menu.exec(ev.globalPosition().toPoint())
+        if chosen_action == delete_action:
+            self.bookmarkRemoved.emit(bookmark)
+
     def paintEvent(self, ev):
         w, h = self.width(), self.height()
         p = QPainter(self)
@@ -148,7 +164,7 @@ class TimelineTrack(QWidget):
             p.drawRect(QRectF(left, 1, seg_w, h - 5))
 
         self._draw_loaded_indicator(p, w, h)
-        self._draw_bookmarks(p, h)
+        self._draw_bookmarks(p)
 
         xph = int((self.frame / max(1, self.total_frames - 1)) * w)
         p.setPen(QPen(QColor(255, 80, 80, 240), 2))
@@ -173,15 +189,20 @@ class TimelineTrack(QWidget):
             painter.setBrush(color)
             painter.drawRect(QRectF(x, y, 1, bar_h))
 
-    def _draw_bookmarks(self, painter: QPainter, h: int):
+    def _draw_bookmarks(self, painter: QPainter):
         bookmarks_to_draw = self.bookmarks
         if self._dragging_bookmark and self._drag_bookmark_frame is not None:
             bookmarks_to_draw = [frame for frame in self.bookmarks if frame != self._drag_source_bookmark]
             bookmarks_to_draw.append(self._drag_bookmark_frame)
 
         painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(247, 193, 45, 240))
+
         for frame in sorted(set(bookmarks_to_draw)):
             x = self._frame_x(frame)
-            color = QColor(247, 193, 45, 240)
-            painter.setBrush(color)
-            painter.drawRect(QRectF(x - 1, 2, 3, h - 8))
+            marker = QPolygonF([
+                QPointF(x - 4, 2),
+                QPointF(x + 4, 2),
+                QPointF(x, 9),
+            ])
+            painter.drawPolygon(marker)

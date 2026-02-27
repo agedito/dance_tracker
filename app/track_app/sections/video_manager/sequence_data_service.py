@@ -81,6 +81,12 @@ class SequenceDataService:
 
         return self._update_bookmarks(frames_folder_path, updater=_move)
 
+    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+        return self._update_bookmarks(
+            frames_folder_path,
+            updater=lambda bookmarks: [value for value in bookmarks if value != frame],
+        )
+
     def _find_matching_metadata(self, frames_folder: Path) -> dict | None:
         metadata_path = self._find_matching_metadata_path(frames_folder)
         if metadata_path is None:
