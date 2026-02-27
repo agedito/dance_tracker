@@ -70,15 +70,27 @@ class RightPanel(QFrame):
 
         self.logger_widget = LogWidget(display_ms=5000, history_limit=100)
 
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.setChildrenCollapsible(False)
-        splitter.addWidget(tabs)
-        splitter.addWidget(self.logger_widget)
-        splitter.setStretchFactor(0, 2)
-        splitter.setStretchFactor(1, 1)
-        splitter.setSizes([400, 200])
+        tabs_panel = QFrame()
+        tabs_panel.setObjectName("Panel")
+        tabs_layout = QVBoxLayout(tabs_panel)
+        tabs_layout.setContentsMargins(0, 0, 0, 0)
+        tabs_layout.addWidget(tabs)
 
-        v.addWidget(splitter, 1)
+        logger_panel = QFrame()
+        logger_panel.setObjectName("Panel")
+        logger_layout = QVBoxLayout(logger_panel)
+        logger_layout.setContentsMargins(0, 0, 0, 0)
+        logger_layout.addWidget(self.logger_widget)
+
+        self.vertical_splitter = QSplitter(Qt.Orientation.Vertical)
+        self.vertical_splitter.setChildrenCollapsible(False)
+        self.vertical_splitter.addWidget(tabs_panel)
+        self.vertical_splitter.addWidget(logger_panel)
+        self.vertical_splitter.setStretchFactor(0, 2)
+        self.vertical_splitter.setStretchFactor(1, 1)
+        self.vertical_splitter.setSizes([400, 200])
+
+        v.addWidget(self.vertical_splitter, 1)
 
     def _add_tabs_in_saved_order(self):
         desired_order = self._preferences.right_panel_tab_order()
@@ -116,6 +128,9 @@ class RightPanel(QFrame):
 
     def update_song_info(self, song: SongMetadata):
         self.music_tab.update_song_info(song)
+
+    def log(self, message: str):
+        self.logger_widget.log(message)
 
     @staticmethod
     def _mock_yolo_pose_detections(frame: int) -> list[dict]:

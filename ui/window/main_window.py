@@ -277,12 +277,14 @@ class MainWindow(QMainWindow):
             loaded_count=self._loaded_count,
             preload_done=self._preload_done,
         )
+        self._right_panel.log("Cacheo de video terminado")
 
     # ── Folder / session events ──────────────────────────────────────
 
     def _on_frames_loaded(self, total_frames: int, initial_frame: int = 0):
         self._playback.pause()
         self._viewer_panel.viewer.set_proxy_frames_enabled(False)
+        self._right_panel.log("Video cargado")
         self.state.set_total_frames(total_frames)
         self._viewer_panel.viewer.set_total_frames(total_frames)
         self._timeline.set_total_frames(total_frames)
