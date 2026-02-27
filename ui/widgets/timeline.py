@@ -1,7 +1,8 @@
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QMenu, QWidget
+from PySide6.QtWidgets import QInputDialog, QMenu, QWidget
 
+from app.interface.sequence_data import Bookmark
 from app.track_app.frame_state.layers import Segment
 from utils.numbers import clamp
 
@@ -18,6 +19,7 @@ class TimelineTrack(QWidget):
     bookmarkRequested = Signal(int)
     bookmarkMoved = Signal(int, int)
     bookmarkRemoved = Signal(int)
+    bookmarkNameChanged = Signal(int, str)
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -25,11 +27,11 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
-        self.bookmarks: list[int] = []
+        self.bookmarks: list[Bookmark] = []
         self._dragging_bookmark = False
         self._drag_source_bookmark: int | None = None
         self._drag_bookmark_frame: int | None = None
-        self.setFixedHeight(28)
+        self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def _frame_from_pos(self, x: float) -> int:
@@ -39,26 +41,32 @@ class TimelineTrack(QWidget):
     def _frame_x(self, frame: int) -> int:
         return int((clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)) * self.width())
 
-    def _bookmark_near_pos(self, x: float, threshold_px: int = 6) -> int | None:
+    def _bookmark_near_pos(self, x: float, threshold_px: int = 8) -> int | None:
         if not self.bookmarks:
             return None
 
         nearest: int | None = None
         nearest_distance: float | None = None
-        for frame in self.bookmarks:
-            marker_x = self._frame_x(frame)
+        for bookmark in self.bookmarks:
+            marker_x = self._frame_x(bookmark.frame)
             distance = abs(marker_x - x)
             if distance > threshold_px:
                 continue
             if nearest_distance is None or distance < nearest_distance:
                 nearest_distance = distance
-                nearest = frame
+                nearest = bookmark.frame
         return nearest
+
+    def _bookmark_name(self, frame: int) -> str:
+        for bookmark in self.bookmarks:
+            if bookmark.frame == frame:
+                return bookmark.name
+        return ""
 
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
         self.frame = clamp(self.frame, 0, self.total_frames - 1)
-        self.bookmarks = [value for value in self.bookmarks if value < self.total_frames]
+        self.bookmarks = [bookmark for bookmark in self.bookmarks if bookmark.frame < self.total_frames]
         self.loaded_flags = [False] * self.total_frames
         self.update()
 
@@ -66,9 +74,15 @@ class TimelineTrack(QWidget):
         self.frame = clamp(f, 0, self.total_frames - 1)
         self.update()
 
-    def set_bookmarks(self, bookmarks: list[int]):
-        normalized = {clamp(value, 0, self.total_frames - 1) for value in bookmarks}
-        self.bookmarks = sorted(normalized)
+    def set_bookmarks(self, bookmarks: list[Bookmark]):
+        by_frame = {
+            clamp(bookmark.frame, 0, self.total_frames - 1): bookmark.name.strip()
+            for bookmark in bookmarks
+        }
+        self.bookmarks = [
+            Bookmark(frame=frame, name=name)
+            for frame, name in sorted(by_frame.items())
+        ]
         self.update()
 
     def set_loaded_flags(self, flags: list[bool]):
@@ -141,9 +155,15 @@ class TimelineTrack(QWidget):
             return
 
         menu = QMenu(self)
+        edit_name_action = menu.addAction("Edit bookmark name")
         delete_action = menu.addAction("Delete bookmark")
         chosen_action = menu.exec(ev.globalPosition().toPoint())
-        if chosen_action == delete_action:
+        if chosen_action == edit_name_action:
+            current_name = self._bookmark_name(bookmark)
+            name, ok = QInputDialog.getText(self, "Bookmark name", "Name:", text=current_name)
+            if ok:
+                self.bookmarkNameChanged.emit(bookmark, name)
+        elif chosen_action == delete_action:
             self.bookmarkRemoved.emit(bookmark)
 
     def paintEvent(self, ev):
@@ -161,7 +181,7 @@ class TimelineTrack(QWidget):
             seg_w = max(1, right - left)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(status_color(s.t))
-            p.drawRect(QRectF(left, 1, seg_w, h - 5))
+            p.drawRect(QRectF(left, 12, seg_w, h - 16))
 
         self._draw_loaded_indicator(p, w, h)
         self._draw_bookmarks(p)
@@ -190,19 +210,31 @@ class TimelineTrack(QWidget):
             painter.drawRect(QRectF(x, y, 1, bar_h))
 
     def _draw_bookmarks(self, painter: QPainter):
-        bookmarks_to_draw = self.bookmarks
+        bookmarks_to_draw = list(self.bookmarks)
         if self._dragging_bookmark and self._drag_bookmark_frame is not None:
-            bookmarks_to_draw = [frame for frame in self.bookmarks if frame != self._drag_source_bookmark]
-            bookmarks_to_draw.append(self._drag_bookmark_frame)
+            bookmarks_to_draw = [
+                bookmark
+                for bookmark in self.bookmarks
+                if bookmark.frame != self._drag_source_bookmark
+            ]
+            bookmarks_to_draw.append(
+                Bookmark(frame=self._drag_bookmark_frame, name=self._bookmark_name(self._drag_source_bookmark or -1))
+            )
 
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(247, 193, 45, 240))
 
-        for frame in sorted(set(bookmarks_to_draw)):
-            x = self._frame_x(frame)
+        for bookmark in sorted(bookmarks_to_draw, key=lambda item: item.frame):
+            x = self._frame_x(bookmark.frame)
             marker = QPolygonF([
-                QPointF(x - 4, 2),
-                QPointF(x + 4, 2),
-                QPointF(x, 9),
+                QPointF(x - 6, 12),
+                QPointF(x + 6, 12),
+                QPointF(x, 22),
             ])
             painter.drawPolygon(marker)
+
+            if bookmark.name:
+                text_rect = QRectF(x - 90, 0, 180, 12)
+                painter.setPen(QColor(237, 241, 244, 230))
+                painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, bookmark.name)
+                painter.setPen(Qt.PenStyle.NoPen)

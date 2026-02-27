@@ -137,6 +137,7 @@ class MainWindow(QMainWindow):
             on_bookmark_requested=self._on_bookmark_requested,
             on_bookmark_moved=self._on_bookmark_moved,
             on_bookmark_removed=self._on_bookmark_removed,
+            on_bookmark_name_changed=self._on_bookmark_name_changed,
         )
 
         self._status = StatusPanel(
@@ -284,9 +285,9 @@ class MainWindow(QMainWindow):
 
         bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
         valid_bookmarks = [
-            frame
-            for frame in bookmarks
-            if 0 <= frame < self._frames.total_frames
+            bookmark
+            for bookmark in bookmarks
+            if 0 <= bookmark.frame < self._frames.total_frames
         ]
         self._timeline.set_bookmarks(valid_bookmarks)
 
@@ -316,13 +317,21 @@ class MainWindow(QMainWindow):
         self._app.sequence_data.remove_bookmark(folder_path, frame)
         self._refresh_timeline_bookmarks()
 
+    def _on_bookmark_name_changed(self, frame: int, name: str):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        self._app.sequence_data.set_bookmark_name(folder_path, frame, name)
+        self._refresh_timeline_bookmarks()
+
     def _go_to_previous_bookmark(self):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
 
         bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        previous = [bookmark for bookmark in bookmarks if bookmark < self._frames.cur_frame]
+        previous = [bookmark.frame for bookmark in bookmarks if bookmark.frame < self._frames.cur_frame]
         if previous:
             self.set_frame(previous[-1])
 
@@ -332,7 +341,7 @@ class MainWindow(QMainWindow):
             return
 
         bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        following = [bookmark for bookmark in bookmarks if bookmark > self._frames.cur_frame]
+        following = [bookmark.frame for bookmark in bookmarks if bookmark.frame > self._frames.cur_frame]
         if following:
             self.set_frame(following[0])
 

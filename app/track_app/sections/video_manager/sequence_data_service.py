@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from app.interface.sequence_data import SequenceVideoData
+from app.interface.sequence_data import Bookmark, SequenceVideoData
 
 
 class SequenceDataService:
@@ -51,7 +51,7 @@ class SequenceDataService:
             fps=fps,
         )
 
-    def read_bookmarks(self, frames_folder_path: str) -> list[int]:
+    def read_bookmarks(self, frames_folder_path: str) -> list[Bookmark]:
         frames_folder = Path(frames_folder_path).expanduser().resolve()
         if not frames_folder.is_dir():
             return []
@@ -66,26 +66,47 @@ class SequenceDataService:
 
         return self._extract_bookmarks(payload)
 
-    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
         return self._update_bookmarks(
             frames_folder_path,
             updater=lambda bookmarks: self._insert_bookmark(bookmarks, frame),
         )
 
-    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[int]:
-        def _move(bookmarks: list[int]) -> list[int]:
-            if source_frame not in bookmarks:
+    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[Bookmark]:
+        def _move(bookmarks: list[Bookmark]) -> list[Bookmark]:
+            if source_frame not in {bookmark.frame for bookmark in bookmarks}:
                 return bookmarks
-            updated = [value for value in bookmarks if value != source_frame]
-            return self._insert_bookmark(updated, target_frame)
+
+            source_name = ""
+            for bookmark in bookmarks:
+                if bookmark.frame == source_frame:
+                    source_name = bookmark.name
+                    break
+
+            updated = [bookmark for bookmark in bookmarks if bookmark.frame != source_frame]
+            return self._insert_bookmark(updated, target_frame, source_name)
 
         return self._update_bookmarks(frames_folder_path, updater=_move)
 
-    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
         return self._update_bookmarks(
             frames_folder_path,
-            updater=lambda bookmarks: [value for value in bookmarks if value != frame],
+            updater=lambda bookmarks: [bookmark for bookmark in bookmarks if bookmark.frame != frame],
         )
+
+    def set_bookmark_name(self, frames_folder_path: str, frame: int, name: str) -> list[Bookmark]:
+        normalized_name = self._normalize_name(name)
+
+        def _set_name(bookmarks: list[Bookmark]) -> list[Bookmark]:
+            updated: list[Bookmark] = []
+            for bookmark in bookmarks:
+                if bookmark.frame == frame:
+                    updated.append(Bookmark(frame=bookmark.frame, name=normalized_name))
+                else:
+                    updated.append(bookmark)
+            return updated
+
+        return self._update_bookmarks(frames_folder_path, updater=_set_name)
 
     def _find_matching_metadata(self, frames_folder: Path) -> dict | None:
         metadata_path = self._find_matching_metadata_path(frames_folder)
@@ -109,7 +130,7 @@ class SequenceDataService:
 
         return None
 
-    def _update_bookmarks(self, frames_folder_path: str, updater) -> list[int]:
+    def _update_bookmarks(self, frames_folder_path: str, updater) -> list[Bookmark]:
         frames_folder = Path(frames_folder_path).expanduser().resolve()
         if not frames_folder.is_dir():
             return []
@@ -128,13 +149,19 @@ class SequenceDataService:
         if not isinstance(sequence, dict):
             sequence = {}
             payload["sequence"] = sequence
-        sequence["bookmarks"] = updated
+        sequence["bookmarks"] = [
+            {
+                "frame": bookmark.frame,
+                "name": bookmark.name,
+            }
+            for bookmark in updated
+        ]
 
         metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return updated
 
     @staticmethod
-    def _extract_bookmarks(payload: dict) -> list[int]:
+    def _extract_bookmarks(payload: dict) -> list[Bookmark]:
         sequence = payload.get("sequence")
         if not isinstance(sequence, dict):
             return []
@@ -143,15 +170,37 @@ class SequenceDataService:
         if not isinstance(raw_bookmarks, list):
             return []
 
-        values = {item for item in (SequenceDataService._to_int(value) for value in raw_bookmarks) if item >= 0}
-        return sorted(values)
+        values: dict[int, str] = {}
+        for raw_bookmark in raw_bookmarks:
+            if isinstance(raw_bookmark, dict):
+                frame = SequenceDataService._to_int(raw_bookmark.get("frame"))
+                name = SequenceDataService._normalize_name(raw_bookmark.get("name"))
+            else:
+                frame = SequenceDataService._to_int(raw_bookmark)
+                name = ""
+
+            if frame < 0:
+                continue
+            values[frame] = name
+
+        return [
+            Bookmark(frame=frame, name=values[frame])
+            for frame in sorted(values)
+        ]
 
     @staticmethod
-    def _insert_bookmark(bookmarks: list[int], frame: int) -> list[int]:
+    def _insert_bookmark(bookmarks: list[Bookmark], frame: int, name: str = "") -> list[Bookmark]:
         normalized = max(0, int(frame))
-        updated = set(bookmarks)
-        updated.add(normalized)
-        return sorted(updated)
+        normalized_name = SequenceDataService._normalize_name(name)
+        by_frame = {bookmark.frame: bookmark.name for bookmark in bookmarks}
+        by_frame[normalized] = normalized_name
+        return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
+
+    @staticmethod
+    def _normalize_name(value: object) -> str:
+        if not isinstance(value, str):
+            return ""
+        return value.strip()
 
     @staticmethod
     def _resolve_metadata_path(value: object, root: Path) -> Path | None:

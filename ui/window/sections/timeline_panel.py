@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from app.interface.sequence_data import Bookmark
 from ui.widgets.timeline import TimelineTrack
 
 
@@ -21,6 +22,7 @@ class TimelinePanel(QFrame):
             on_bookmark_requested: Callable[[int], None],
             on_bookmark_moved: Callable[[int, int], None],
             on_bookmark_removed: Callable[[int], None],
+            on_bookmark_name_changed: Callable[[int, str], None],
     ):
         super().__init__()
         self.setObjectName("Panel")
@@ -70,6 +72,7 @@ class TimelinePanel(QFrame):
             track.bookmarkRequested.connect(on_bookmark_requested)
             track.bookmarkMoved.connect(on_bookmark_moved)
             track.bookmarkRemoved.connect(on_bookmark_removed)
+            track.bookmarkNameChanged.connect(on_bookmark_name_changed)
             self.track_widgets.append(track)
 
             rl.addWidget(name)
@@ -88,7 +91,7 @@ class TimelinePanel(QFrame):
         for track in self.track_widgets:
             track.set_total_frames(total)
 
-    def set_bookmarks(self, bookmarks: list[int]):
+    def set_bookmarks(self, bookmarks: list[Bookmark]):
         for track in self.track_widgets:
             track.set_bookmarks(bookmarks)
 

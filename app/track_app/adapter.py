@@ -6,7 +6,7 @@ from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import SongMetadata, SongStatus
-from app.interface.sequence_data import SequenceDataPort
+from app.interface.sequence_data import Bookmark, SequenceDataPort
 from app.interface.sequences import SequenceItem, SequenceState
 from app.track_app.main_app import DanceTrackerApp
 from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
@@ -394,17 +394,20 @@ class SequenceDataAdapter:
     def read_video_data(self, frames_folder_path: str):
         return self._service.read_video_data(frames_folder_path)
 
-    def read_bookmarks(self, frames_folder_path: str) -> list[int]:
+    def read_bookmarks(self, frames_folder_path: str) -> list[Bookmark]:
         return self._service.read_bookmarks(frames_folder_path)
 
-    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
         return self._service.add_bookmark(frames_folder_path, frame)
 
-    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[int]:
+    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[Bookmark]:
         return self._service.move_bookmark(frames_folder_path, source_frame, target_frame)
 
-    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+    def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
         return self._service.remove_bookmark(frames_folder_path, frame)
+
+    def set_bookmark_name(self, frames_folder_path: str, frame: int, name: str) -> list[Bookmark]:
+        return self._service.set_bookmark_name(frames_folder_path, frame, name)
 
 
 class AppAdapter:
