@@ -10,6 +10,10 @@ class SongMetadata:
     album: str = ""
     provider: str = ""
     message: str = ""
+    tempo_bpm: float | None = None
+    pulse_count: int | None = None
+    audio_duration_s: float | None = None
+    analysis_provider: str = ""
 
 
 class SongStatus:
@@ -28,5 +32,15 @@ class AudioSongRecognizerPort(Protocol):
     def identify(self, audio_path: str) -> SongMetadata: ...
 
 
+class AudioTempoAnalyzerPort(Protocol):
+    def analyze(self, audio_path: str) -> SongMetadata: ...
+
+
 class MusicIdentifierPort(Protocol):
     def identify_from_video(self, video_path: str) -> SongMetadata: ...
+
+    def analyze_tempo_from_video(self, video_path: str) -> SongMetadata: ...
+
+
+class MusicPort(Protocol):
+    def analyze_for_sequence(self, frames_folder_path: str) -> SongMetadata: ...

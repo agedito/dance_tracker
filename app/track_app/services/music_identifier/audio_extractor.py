@@ -4,23 +4,23 @@ from pathlib import Path
 
 
 class AudioExtractor:
-    """Single responsibility: extract a lightweight audio sample from a video file."""
+    """Extract or reuse a lightweight audio sample from a video file."""
 
     def __init__(self, sample_seconds: int = 20):
         self._sample_seconds = max(1, sample_seconds)
 
     def extract_sample(self, video_path: str) -> str | None:
-        ffmpeg = self._resolve_ffmpeg_executable()
-        if ffmpeg is None:
-            return None
-
         source = Path(video_path)
         if not source.exists() or not source.is_file():
             return None
 
         target = source.parent / f"{source.stem}_music_sample.wav"
-        if target.exists():
-            target.unlink()
+        if target.exists() and target.stat().st_size > 0:
+            return str(target)
+
+        ffmpeg = self._resolve_ffmpeg_executable()
+        if ffmpeg is None:
+            return None
 
         cmd = [
             ffmpeg,

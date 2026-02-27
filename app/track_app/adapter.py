@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
-from app.interface.music import SongMetadata, SongStatus
+from app.interface.music import MusicPort, SongMetadata, SongStatus
 from app.interface.sequence_data import SequenceDataPort
 from app.interface.track_detector import PersonDetection
 from app.interface.sequence_data import Bookmark, SequenceDataPort
@@ -137,6 +137,58 @@ class MediaAdapter:
 
         self._app.video_manager.write_sequence_metadata(path, frames_path)
         return frames_path
+
+
+class MusicAdapter:
+    def __init__(self, app: DanceTrackerApp, events: EventBus):
+        self._app = app
+        self._events = events
+
+    def analyze_for_sequence(self, frames_folder_path: str) -> SongMetadata:
+        video_path = self._resolve_video_path(frames_folder_path)
+        if not video_path:
+            song = SongMetadata(
+                status=SongStatus.UNAVAILABLE,
+                provider="music_identifier",
+                message="Could not resolve the source video for this sequence.",
+            )
+            self._events.emit(Event.SongIdentified, song)
+            return song
+
+        try:
+            song = self._app.music_identifier.analyze_tempo_from_video(video_path)
+        except Exception as err:
+            song = SongMetadata(
+                status=SongStatus.ERROR,
+                provider="music_identifier",
+                message=f"Error analyzing tempo: {err}",
+            )
+
+        self._events.emit(Event.SongIdentified, song)
+        return song
+
+    def _resolve_video_path(self, frames_folder_path: str) -> str | None:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        if not frames_folder.is_dir():
+            return None
+
+        metadata_candidates = sorted(frames_folder.parent.glob("*.dance_tracker.json"))
+        for metadata_path in metadata_candidates:
+            metadata = self._app.video_manager.read_sequence_metadata(str(metadata_path))
+            if not metadata:
+                continue
+
+            frames_value = metadata.get("frames") or metadata.get("frames_path")
+            resolved_frames = MediaAdapter._resolve_metadata_path(frames_value, metadata_path.parent)
+            if resolved_frames != frames_folder:
+                continue
+
+            video_value = MediaAdapter._video_path_from_metadata(metadata)
+            resolved_video = MediaAdapter._resolve_metadata_path(video_value, metadata_path.parent)
+            if resolved_video and self._app.video_manager.is_video(str(resolved_video)):
+                return str(resolved_video)
+
+        return None
 
 
 class SequencesAdapter:
@@ -442,6 +494,7 @@ class TrackDetectorAdapter:
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self.media = MediaAdapter(app, events)
+        self.music: MusicPort = MusicAdapter(app, events)
         self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
         self.frames = FramesAdapter(app)
         self.sequence_data = SequenceDataAdapter()
