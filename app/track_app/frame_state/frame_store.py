@@ -213,7 +213,8 @@ class FrameStore(QObject):
                 return None
 
             self._cache[cache_key] = pix
-            self._remember_base_size(frame_idx)
+            if not is_proxy:
+                self._remember_base_size(frame_idx, allow_disk_load=allow_disk_load)
             self._enforce_cache_limit(center_frame=frame_idx)
         else:
             self._cache.move_to_end(cache_key)
@@ -221,7 +222,7 @@ class FrameStore(QObject):
         self._prefetch_neighbors(frame_idx, use_proxy=is_proxy, allow_disk_load=allow_disk_load)
         return pix
 
-    def get_display_size(self, frame_idx: int) -> tuple[int, int] | None:
+    def get_display_size(self, frame_idx: int, allow_disk_load: bool = True) -> tuple[int, int] | None:
         if frame_idx in self._base_sizes:
             return self._base_sizes[frame_idx]
 
@@ -235,14 +236,17 @@ class FrameStore(QObject):
             self._base_sizes[frame_idx] = (image.width(), image.height())
             return self._base_sizes[frame_idx]
 
-        pix = self.get_frame(frame_idx, use_proxy=False)
+        if not allow_disk_load:
+            return None
+
+        pix = self.get_frame(frame_idx, use_proxy=False, allow_disk_load=True)
         if pix is None:
             return None
 
-        self._remember_base_size(frame_idx)
+        self._remember_base_size(frame_idx, allow_disk_load=True)
         return self._base_sizes.get(frame_idx)
 
-    def _remember_base_size(self, frame_idx: int):
+    def _remember_base_size(self, frame_idx: int, allow_disk_load: bool = True):
         if frame_idx in self._base_sizes or frame_idx < 0 or frame_idx >= len(self._frame_files):
             return
 
@@ -256,6 +260,8 @@ class FrameStore(QObject):
         key = (False, frame_idx)
         base_pix = self._cache.get(key)
         if base_pix is None:
+            if not allow_disk_load:
+                return
             base_pix = QPixmap(str(self._frame_files[frame_idx]))
             if base_pix.isNull():
                 return

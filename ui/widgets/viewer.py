@@ -75,7 +75,10 @@ class ViewerWidget(QWidget):
         if pixmap is None:
             return QRectF(self.rect().adjusted(16, 16, -16, -16))
 
-        display_size = self._frame_store.get_display_size(self._frame)
+        display_size = self._frame_store.get_display_size(
+            self._frame,
+            allow_disk_load=self._use_proxy,
+        )
         if display_size is None:
             display_size = (pixmap.width(), pixmap.height())
 
@@ -138,7 +141,10 @@ class ViewerWidget(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.GlobalColor.black)
 
-        display_size = self._frame_store.get_display_size(self._frame)
+        display_size = self._frame_store.get_display_size(
+            self._frame,
+            allow_disk_load=self._use_proxy,
+        )
         if display_size is not None:
             pixmap = pixmap.scaled(
                 display_size[0],

@@ -213,10 +213,6 @@ class MainWindow(QMainWindow):
         self._timeline.set_frame(cur)
 
     def _on_timeline_frame_changed(self, frame: int):
-        if not self._scrubbing:
-            self.set_frame(frame)
-            return
-
         self._pending_scrub_frame = frame
         self._set_frame_lightweight(frame)
         if not self._scrub_timer.isActive():
