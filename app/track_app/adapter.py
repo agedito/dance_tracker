@@ -145,6 +145,8 @@ class AppAdapter:
             playing=state.playing,
             error_frames=tuple(sorted(state.error_frames)),
             current_folder=self._current_folder,
+            layers=tuple(state.layers),
+            frame_cache_radius=state.config.frame_cache_radius,
         )
 
     def emit_state(self) -> None:

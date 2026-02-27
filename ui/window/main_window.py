@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
         self._app_state = app.get_state()
 
         self._prefs = PreferencesManager(cfg.max_recent_folders)
-        self._frame_store = FrameStore(cache_radius=200)
+        self._frame_store = FrameStore(cache_radius=max(1, self._app_state.frame_cache_radius))
 
         self._scrubbing = False
         self._pending_scrub_frame: int | None = None
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
 
         self._timeline = TimelinePanel(
             total_frames=self._app_state.total_frames,
-            layers=[],
+            layers=list(self._app_state.layers),
             on_frame_changed=self._on_timeline_frame_changed,
             on_scrub_start=self._on_scrub_start,
             on_scrub_end=self._on_scrub_end,

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from app.interface.media import MediaPort
+from app.track_app.frame_state.layers import Layer
 
 
 @dataclass(frozen=True)
@@ -12,6 +13,8 @@ class AppState:
     playing: bool
     error_frames: tuple[int, ...]
     current_folder: str | None
+    layers: tuple[Layer, ...]
+    frame_cache_radius: int
 
 
 class DanceTrackerPort(Protocol):
