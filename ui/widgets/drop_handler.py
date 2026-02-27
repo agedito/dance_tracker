@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QProgressDialog, QWidget
 from app.interface.media import MediaPort
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
+SEQUENCE_SUFFIXES = {".json"}
 
 
 class DropHandler(QObject):
@@ -30,7 +31,7 @@ class DropHandler(QObject):
             if not url.isLocalFile():
                 continue
             path = url.toLocalFile()
-            if self._is_video(path):
+            if self._is_video(path) or self._is_sequence_metadata(path):
                 self._load_with_progress(path)
             else:
                 self._media_manager.load(path)
@@ -65,3 +66,9 @@ class DropHandler(QObject):
     def _is_video(path: str) -> bool:
         source = Path(path)
         return source.is_file() and source.suffix.lower() in VIDEO_SUFFIXES
+
+
+    @staticmethod
+    def _is_sequence_metadata(path: str) -> bool:
+        source = Path(path)
+        return source.is_file() and source.suffix.lower() in SEQUENCE_SUFFIXES

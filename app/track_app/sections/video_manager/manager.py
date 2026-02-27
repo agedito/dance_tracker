@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from pathlib import Path
 import shutil
+import json
 
 import cv2
 
@@ -9,6 +10,8 @@ VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
 
 class VideoManager:
+    _SEQUENCE_METADATA_SUFFIX = ".dance_tracker.json"
+
     @staticmethod
     def is_video(video_path: str) -> bool:
         source = Path(video_path)
@@ -92,3 +95,44 @@ class VideoManager:
 
         print("Finished")
         return str(frames_dir)
+
+    @classmethod
+    def is_sequence_metadata(cls, file_path: str) -> bool:
+        source = Path(file_path)
+        return source.is_file() and source.suffix.lower() == ".json"
+
+    @classmethod
+    def metadata_path_for_video(cls, video_path: str) -> Path:
+        source = Path(video_path)
+        return source.with_name(f"{source.stem}{cls._SEQUENCE_METADATA_SUFFIX}")
+
+    @classmethod
+    def write_sequence_metadata(cls, video_path: str, frames_path: str) -> str | None:
+        source = Path(video_path)
+        if not source.is_file():
+            return None
+
+        metadata_path = cls.metadata_path_for_video(video_path)
+        payload = {
+            "version": 1,
+            "video_path": str(source.resolve()),
+            "frames_path": str(Path(frames_path).resolve()),
+        }
+        metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return str(metadata_path)
+
+    @classmethod
+    def read_sequence_metadata(cls, metadata_path: str) -> dict | None:
+        source = Path(metadata_path)
+        if not source.is_file() or source.suffix.lower() != ".json":
+            return None
+
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        return data

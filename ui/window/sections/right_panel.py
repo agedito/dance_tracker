@@ -100,6 +100,9 @@ class RightPanel(QFrame):
     def refresh_sequences(self):
         self.sequences_tab.refresh()
 
+    def set_active_sequence(self, folder_path: str | None):
+        self.sequences_tab.set_active_folder(folder_path)
+
     def update_song_info(self, song: SongMetadata):
         self.music_tab.update_song_info(song)
 
