@@ -70,15 +70,19 @@ class MediaPipePosePersonDetector:
         _ = previous_detections
         width, height = _image_size(frame_path)
 
+        print(f"[TrackDetector] MediaPipe detection requested for frame: {frame_path}")
         image = _load_image(frame_path)
         if image is None:
+            print(f"[TrackDetector] MediaPipe skipped frame (image could not be loaded): {frame_path}")
             return []
 
         pose_module = _mediapipe_pose_module()
         if pose_module is None:
+            print("[TrackDetector] MediaPipe is not available (module import failed).")
             return []
 
         if self._pose is None:
+            print("[TrackDetector] Initializing MediaPipe Pose detector.")
             self._pose = pose_module.Pose(
                 static_image_mode=True,
                 model_complexity=1,
@@ -88,6 +92,7 @@ class MediaPipePosePersonDetector:
         results = self._pose.process(image)
         landmarks = getattr(results, "pose_landmarks", None)
         if landmarks is None:
+            print(f"[TrackDetector] MediaPipe found no landmarks for frame: {frame_path}")
             return []
 
         points_in_frame = [
@@ -96,6 +101,7 @@ class MediaPipePosePersonDetector:
             if 0.0 <= lm.x <= 1.0 and 0.0 <= lm.y <= 1.0
         ]
         if not points_in_frame:
+            print(f"[TrackDetector] MediaPipe returned landmarks outside frame bounds: {frame_path}")
             return []
 
         visible_points = [lm for lm in points_in_frame if lm.visibility >= 0.2]
@@ -113,6 +119,7 @@ class MediaPipePosePersonDetector:
         rel_w = min(1.0 - rel_x, max_x - min_x + (2 * padding_x))
         rel_h = min(1.0 - rel_y, max_y - min_y + (2 * padding_y))
         if rel_w <= 0.0 or rel_h <= 0.0:
+            print(f"[TrackDetector] MediaPipe produced an invalid bounding box for frame: {frame_path}")
             return []
 
         box = BoundingBox(
@@ -122,6 +129,10 @@ class MediaPipePosePersonDetector:
             height=max(1, int(rel_h * height)),
         )
         confidence = max(0.0, min(1.0, _average_visibility(points)))
+        print(
+            f"[TrackDetector] MediaPipe detection ready for frame: {frame_path} | "
+            f"in-frame landmarks={len(points_in_frame)} | used landmarks={len(points)} | confidence={confidence:.3f}"
+        )
         return [
             PersonDetection(
                 confidence=confidence,
@@ -152,13 +163,18 @@ class TrackDetectorService:
         return True
 
     def detect_people_for_sequence(self, frames_folder_path: str) -> int:
+        print(
+            f"[TrackDetector] Detection run started. detector='{self._active_detector_name}' folder='{frames_folder_path}'"
+        )
         detector = self._detectors.get(self._active_detector_name)
         if detector is None:
+            print(f"[TrackDetector] Active detector not found: {self._active_detector_name}")
             self._detections_by_frame = {}
             self._write_json(frames_folder_path, {})
             return 0
 
         frame_files = self._frame_files(frames_folder_path)
+        print(f"[TrackDetector] Frames discovered for detection: {len(frame_files)}")
         detections: dict[int, list[PersonDetection]] = {}
         previous_detections: list[PersonDetection] | None = None
 
@@ -169,14 +185,25 @@ class TrackDetectorService:
             )
             detections[index] = frame_detections
             previous_detections = frame_detections
+            if index < 5 or index == len(frame_files) - 1:
+                print(
+                    f"[TrackDetector] Frame {index}: detections={len(frame_detections)} path='{frame_path.name}'"
+                )
 
         self._detections_by_frame = detections
+        total_detections = sum(len(frame_detections) for frame_detections in detections.values())
+        print(
+            f"[TrackDetector] Detection run finished. frames={len(frame_files)} total_detections={total_detections}"
+        )
         self._write_json(frames_folder_path, detections)
         return len(frame_files)
 
     def load_detections(self, frames_folder_path: str) -> None:
         payload = self._read_json(frames_folder_path)
         self._detections_by_frame = payload
+        print(
+            f"[TrackDetector] Detections loaded. frames_with_detections={len(payload)} folder='{frames_folder_path}'"
+        )
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return list(self._detections_by_frame.get(frame_index, []))
@@ -205,6 +232,7 @@ class TrackDetectorService:
         }
         json_path = self._json_path(frames_folder_path)
         json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"[TrackDetector] Detections saved at: {json_path}")
 
     def _read_json(self, frames_folder_path: str) -> dict[int, list[PersonDetection]]:
         json_path = self._json_path(frames_folder_path)
