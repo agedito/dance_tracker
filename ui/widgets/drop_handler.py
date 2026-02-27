@@ -42,7 +42,7 @@ class DropHandler(QObject):
     def _load_with_progress(self, path: str) -> None:
         progress = QProgressDialog("Loading video...", "Cancel", 0, 100, self._parent_widget())
         progress.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
-        progress.setWindowTitle("Procesando video")
+        progress.setWindowTitle("Processing video")
         progress.setMinimumDuration(0)
         progress.setAutoClose(True)
         progress.setAutoReset(True)

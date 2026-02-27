@@ -20,7 +20,7 @@ class LogWidget(QFrame):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
 
-        self.current_label = QLabel("Sin logs")
+        self.current_label = QLabel("No logs")
         self.current_label.setObjectName("LogCurrent")
         self.current_label.setWordWrap(True)
 
@@ -46,8 +46,8 @@ class LogWidget(QFrame):
         self._clear_timer.setSingleShot(True)
         self._clear_timer.timeout.connect(self._clear_current)
 
-    def log(self, texto: str):
-        message = (texto or "").strip()
+    def log(self, text: str):
+        message = (text or "").strip()
         if not message:
             return
 
@@ -57,7 +57,7 @@ class LogWidget(QFrame):
         self._clear_timer.start(self.display_ms)
 
     def _clear_current(self):
-        self.current_label.setText("Sin logs")
+        self.current_label.setText("No logs")
 
     def _toggle_history(self, show_history: bool):
         self.history_list.setVisible(show_history)
