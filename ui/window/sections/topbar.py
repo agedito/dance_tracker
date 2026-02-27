@@ -50,6 +50,7 @@ class TopBar(QWidget):
         close_button.setObjectName("TopCloseButton")
         close_button.setToolTip("Close app")
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_button.clicked.connect(on_close)
         layout.addSpacing(10)
         layout.addWidget(close_button)
