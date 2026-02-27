@@ -2,8 +2,15 @@ from pathlib import Path
 from typing import Callable
 import shutil
 
-from PySide6.QtCore import QPoint, QEvent, QSize, Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QIcon
+from PySide6.QtCore import QPoint, QEvent, QSize, Qt, QUrl, QMimeData, Signal
+from PySide6.QtGui import (
+    QDesktopServices,
+    QDrag,
+    QDragEnterEvent,
+    QDropEvent,
+    QIcon,
+    QMouseEvent,
+)
 from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
@@ -22,6 +29,7 @@ from ui.window.sections.preferences_manager import PreferencesManager
 
 class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
+    _SEQUENCE_MIME_TYPE = "application/x-dance-tracker-sequence"
 
     def __init__(
             self,
@@ -58,19 +66,27 @@ class SequencesTabWidget(QWidget):
         self.refresh()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasFormat(self._SEQUENCE_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+
         if self._drop_handler.can_accept(event):
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def dropEvent(self, event: QDropEvent):
+        if event.mimeData().hasFormat(self._SEQUENCE_MIME_TYPE):
+            event.acceptProposedAction()
+            return
+
         if self._drop_handler.handle_drop(event):
             event.acceptProposedAction()
         else:
             event.ignore()
 
     def refresh(self):
-        self._folders = list(reversed(self._prefs.recent_folders()))
+        self._folders = self._prefs.recent_folders()
         if self._selected_path not in self._folders:
             self._selected_path = None
         self._rebuild_grid()
@@ -103,13 +119,17 @@ class SequencesTabWidget(QWidget):
             self._grid.addWidget(self._sequence_button(folder), row, col)
 
     def _sequence_button(self, folder_path: str) -> QPushButton:
-        button = QPushButton("")
+        button = _SequenceThumbnailButton(
+            folder_path=folder_path,
+            size=self._THUMBNAIL_SIZE,
+            sequence_mime_type=self._SEQUENCE_MIME_TYPE,
+        )
+        button.folderDropped.connect(self._move_folder_before)
         button.setObjectName("SequenceThumbnail")
         button.setProperty("isSelected", folder_path == self._selected_path)
         button.style().unpolish(button)
         button.style().polish(button)
         button.setToolTip(folder_path)
-        button.setFixedSize(self._THUMBNAIL_SIZE)
         button.clicked.connect(lambda _=False, selected_path=folder_path: self._select_and_load(selected_path))
         button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         button.customContextMenuRequested.connect(
@@ -121,6 +141,20 @@ class SequencesTabWidget(QWidget):
             button.setIcon(QIcon(thumbnail))
             button.setIconSize(QSize(146, 82))
         return button
+
+    def _move_folder_before(self, dragged_folder: str, target_folder: str):
+        if dragged_folder == target_folder:
+            return
+        if dragged_folder not in self._folders or target_folder not in self._folders:
+            return
+
+        updated = [folder for folder in self._folders if folder != dragged_folder]
+        target_idx = updated.index(target_folder)
+        updated.insert(target_idx, dragged_folder)
+
+        self._folders = updated
+        self._prefs.save_recent_folders_order(updated)
+        self._rebuild_grid()
 
     def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
         menu = QMenu(self)
@@ -185,3 +219,52 @@ class SequencesTabWidget(QWidget):
         self._selected_path = folder_path
         self._media_manager.load(folder_path)
         self._rebuild_grid()
+
+
+class _SequenceThumbnailButton(QPushButton):
+    folderDropped = Signal(str, str)
+
+    def __init__(self, folder_path: str, size: QSize, sequence_mime_type: str):
+        super().__init__("")
+        self._folder_path = folder_path
+        self._sequence_mime_type = sequence_mime_type
+        self._drag_start_pos: QPoint | None = None
+        self.setAcceptDrops(True)
+        self.setFixedSize(size)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_start_pos = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if not (event.buttons() & Qt.MouseButton.LeftButton):
+            return
+        if self._drag_start_pos is None:
+            return
+
+        distance = (event.position().toPoint() - self._drag_start_pos).manhattanLength()
+        if distance < 8:
+            return
+
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setData(self._sequence_mime_type, self._folder_path.encode("utf-8"))
+        drag.setMimeData(mime_data)
+        drag.exec(Qt.DropAction.MoveAction)
+        self._drag_start_pos = None
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        if event.mimeData().hasFormat(self._sequence_mime_type):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        if not event.mimeData().hasFormat(self._sequence_mime_type):
+            event.ignore()
+            return
+
+        dragged = bytes(event.mimeData().data(self._sequence_mime_type)).decode("utf-8")
+        self.folderDropped.emit(dragged, self._folder_path)
+        event.acceptProposedAction()

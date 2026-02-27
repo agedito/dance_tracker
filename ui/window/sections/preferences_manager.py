@@ -122,6 +122,24 @@ class PreferencesManager:
         ]
         self.save()
 
+    def save_recent_folders_order(self, order: list[str]):
+        normalized_order = [
+            str(Path(folder).expanduser())
+            for folder in order
+            if isinstance(folder, str) and folder
+        ]
+
+        deduped: list[str] = []
+        seen: set[str] = set()
+        for folder in normalized_order:
+            if folder in seen:
+                continue
+            deduped.append(folder)
+            seen.add(folder)
+
+        self._prefs["recent_folders"] = deduped[: self._max_recent]
+        self.save()
+
     # ── Recent folder thumbnails ────────────────────────────────────
 
     def _remember_folder_thumbnail(self, folder_path: str):
