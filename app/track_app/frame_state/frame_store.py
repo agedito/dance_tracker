@@ -28,7 +28,7 @@ class FrameStore(QObject):
         self._loaded_flags: list[bool] = []
 
         self._preload_stop = threading.Event()
-        self._preload_thread: threading.Thread | None = None
+        self._preload_threads: list[threading.Thread] = []
         self._preload_generation = 0
         self._preload_priority = 0
         self._lock = threading.Lock()
@@ -167,18 +167,29 @@ class FrameStore(QObject):
         self._preload_stop.clear()
         self._preload_generation += 1
         generation = self._preload_generation
+        total_frames = len(self._frame_files)
+        pending = set(range(total_frames))
 
-        def preload_worker():
-            pending = set(range(len(self._frame_files)))
-            while pending:
+        anchors = [0, total_frames // 2, total_frames - 1]
+        unique_anchors: list[int] = []
+        for anchor in anchors:
+            if anchor not in unique_anchors:
+                unique_anchors.append(anchor)
+
+        remaining_workers = len(unique_anchors)
+
+        def preload_worker(anchor: int):
+            nonlocal remaining_workers
+            while True:
                 if self._preload_stop.is_set() or generation != self._preload_generation:
                     return
 
                 with self._lock:
-                    priority = self._preload_priority
+                    if not pending:
+                        break
 
-                idx = min(pending, key=lambda i: abs(i - priority))
-                pending.remove(idx)
+                    idx = min(pending, key=lambda i: abs(i - anchor))
+                    pending.remove(idx)
 
                 image = QImage(str(self._frame_files[idx]))
                 if self._preload_stop.is_set() or generation != self._preload_generation:
@@ -198,14 +209,22 @@ class FrameStore(QObject):
                 self._base_sizes[idx] = (image.width(), image.height())
                 self._safe_emit_frame_preloaded(idx, True, generation)
 
-            if not self._preload_stop.is_set() and generation == self._preload_generation:
+            should_emit_finished = False
+            with self._lock:
+                remaining_workers -= 1
+                should_emit_finished = remaining_workers == 0
+
+            if should_emit_finished and not self._preload_stop.is_set() and generation == self._preload_generation:
                 try:
                     self.preload_finished.emit(generation)
                 except RuntimeError:
                     return
 
-        self._preload_thread = threading.Thread(target=preload_worker, daemon=True)
-        self._preload_thread.start()
+        self._preload_threads = []
+        for anchor in unique_anchors:
+            thread = threading.Thread(target=preload_worker, args=(anchor,), daemon=True)
+            self._preload_threads.append(thread)
+            thread.start()
 
     def _safe_emit_frame_preloaded(self, idx: int, loaded: bool, generation: int):
         try:
@@ -216,10 +235,12 @@ class FrameStore(QObject):
     def _stop_preload_thread(self, wait: bool = False):
         self._preload_stop.set()
         self._preload_generation += 1
-        thread = self._preload_thread
-        self._preload_thread = None
-        if wait and thread and thread.is_alive():
-            thread.join(timeout=0.5)
+        threads = list(self._preload_threads)
+        self._preload_threads = []
+        if wait:
+            for thread in threads:
+                if thread.is_alive():
+                    thread.join(timeout=0.5)
 
     @staticmethod
     def _natural_sort_key(path: Path):
