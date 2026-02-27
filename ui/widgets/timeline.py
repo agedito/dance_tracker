@@ -96,16 +96,15 @@ class TimelineTrack(QWidget):
         bar_h = 3
         y = h - bar_h - 1
         painter.setPen(Qt.PenStyle.NoPen)
+        indicator_color = QColor(0, 0, 0, 220)
 
         if w <= 1:
-            color = QColor(42, 160, 88, 240) if self.loaded_flags and self.loaded_flags[0] else QColor(95, 98, 102, 200)
-            painter.setBrush(color)
+            painter.setBrush(indicator_color)
             painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
             return
 
         for x in range(1, w - 1):
             frame = int((x / max(1, w - 1)) * (self.total_frames - 1))
-            loaded = self.loaded_flags[frame] if frame < len(self.loaded_flags) else False
-            color = QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200)
-            painter.setBrush(color)
+            _ = self.loaded_flags[frame] if frame < len(self.loaded_flags) else False
+            painter.setBrush(indicator_color)
             painter.drawRect(QRectF(x, y, 1, bar_h))
