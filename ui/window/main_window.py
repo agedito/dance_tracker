@@ -112,7 +112,7 @@ class MainWindow(QMainWindow):
 
         self._right_panel = RightPanel(
             preferences=self._prefs,
-            on_media_selected=self._app.media.load,
+            media_manager=self._app.media,
         )
 
         self._timeline = TimelinePanel(

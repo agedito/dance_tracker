@@ -1,11 +1,9 @@
 import math
 from pathlib import Path
-from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon, QMouseEvent
 from PySide6.QtWidgets import (
-    QFileDialog,
     QFrame,
     QGridLayout,
     QLabel,
@@ -16,18 +14,60 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.interface.media import MediaPort
+from ui.widgets.drop_handler import DropHandler
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.thumbnail import ThumbnailWidget
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
+class DragScrollArea(QScrollArea):
+    """Scroll area that supports click-and-drag scrolling and hides scrollbars."""
+
+    def __init__(self):
+        super().__init__()
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._dragging = False
+        self._last_pos = None
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            self._last_pos = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self._dragging and self._last_pos is not None:
+            delta = event.position() - self._last_pos
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - int(delta.x()))
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(delta.y()))
+            self._last_pos = event.position()
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and self._dragging:
+            self._dragging = False
+            self._last_pos = None
+            self.unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+
 class RightPanel(QFrame):
     """Single responsibility: display right-side tools grouped in tabs."""
 
-    def __init__(self, preferences: PreferencesManager, on_media_selected: Callable[[str], None]):
+    def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
         super().__init__()
         self._prefs = preferences
-        self._on_media_selected = on_media_selected
+        self._media_manager = media_manager
+        self._drop_handler = DropHandler(media_manager, parent=self)
         self.setObjectName("Panel")
 
         v = QVBoxLayout(self)
@@ -94,15 +134,19 @@ class RightPanel(QFrame):
 
     def _build_sequences_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setAcceptDrops(True)
+        tab.dragEnterEvent = self._sequences_drag_enter_event
+        tab.dropEvent = self._sequences_drop_event
+
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        load_btn = QPushButton("Cargar video")
-        load_btn.clicked.connect(self._pick_video)
-        layout.addWidget(load_btn)
+        hint = QLabel("Arrastra videos o carpetas aquí")
+        hint.setObjectName("Muted")
+        layout.addWidget(hint)
 
-        self._seq_scroll = QScrollArea()
+        self._seq_scroll = DragScrollArea()
         self._seq_scroll.setObjectName("ScrollArea")
         self._seq_scroll.setWidgetResizable(True)
         self._seq_container = QWidget()
@@ -115,15 +159,17 @@ class RightPanel(QFrame):
         self._rebuild_sequences_grid()
         return tab
 
-    def _pick_video(self):
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Selecciona un video",
-            "",
-            "Videos (*.mp4 *.mov *.avi *.mkv *.webm *.m4v);;Todos (*.*)",
-        )
-        if file_path:
-            self._on_media_selected(file_path)
+    def _sequences_drag_enter_event(self, event: QDragEnterEvent):
+        if self._drop_handler.can_accept(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def _sequences_drop_event(self, event: QDropEvent):
+        if self._drop_handler.handle_drop(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def _rebuild_sequences_grid(self):
         while self._seq_grid.count():
@@ -148,13 +194,13 @@ class RightPanel(QFrame):
         p = Path(folder_path).expanduser()
         button = QPushButton(p.name)
         button.setToolTip(folder_path)
-        button.setFixedSize(QSize(140, 100))
-        button.clicked.connect(lambda _=False, path=folder_path: self._on_media_selected(path))
+        button.setFixedSize(QSize(160, 110))
+        button.clicked.connect(lambda _=False, path=folder_path: self._media_manager.load(path))
 
         thumbnail = self._prefs.thumbnail_for_folder(folder_path)
         if thumbnail:
             button.setIcon(QIcon(thumbnail))
-            button.setIconSize(QSize(128, 72))
+            button.setIconSize(QSize(146, 82))
         return button
 
     @staticmethod
