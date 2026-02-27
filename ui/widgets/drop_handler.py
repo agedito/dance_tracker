@@ -1,7 +1,12 @@
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from pathlib import Path
+
+from PySide6.QtWidgets import QProgressDialog, QWidget
 
 from app.interface.media import MediaPort
+
+VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
 
 class DropHandler(QObject):
@@ -25,8 +30,38 @@ class DropHandler(QObject):
             if not url.isLocalFile():
                 continue
             path = url.toLocalFile()
-            self._media_manager.load(path)
-
+            if self._is_video(path):
+                self._load_with_progress(path)
+            else:
+                self._media_manager.load(path)
             return True
 
         return False
+
+    def _load_with_progress(self, path: str) -> None:
+        progress = QProgressDialog("Cargando video...", "Cancelar", 0, 100, self._parent_widget())
+        progress.setWindowTitle("Procesando video")
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.setAutoReset(True)
+        progress.setValue(0)
+        progress.show()
+
+        def on_progress(value: int) -> None:
+            progress.setValue(max(0, min(100, value)))
+            QCoreApplication.processEvents()
+
+        self._media_manager.load(path, on_progress=on_progress, should_cancel=progress.wasCanceled)
+        progress.close()
+
+    def _parent_widget(self) -> QWidget | None:
+        parent = self.parent()
+        if isinstance(parent, QWidget):
+            return parent
+        return None
+
+
+    @staticmethod
+    def _is_video(path: str) -> bool:
+        source = Path(path)
+        return source.is_file() and source.suffix.lower() in VIDEO_SUFFIXES

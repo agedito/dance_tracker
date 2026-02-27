@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -18,7 +19,12 @@ class VideoManager:
 
         return True
 
-    def extract_frames(self, video_path: str) -> str | None:
+    def extract_frames(
+        self,
+        video_path: str,
+        on_progress: Callable[[int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> str | None:
         source = Path(video_path)
         if not self.is_video(video_path):
             return None
@@ -40,8 +46,17 @@ class VideoManager:
         if not capture.isOpened():
             return None
 
+        total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        if on_progress is not None:
+            on_progress(0)
+
         frame_idx = 0
+        canceled = False
         while True:
+            if should_cancel is not None and should_cancel():
+                canceled = True
+                break
+
             ok, frame = capture.read()
             if not ok:
                 break
@@ -58,11 +73,23 @@ class VideoManager:
             cv2.imwrite(str(frames_mino_dir / out_name), resized)
 
             frame_idx += 1
+            if on_progress is not None and total_frames > 0:
+                on_progress(min(100, int((frame_idx * 100) / total_frames)))
 
         capture.release()
 
+        if canceled:
+            for output_dir in (frames_dir, frames_mino_dir):
+                for item in output_dir.iterdir():
+                    if item.is_file() and item.suffix.lower() in VALID_SUFFIXES:
+                        item.unlink()
+            return None
+
         if frame_idx == 0:
             return None
+
+        if on_progress is not None:
+            on_progress(100)
 
         print("Finished")
         return str(frames_dir)

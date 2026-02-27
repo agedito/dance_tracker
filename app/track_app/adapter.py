@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections.abc import Callable
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import SongMetadata, SongStatus
@@ -10,7 +11,12 @@ class MediaAdapter:
         self._app = app
         self._events = events
 
-    def load(self, path: str) -> None:
+    def load(
+        self,
+        path: str,
+        on_progress: Callable[[int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> None:
         print("Loading", path)
 
         if self._app.video_manager.is_video(path):
@@ -26,7 +32,11 @@ class MediaAdapter:
 
             self._events.emit(Event.SongIdentified, song)
 
-            path = self._app.video_manager.extract_frames(path)
+            path = self._app.video_manager.extract_frames(
+                path,
+                on_progress=on_progress,
+                should_cancel=should_cancel,
+            )
             print("Video extracted at", path)
 
         if not path or not Path(path).is_dir():
