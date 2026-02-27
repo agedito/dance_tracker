@@ -108,6 +108,13 @@ class PreferencesManager:
     def save_fullscreen(self, is_fullscreen: bool):
         self._prefs["fullscreen"] = is_fullscreen
 
+    def last_screen_name(self) -> str | None:
+        value = self._prefs.get("last_screen_name")
+        return value if isinstance(value, str) and value else None
+
+    def save_last_screen_name(self, screen_name: str | None):
+        self._prefs["last_screen_name"] = screen_name if screen_name else None
+
     # ── Right panel tabs ───────────────────────────────────────────
 
     def right_panel_tab_order(self) -> list[str]:

@@ -16,7 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QApplication, QMainWindow
 
 from app.interface.application import DanceTrackerPort
 from app.interface.music import SongMetadata
@@ -174,12 +174,24 @@ class MainWindow(QMainWindow):
     # ── Splitter layout persistence ──────────────────────────────────
 
     def _restore_splitters(self):
+        self._restore_window_screen()
         self.showFullScreen()
         for name in ("top_splitter", "bottom_splitter", "main_splitter"):
             splitter = getattr(self._layout, name)
             sizes = self._prefs.splitter_sizes(name)
             if sizes:
                 splitter.setSizes(sizes)
+
+    def _restore_window_screen(self):
+        screen_name = self._prefs.last_screen_name()
+        if not screen_name:
+            return
+
+        for screen in QApplication.screens():
+            if screen.name() != screen_name:
+                continue
+            self.setGeometry(screen.availableGeometry())
+            return
 
     def _connect_splitter_persistence(self):
         for name in ("top_splitter", "bottom_splitter", "main_splitter"):
@@ -349,6 +361,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         self._folder_session.remember_current_frame(self.state.cur_frame)
+        current_screen = self.windowHandle().screen() if self.windowHandle() else None
+        self._prefs.save_last_screen_name(current_screen.name() if current_screen else None)
         self._save_splitters()
         self._frame_store.shutdown()
         super().closeEvent(event)
