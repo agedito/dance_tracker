@@ -6,7 +6,7 @@ from app.track_app.frame_state.logic import ReviewState
 from app.track_app.services.music_identifier.audio_extractor import AudioExtractor
 from app.track_app.services.music_identifier.audd_client import AuddSongIdentifier
 from app.track_app.services.music_identifier.service import MusicIdentifierService
-from app.track_app.sections.track_detector.service import MockPersonDetector, TrackDetectorService
+from app.track_app.sections.track_detector.service import MockPersonDetector, NearbyMockPersonDetector, TrackDetectorService
 from app.track_app.sections.video_manager.manager import VideoManager
 
 
@@ -19,4 +19,10 @@ class DanceTrackerApp:
             extractor=AudioExtractor(sample_seconds=cfg.audio_sample_seconds),
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
         )
-        self.track_detector: TrackDetectorPort = TrackDetectorService(detector=MockPersonDetector())
+        self.track_detector: TrackDetectorPort = TrackDetectorService(
+            detectors={
+                "Random detector": MockPersonDetector(),
+                "Nearby random detector": NearbyMockPersonDetector(),
+            },
+            default_detector_name="Random detector",
+        )
