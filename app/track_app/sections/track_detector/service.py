@@ -57,6 +57,73 @@ class NearbyMockPersonDetector:
         return detections
 
 
+class MediaPipePosePersonDetector:
+    def __init__(self, min_detection_confidence: float = 0.5):
+        self._min_detection_confidence = min_detection_confidence
+        self._pose = None
+
+    def detect_people_in_frame(
+        self,
+        frame_path: str,
+        previous_detections: list[PersonDetection] | None = None,
+    ) -> list[PersonDetection]:
+        _ = previous_detections
+        width, height = _image_size(frame_path)
+
+        image = _load_image(frame_path)
+        if image is None:
+            return []
+
+        pose_module = _mediapipe_pose_module()
+        if pose_module is None:
+            return []
+
+        if self._pose is None:
+            self._pose = pose_module.Pose(
+                static_image_mode=True,
+                model_complexity=1,
+                min_detection_confidence=self._min_detection_confidence,
+            )
+
+        results = self._pose.process(image)
+        landmarks = getattr(results, "pose_landmarks", None)
+        if landmarks is None:
+            return []
+
+        points = [lm for lm in landmarks.landmark if 0.0 <= lm.x <= 1.0 and 0.0 <= lm.y <= 1.0 and lm.visibility >= 0.2]
+        if not points:
+            return []
+
+        min_x = min(point.x for point in points)
+        max_x = max(point.x for point in points)
+        min_y = min(point.y for point in points)
+        max_y = max(point.y for point in points)
+
+        padding_x = 0.06
+        padding_y = 0.08
+        rel_x = max(0.0, min_x - padding_x)
+        rel_y = max(0.0, min_y - padding_y)
+        rel_w = min(1.0 - rel_x, max_x - min_x + (2 * padding_x))
+        rel_h = min(1.0 - rel_y, max_y - min_y + (2 * padding_y))
+        if rel_w <= 0.0 or rel_h <= 0.0:
+            return []
+
+        box = BoundingBox(
+            x=int(rel_x * width),
+            y=int(rel_y * height),
+            width=max(1, int(rel_w * width)),
+            height=max(1, int(rel_h * height)),
+        )
+        confidence = max(0.0, min(1.0, _average_visibility(points)))
+        return [
+            PersonDetection(
+                confidence=confidence,
+                bbox_pixels=box,
+                bbox_relative=RelativeBoundingBox(x=rel_x, y=rel_y, width=rel_w, height=rel_h),
+            )
+        ]
+
+
 class TrackDetectorService:
     _VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
@@ -317,3 +384,29 @@ def _jpeg_size(data: bytes) -> tuple[int, int] | None:
 def _natural_sort_key(path: Path):
     chunks = re.split(r"(\d+)", path.name.lower())
     return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+
+
+def _load_image(frame_path: str):
+    try:
+        import cv2
+    except ImportError:
+        return None
+
+    image = cv2.imread(frame_path)
+    if image is None:
+        return None
+    return cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+
+def _mediapipe_pose_module():
+    try:
+        import mediapipe as mp
+    except ImportError:
+        return None
+    return mp.solutions.pose
+
+
+def _average_visibility(points: list) -> float:
+    if not points:
+        return 0.0
+    return sum(point.visibility for point in points) / len(points)
