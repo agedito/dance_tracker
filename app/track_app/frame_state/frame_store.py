@@ -23,6 +23,7 @@ class FrameStore(QObject):
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
         self._base_sizes: dict[int, tuple[int, int]] = {}
         self._proxy_cache_loaded = False
+        self._bookmark_anchor_frames: list[int] = []
 
         self._full_images: list[QImage | None] = []
         self._loaded_flags: list[bool] = []
@@ -60,6 +61,7 @@ class FrameStore(QObject):
         self._cache.clear()
         self._base_sizes.clear()
         self._proxy_cache_loaded = False
+        self._bookmark_anchor_frames = []
         with self._lock:
             self._full_images = []
             self._loaded_flags = []
@@ -83,6 +85,7 @@ class FrameStore(QObject):
         self._cache.clear()
         self._base_sizes.clear()
         self._proxy_cache_loaded = False
+        self._bookmark_anchor_frames = self._read_bookmark_anchor_frames(folder, len(files))
 
         with self._lock:
             self._full_images = [None] * len(files)
@@ -170,10 +173,10 @@ class FrameStore(QObject):
         total_frames = len(self._frame_files)
         pending = set(range(total_frames))
 
-        anchors = [0, total_frames // 2, total_frames - 1]
+        anchors = [0, total_frames // 2, total_frames - 1, *self._bookmark_anchor_frames]
         unique_anchors: list[int] = []
         for anchor in anchors:
-            if anchor not in unique_anchors:
+            if 0 <= anchor < total_frames and anchor not in unique_anchors:
                 unique_anchors.append(anchor)
 
         remaining_workers = len(unique_anchors)
@@ -225,6 +228,62 @@ class FrameStore(QObject):
             thread = threading.Thread(target=preload_worker, args=(anchor,), daemon=True)
             self._preload_threads.append(thread)
             thread.start()
+
+    def _read_bookmark_anchor_frames(self, folder: Path, total_frames: int) -> list[int]:
+        if total_frames <= 0:
+            return []
+
+        for metadata_file in folder.parent.glob("*.json"):
+            payload = self._read_json_dict(metadata_file)
+            if payload is None:
+                continue
+
+            frames_value = payload.get("frames") or payload.get("frames_path")
+            if not isinstance(frames_value, str):
+                continue
+
+            resolved_frames = self._resolve_metadata_path(frames_value, metadata_file.parent)
+            if resolved_frames != folder.resolve():
+                continue
+
+            return self._extract_bookmark_frames(payload, total_frames)
+
+        return []
+
+    @staticmethod
+    def _read_json_dict(path: Path) -> dict | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    @staticmethod
+    def _extract_bookmark_frames(payload: dict, total_frames: int) -> list[int]:
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            return []
+
+        raw_bookmarks = sequence.get("bookmarks")
+        if not isinstance(raw_bookmarks, list):
+            return []
+
+        frames: list[int] = []
+        for raw_bookmark in raw_bookmarks:
+            if isinstance(raw_bookmark, dict):
+                frame_value = raw_bookmark.get("frame")
+            else:
+                frame_value = raw_bookmark
+
+            try:
+                frame = int(frame_value)
+            except (TypeError, ValueError):
+                continue
+
+            if 0 <= frame < total_frames and frame not in frames:
+                frames.append(frame)
+
+        return sorted(frames)
 
     def _safe_emit_frame_preloaded(self, idx: int, loaded: bool, generation: int):
         try:
