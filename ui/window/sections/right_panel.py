@@ -2,6 +2,7 @@ import math
 
 from PySide6.QtWidgets import (
     QFrame,
+    QWidget,
     QTabWidget,
     QVBoxLayout,
 )
@@ -23,6 +24,7 @@ class RightPanel(QFrame):
 
     def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
         super().__init__()
+        self._preferences = preferences
         self.setObjectName("Panel")
 
         v = QVBoxLayout(self)
@@ -30,16 +32,57 @@ class RightPanel(QFrame):
         v.setSpacing(10)
 
         tabs = QTabWidget()
+        tabs.setMovable(True)
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
         self.sequences_tab = SequencesTabWidget(preferences, media_manager)
 
-        tabs.addTab(self.sequences_tab, "Sequences")
-        tabs.addTab(LayerViewersTabWidget(), "Layer viewers")
-        tabs.addTab(self.pose_3d_viewer, "Visor 3D")
-        tabs.addTab(self.music_tab, "Music")
-        tabs.addTab(EmbedingsTabWidget(), "Embedings")
+        self._tabs = tabs
+        self._tab_widgets_by_id: dict[str, QWidget] = {
+            "sequences": self.sequences_tab,
+            "layer_viewers": LayerViewersTabWidget(),
+            "visor_3d": self.pose_3d_viewer,
+            "music": self.music_tab,
+            "embedings": EmbedingsTabWidget(),
+        }
+        self._tab_labels_by_id: dict[str, str] = {
+            "sequences": "Sequences",
+            "layer_viewers": "Layer viewers",
+            "visor_3d": "Visor 3D",
+            "music": "Music",
+            "embedings": "Embedings",
+        }
+
+        self._add_tabs_in_saved_order()
+        tabs.tabBar().tabMoved.connect(self._save_tab_order)
         v.addWidget(tabs, 1)
+
+    def _add_tabs_in_saved_order(self):
+        desired_order = self._preferences.right_panel_tab_order()
+        available_ids = list(self._tab_widgets_by_id.keys())
+
+        ordered_ids = [tab_id for tab_id in desired_order if tab_id in available_ids]
+        ordered_ids.extend(tab_id for tab_id in available_ids if tab_id not in ordered_ids)
+
+        for tab_id in ordered_ids:
+            self._tabs.addTab(self._tab_widgets_by_id[tab_id], self._tab_labels_by_id[tab_id])
+
+    def _save_tab_order(self, *_):
+        current_order: list[str] = []
+        for i in range(self._tabs.count()):
+            widget = self._tabs.widget(i)
+            tab_id = next(
+                (
+                    id_candidate
+                    for id_candidate, tab_widget in self._tab_widgets_by_id.items()
+                    if tab_widget is widget
+                ),
+                None,
+            )
+            if tab_id:
+                current_order.append(tab_id)
+
+        self._preferences.save_right_panel_tab_order(current_order)
 
     def update_pose(self, frame: int):
         detections = self._mock_yolo_pose_detections(frame)
