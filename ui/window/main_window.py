@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self._layout = MainWindowLayout(self, cfg.get_css())
         self._build_ui()
         self.set_frame(0)
+        self._emit_startup_log_samples()
 
     # ── UI construction ──────────────────────────────────────────────
 
@@ -109,6 +110,28 @@ class MainWindow(QMainWindow):
 
     def _log_message(self, message: str) -> None:
         self._right_panel.logger_widget.log(message)
+
+    def _emit_startup_log_samples(self) -> None:
+        logger = self._right_panel.logger_widget
+        group = "Startup demo"
+
+        logger.log("Welcome! This panel can show plain logs.", group=group)
+        logger.log_status("Status logs can be highlighted as success.", status="success", group=group)
+        logger.log_status("Warnings are also supported.", status="warning", group=group)
+        logger.log_status("Errors can be displayed too.", status="error", group=group)
+
+        progress_key = "startup-demo-progress"
+        logger.show_progress(progress_key, "Preparing startup checks...", group=group)
+        QTimer.singleShot(250, lambda: logger.update_progress(progress_key, 35, "Checking inputs..."))
+        QTimer.singleShot(500, lambda: logger.update_progress(progress_key, 70, "Syncing interface..."))
+        QTimer.singleShot(
+            750,
+            lambda: logger.complete_progress(
+                progress_key,
+                status="success",
+                text="Startup checks completed successfully.",
+            ),
+        )
 
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
