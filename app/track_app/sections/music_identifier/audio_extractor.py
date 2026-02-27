@@ -2,8 +2,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import imageio_ffmpeg
-
 
 class AudioExtractor:
     """Single responsibility: extract a lightweight audio sample from a video file."""
@@ -55,6 +53,8 @@ class AudioExtractor:
             return system_ffmpeg
 
         try:
+            import imageio_ffmpeg
+
             bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         except Exception:
             return None
