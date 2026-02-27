@@ -90,9 +90,16 @@ class MediaPipePosePersonDetector:
         if landmarks is None:
             return []
 
-        points = [lm for lm in landmarks.landmark if 0.0 <= lm.x <= 1.0 and 0.0 <= lm.y <= 1.0 and lm.visibility >= 0.2]
-        if not points:
+        points_in_frame = [
+            lm
+            for lm in landmarks.landmark
+            if 0.0 <= lm.x <= 1.0 and 0.0 <= lm.y <= 1.0
+        ]
+        if not points_in_frame:
             return []
+
+        visible_points = [lm for lm in points_in_frame if lm.visibility >= 0.2]
+        points = visible_points if visible_points else points_in_frame
 
         min_x = min(point.x for point in points)
         max_x = max(point.x for point in points)
