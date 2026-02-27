@@ -6,16 +6,6 @@ from app.track_app.frame_state.layers import Segment
 from utils.numbers import clamp
 
 
-def status_color(t: str) -> QColor:
-    if t == "ok":
-        return QColor(46, 204, 113, 190)
-    if t == "warn":
-        return QColor(241, 196, 15, 200)
-    if t == "err":
-        return QColor(231, 76, 60, 220)
-    return QColor(120, 120, 120, 180)
-
-
 class TimelineTrack(QWidget):
     frameChanged = Signal(int)
     scrubStarted = Signal()
@@ -27,7 +17,7 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
-        self.setFixedHeight(20)
+        self.setFixedHeight(28)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def _frame_from_pos(self, x: float) -> int:
@@ -82,14 +72,6 @@ class TimelineTrack(QWidget):
         p.setPen(QPen(QColor(43, 52, 59), 1))
         p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 9, 9)
 
-        for s in self.segments:
-            left = int((s.a / self.total_frames) * w)
-            right = int((s.b / self.total_frames) * w)
-            seg_w = max(1, right - left)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(status_color(s.t))
-            p.drawRect(QRectF(left, 1, seg_w, h - 5))
-
         self._draw_loaded_indicator(p, w, h)
 
         xph = int((self.frame / max(1, self.total_frames - 1)) * w)
@@ -98,8 +80,8 @@ class TimelineTrack(QWidget):
         p.end()
 
     def _draw_loaded_indicator(self, painter: QPainter, w: int, h: int):
-        bar_h = 3
-        y = h - bar_h - 1
+        bar_h = max(6, h - 6)
+        y = (h - bar_h) / 2
         painter.setPen(Qt.PenStyle.NoPen)
 
         if w <= 1:

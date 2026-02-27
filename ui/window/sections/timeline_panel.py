@@ -1,7 +1,7 @@
 from typing import Callable
 
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea,
+    QFrame, QHBoxLayout, QLabel,
     QVBoxLayout, QWidget,
 )
 
@@ -9,7 +9,7 @@ from ui.widgets.timeline import TimelineTrack
 
 
 class TimelinePanel(QFrame):
-    """Single responsibility: display timeline tracks for all layers."""
+    """Single responsibility: display the master timeline track."""
 
     def __init__(
             self,
@@ -40,39 +40,20 @@ class TimelinePanel(QFrame):
         hl.addWidget(self.time_info)
         root.addWidget(header)
 
-        # Scroll area with tracks
-        scroll = QScrollArea()
-        scroll.setObjectName("ScrollArea")
-        scroll.setWidgetResizable(True)
-
+        # Single master timeline
         content = QWidget()
         lay = QVBoxLayout(content)
         lay.setContentsMargins(10, 10, 10, 10)
         lay.setSpacing(10)
 
-        for layer in layers:
-            row = QWidget()
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            rl.setSpacing(10)
+        track = TimelineTrack(total_frames, layers[0].segments if layers else [])
+        track.frameChanged.connect(on_frame_changed)
+        track.scrubStarted.connect(on_scrub_start)
+        track.scrubFinished.connect(on_scrub_end)
+        self.track_widgets.append(track)
 
-            name = QLabel(layer.name)
-            name.setObjectName("LayerName")
-            name.setFixedWidth(160)
-
-            track = TimelineTrack(total_frames, layer.segments)
-            track.frameChanged.connect(on_frame_changed)
-            track.scrubStarted.connect(on_scrub_start)
-            track.scrubFinished.connect(on_scrub_end)
-            self.track_widgets.append(track)
-
-            rl.addWidget(name)
-            rl.addWidget(track, 1)
-            lay.addWidget(row)
-
-        lay.addStretch(1)
-        scroll.setWidget(content)
-        root.addWidget(scroll, 1)
+        lay.addWidget(track)
+        root.addWidget(content, 1)
 
     def set_frame(self, frame: int):
         for track in self.track_widgets:
