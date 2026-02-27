@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from app.interface.application import MediaPort
 from app.interface.event_bus import EventBus, Event
+from app.interface.music import SongMetadata, SongStatus
 from app.track_app.main_app import DanceTrackerApp
 
 
-class MediaAdapter(MediaPort):
+class MediaAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self._app = app
         self._events = events
@@ -14,11 +14,24 @@ class MediaAdapter(MediaPort):
         print("Loading", path)
 
         if self._app.video_manager.is_video(path):
+            song = SongMetadata(status=SongStatus.NOT_RUN)
+            try:
+                song = self._app.music_identifier.identify_from_video(path)
+            except Exception as err:  # Defensive: never break media load on music service errors.
+                song = SongMetadata(
+                    status=SongStatus.ERROR,
+                    provider="music_identifier",
+                    message=f"Error identificando canción: {err}",
+                )
+
+            self._events.emit(Event.SongIdentified, song)
+
             path = self._app.video_manager.extract_frames(path)
             print("Video extracted at", path)
 
-        if not Path(path).is_dir():
+        if not path or not Path(path).is_dir():
             print("It's not a folder")
+            return
 
         self._events.emit(Event.FramesLoaded, path)
 

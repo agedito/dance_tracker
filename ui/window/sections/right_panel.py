@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.interface.music import SongMetadata
 from app.interface.media import MediaPort
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
@@ -91,6 +92,14 @@ class RightPanel(QFrame):
     def refresh_sequences(self):
         self._rebuild_sequences_grid()
 
+    def update_song_info(self, song: SongMetadata):
+        self._music_status_value.setText(song.status)
+        self._music_title_value.setText(song.title or "—")
+        self._music_artist_value.setText(song.artist or "—")
+        self._music_album_value.setText(song.album or "—")
+        self._music_provider_value.setText(song.provider or "—")
+        self._music_message_value.setText(song.message or "")
+
     # ── Private helpers ──────────────────────────────────────────────
 
     @staticmethod
@@ -129,7 +138,29 @@ class RightPanel(QFrame):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
         layout.addWidget(self._section_label("Music"))
+
+        self._music_status_value = QLabel("not_run")
+        self._music_title_value = QLabel("—")
+        self._music_artist_value = QLabel("—")
+        self._music_album_value = QLabel("—")
+        self._music_provider_value = QLabel("—")
+        self._music_message_value = QLabel("")
+        self._music_message_value.setWordWrap(True)
+
+        for label, value in (
+            ("Estado", self._music_status_value),
+            ("Título", self._music_title_value),
+            ("Artista", self._music_artist_value),
+            ("Álbum", self._music_album_value),
+            ("Proveedor", self._music_provider_value),
+        ):
+            layout.addWidget(QLabel(f"{label}:"))
+            layout.addWidget(value)
+
+        layout.addWidget(self._music_message_value)
         layout.addStretch(1)
         return tab
 
