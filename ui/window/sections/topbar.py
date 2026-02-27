@@ -1,26 +1,12 @@
-from pathlib import Path
-from typing import Callable
-
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
-
-from ui.window.sections.preferences_manager import PreferencesManager
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 
 class TopBar(QWidget):
-    """Single responsibility: render the top bar with recent folder icons."""
+    """Render a minimal top bar without media shortcuts or previews."""
 
-    def __init__(
-            self,
-            preferences: PreferencesManager,
-            on_folder_clicked: Callable[[str], None],
-            on_close: Callable[[], None],
-    ):
+    def __init__(self, on_close):
         super().__init__()
-        self._prefs = preferences
-        self._on_folder_clicked = on_folder_clicked
-        self._active_folder: str | None = None
 
         self.setObjectName("TopBar")
         layout = QHBoxLayout(self)
@@ -30,19 +16,7 @@ class TopBar(QWidget):
         title.setObjectName("TopTitle")
         layout.addWidget(title)
 
-        hint = QLabel("Drop folder or video to load frames")
-        hint.setObjectName("TopHint")
-
-        # Recent folders container
-        self._folders_container = QWidget()
-        self._folders_layout = QHBoxLayout(self._folders_container)
-        self._folders_layout.setContentsMargins(0, 0, 0, 0)
-        self._folders_layout.setSpacing(6)
-
-        layout.addSpacing(12)
-        layout.addWidget(self._folders_container)
         layout.addStretch(1)
-        layout.addWidget(hint)
 
         close_button = QPushButton("✕")
         close_button.setObjectName("TopCloseButton")
@@ -52,48 +26,8 @@ class TopBar(QWidget):
         layout.addSpacing(10)
         layout.addWidget(close_button)
 
-        self.refresh_icons()
-
     def refresh_icons(self):
-        """Rebuild folder icon buttons from current preferences."""
-        while self._folders_layout.count():
-            item = self._folders_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
+        """Compatibility no-op: top bar no longer shows recent media."""
 
-        for folder in self._prefs.recent_folders():
-            btn = QPushButton()
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setObjectName("RecentFolderIcon")
-            btn.setToolTip(folder)
-            normalized = str(Path(folder).expanduser())
-            is_active = normalized == self._active_folder
-            btn.setProperty("isActive", is_active)
-
-            btn.setText("📁")
-            btn.setIconSize(QSize(42, 42))
-            btn.setFixedSize(QSize(46, 46))
-
-            btn.clicked.connect(lambda _=False, p=folder: self._on_folder_clicked(p))
-
-            btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            btn.customContextMenuRequested.connect(
-                lambda pos, p=folder, b=btn: self._show_context_menu(p, b.mapToGlobal(pos))
-            )
-            self._folders_layout.addWidget(btn)
-
-    def set_active_folder(self, folder_path: str | None):
-        self._active_folder = str(Path(folder_path).expanduser()) if folder_path else None
-        self.refresh_icons()
-
-    def _show_context_menu(self, folder_path: str, global_pos):
-        menu = QMenu(self)
-        remove = QAction("Remove folder", self)
-        remove.triggered.connect(lambda _=False, p=folder_path: self._remove_folder(p))
-        menu.addAction(remove)
-        menu.exec(global_pos)
-
-    def _remove_folder(self, folder_path: str):
-        self._prefs.remove_recent_folder(folder_path)
-        self.refresh_icons()
+    def set_active_folder(self, folder_path):
+        """Compatibility no-op: top bar no longer tracks folders."""

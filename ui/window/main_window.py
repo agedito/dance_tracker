@@ -97,8 +97,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._layout.root)
 
         self._topbar = TopBar(
-            preferences=self._prefs,
-            on_folder_clicked=self._open_recent_folder,
             on_close=self._close,
         )
         self._layout.set_topbar(self._topbar)
