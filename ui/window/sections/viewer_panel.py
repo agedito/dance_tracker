@@ -55,18 +55,21 @@ class ViewerPanel(QFrame):
         self.play_pause_btn = QPushButton("▶")
         self.play_pause_btn.setObjectName("PrimaryButton")
         self.play_pause_btn.setToolTip("Play")
+        self.play_pause_btn.setProperty("transportControl", True)
         self.play_pause_btn.clicked.connect(on_play_pause_toggle)
+        self._set_play_icon()
         fl.addWidget(self.play_pause_btn)
 
         buttons = [
-            ("⏮", "Go to previous bookmark", on_prev_bookmark),
-            ("⏪", "Step back one frame", lambda: on_step(-1)),
-            ("⏩", "Step forward one frame", lambda: on_step(1)),
-            ("⏭", "Go to next bookmark", on_next_bookmark),
+            ("↩🔖", "Go to previous bookmark", on_prev_bookmark),
+            ("←", "Step back one frame", lambda: on_step(-1)),
+            ("→", "Step forward one frame", lambda: on_step(1)),
+            ("🔖↪", "Go to next bookmark", on_next_bookmark),
         ]
         for icon, tooltip, callback in buttons:
             btn = QPushButton(icon)
             btn.setToolTip(tooltip)
+            btn.setProperty("transportControl", True)
             btn.clicked.connect(callback)
             fl.addWidget(btn)
 
@@ -78,8 +81,16 @@ class ViewerPanel(QFrame):
 
     def update_playback_button(self, is_playing: bool) -> None:
         if is_playing:
-            self.play_pause_btn.setText("⏸")
             self.play_pause_btn.setToolTip("Pause")
+            self._set_pause_icon()
             return
-        self.play_pause_btn.setText("▶")
         self.play_pause_btn.setToolTip("Play")
+        self._set_play_icon()
+
+    def _set_play_icon(self) -> None:
+        self.play_pause_btn.setText("▶")
+        self.play_pause_btn.setStyleSheet("color: #35C76F;")
+
+    def _set_pause_icon(self) -> None:
+        self.play_pause_btn.setText("⏸")
+        self.play_pause_btn.setStyleSheet("color: #D84C4C;")

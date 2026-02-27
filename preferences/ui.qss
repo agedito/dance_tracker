@@ -90,6 +90,15 @@ QPushButton#PrimaryButton {
     border-style: solid;
 }
 
+QPushButton[transportControl="true"] {
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    padding: 2px;
+    font-size: 19px;
+}
+
 QPushButton#RecentFolderIcon {
     min-width: 28px;
     max-width: 28px;
