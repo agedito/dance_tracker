@@ -1,21 +1,33 @@
 import re
+import threading
 from collections import OrderedDict
 from pathlib import Path
 
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtGui import QImage, QPixmap
 
 
-class FrameStore:
+class FrameStore(QObject):
     VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
     VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
+    frame_preloaded = Signal(int, bool)
+    preload_finished = Signal()
+
     def __init__(self, cache_radius: int):
+        super().__init__()
         self.cache_radius = cache_radius
         self._frame_files: list[Path] = []
         self._proxy_files: list[Path] = []
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
         self._base_sizes: dict[int, tuple[int, int]] = {}
         self._proxy_cache_loaded = False
+
+        self._full_images: list[QImage | None] = []
+        self._loaded_flags: list[bool] = []
+        self._preload_stop = threading.Event()
+        self._preload_thread: threading.Thread | None = None
+        self._preload_generation = 0
 
     @property
     def total_frames(self) -> int:
@@ -25,7 +37,13 @@ class FrameStore:
     def has_proxy_frames(self) -> bool:
         return bool(self._proxy_files)
 
+    @property
+    def loaded_flags(self) -> list[bool]:
+        return list(self._loaded_flags)
+
     def load_folder(self, folder_path: str) -> int:
+        self._stop_preload_thread()
+
         folder = Path(folder_path)
         if not folder.exists() or not folder.is_dir():
             self._frame_files = []
@@ -33,6 +51,8 @@ class FrameStore:
             self._cache.clear()
             self._base_sizes.clear()
             self._proxy_cache_loaded = False
+            self._full_images = []
+            self._loaded_flags = []
             return 0
 
         files = [
@@ -45,7 +65,11 @@ class FrameStore:
         self._cache.clear()
         self._base_sizes.clear()
         self._proxy_cache_loaded = False
+        self._full_images = [None] * len(files)
+        self._loaded_flags = [False] * len(files)
+
         self._preload_proxy_cache()
+        self._start_full_preload_thread()
         return len(files)
 
     def _find_proxy_files(self, folder: Path, expected_count: int) -> list[Path]:
@@ -74,6 +98,40 @@ class FrameStore:
 
         self._proxy_cache_loaded = True
 
+    def _start_full_preload_thread(self):
+        if not self._frame_files:
+            return
+
+        self._preload_stop.clear()
+        self._preload_generation += 1
+        generation = self._preload_generation
+
+        def preload_worker():
+            for idx, path in enumerate(self._frame_files):
+                if self._preload_stop.is_set() or generation != self._preload_generation:
+                    return
+
+                image = QImage(str(path))
+                if image.isNull():
+                    self.frame_preloaded.emit(idx, False)
+                    continue
+
+                self._full_images[idx] = image
+                self._base_sizes[idx] = (image.width(), image.height())
+                self._loaded_flags[idx] = True
+                self.frame_preloaded.emit(idx, True)
+
+            if not self._preload_stop.is_set() and generation == self._preload_generation:
+                self.preload_finished.emit()
+
+        self._preload_thread = threading.Thread(target=preload_worker, daemon=True)
+        self._preload_thread.start()
+
+    def _stop_preload_thread(self):
+        self._preload_stop.set()
+        self._preload_generation += 1
+        self._preload_thread = None
+
     @staticmethod
     def _natural_sort_key(path: Path):
         chunks = re.split(r"(\d+)", path.name.lower())
@@ -84,11 +142,16 @@ class FrameStore:
             return None
 
         source_files = self._proxy_files if use_proxy and self._proxy_files else self._frame_files
-        cache_key = (source_files is self._proxy_files, frame_idx)
+        is_proxy = source_files is self._proxy_files
+        cache_key = (is_proxy, frame_idx)
 
         pix = self._cache.get(cache_key)
         if pix is None:
-            pix = QPixmap(str(source_files[frame_idx]))
+            if not is_proxy and self._full_images[frame_idx] is not None:
+                pix = QPixmap.fromImage(self._full_images[frame_idx])
+            else:
+                pix = QPixmap(str(source_files[frame_idx]))
+
             if pix.isNull():
                 return None
 
@@ -98,7 +161,7 @@ class FrameStore:
         else:
             self._cache.move_to_end(cache_key)
 
-        self._prefetch_neighbors(frame_idx, use_proxy=source_files is self._proxy_files)
+        self._prefetch_neighbors(frame_idx, use_proxy=is_proxy)
         return pix
 
     def get_display_size(self, frame_idx: int) -> tuple[int, int] | None:
@@ -107,6 +170,11 @@ class FrameStore:
 
         if frame_idx < 0 or frame_idx >= len(self._frame_files):
             return None
+
+        if self._full_images[frame_idx] is not None:
+            image = self._full_images[frame_idx]
+            self._base_sizes[frame_idx] = (image.width(), image.height())
+            return self._base_sizes[frame_idx]
 
         pix = self.get_frame(frame_idx, use_proxy=False)
         if pix is None:
@@ -117,6 +185,11 @@ class FrameStore:
 
     def _remember_base_size(self, frame_idx: int):
         if frame_idx in self._base_sizes or frame_idx < 0 or frame_idx >= len(self._frame_files):
+            return
+
+        image = self._full_images[frame_idx]
+        if image is not None:
+            self._base_sizes[frame_idx] = (image.width(), image.height())
             return
 
         key = (False, frame_idx)
@@ -139,9 +212,15 @@ class FrameStore:
             key = (source_key, idx)
             if key in self._cache:
                 continue
-            pix = QPixmap(str(source_files[idx]))
+
+            if not source_key and self._full_images[idx] is not None:
+                pix = QPixmap.fromImage(self._full_images[idx])
+            else:
+                pix = QPixmap(str(source_files[idx]))
+
             if pix.isNull():
                 continue
+
             self._cache[key] = pix
             if not source_key:
                 self._base_sizes[idx] = (pix.width(), pix.height())

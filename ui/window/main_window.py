@@ -56,6 +56,9 @@ class MainWindow(QMainWindow):
         self._scrub_timer.setSingleShot(True)
         self._scrub_timer.setInterval(16)
         self._scrub_timer.timeout.connect(self._flush_scrub_frame)
+        self._loaded_count = 0
+        self._frame_store.frame_preloaded.connect(self._on_frame_preloaded)
+        self._frame_store.preload_finished.connect(self._on_preload_finished)
 
         self._folder_session = FolderSessionManager(
             preferences=self._prefs,
@@ -165,7 +168,11 @@ class MainWindow(QMainWindow):
         self._viewer_panel.update_frame_label(cur)
 
         self._timeline.set_frame(cur)
-        self._timeline.update_info(self.state.total_frames, len(self.state.error_frames))
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+        )
 
         self._right_panel.update_pose(cur)
 
@@ -210,6 +217,24 @@ class MainWindow(QMainWindow):
         self._viewer_panel.viewer.set_proxy_frames_enabled(False)
         self._flush_scrub_frame()
 
+
+    def _on_frame_preloaded(self, frame: int, loaded: bool):
+        if loaded:
+            self._loaded_count += 1
+        self._timeline.set_frame_loaded(frame, loaded)
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+        )
+
+    def _on_preload_finished(self):
+        self._timeline.update_info(
+            self.state.total_frames,
+            len(self.state.error_frames),
+            loaded_count=self._loaded_count,
+        )
+
     # ── Folder / session events ──────────────────────────────────────
 
     def _on_frames_loaded(self, total_frames: int, initial_frame: int = 0):
@@ -218,6 +243,8 @@ class MainWindow(QMainWindow):
         self.state.set_total_frames(total_frames)
         self._viewer_panel.viewer.set_total_frames(total_frames)
         self._timeline.set_total_frames(total_frames)
+        self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
+        self._loaded_count = sum(1 for loaded in self._frame_store.loaded_flags if loaded)
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
