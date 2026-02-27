@@ -1,6 +1,7 @@
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QResizeEvent
 from PySide6.QtWidgets import QSizePolicy, QWidget
+from shiboken6 import isValid
 
 from app.interface.application import DanceTrackerPort
 from app.track_app.frame_state.frame_store import FrameStore
@@ -27,6 +28,7 @@ class ViewerWidget(QWidget):
         self._frame_store = frame_store
         self._use_proxy = False
         self._app = app
+        self._is_closing = False
 
         self.setMinimumHeight(320)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -94,8 +96,16 @@ class ViewerWidget(QWidget):
 
     def resizeEvent(self, ev: QResizeEvent):
         super().resizeEvent(ev)
+        if self._is_closing:
+            return
         self._radial_menu.setGeometry(self.rect())
-        self._radial_menu.set_anchor_rect(self._video_rect())
+        self._sync_radial_menu_anchor(self._video_rect())
+
+    def closeEvent(self, ev):
+        self._is_closing = True
+        if isValid(self._radial_menu):
+            self._radial_menu.hide()
+        super().closeEvent(ev)
 
     def dragEnterEvent(self, ev):
         if self._drop_handler.can_accept(ev):
@@ -110,6 +120,9 @@ class ViewerWidget(QWidget):
             ev.ignore()
 
     def paintEvent(self, ev):
+        if self._is_closing:
+            return
+
         pixmap = self._frame_store.get_frame(self._frame, use_proxy=self._use_proxy)
         video_rect = self._video_rect()
 
@@ -122,6 +135,11 @@ class ViewerWidget(QWidget):
             painter.end()
 
         # Keep the radial menu in sync with the current video rect
+        self._sync_radial_menu_anchor(video_rect)
+
+    def _sync_radial_menu_anchor(self, video_rect: QRectF):
+        if self._is_closing or not isValid(self._radial_menu):
+            return
         self._radial_menu.set_anchor_rect(video_rect)
 
     # ── Painting helpers ─────────────────────────────────────────────
