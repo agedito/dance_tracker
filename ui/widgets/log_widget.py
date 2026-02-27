@@ -28,6 +28,8 @@ class _LogEntry:
 
 class LogWidget(QFrame):
     _EMPTY_TEXT = "No logs"
+    _START_BOUNDARY_TEXT = "Beginning of logs"
+    _END_BOUNDARY_TEXT = "End of logs"
     _STATUS_COLORS = {
         "success": "#2ecc71",
         "error": "#e74c3c",
@@ -149,6 +151,8 @@ class LogWidget(QFrame):
 
         self.empty_label.hide()
 
+        self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_boundary_widget(self._START_BOUNDARY_TEXT))
+
         rendered_groups: set[str] = set()
         for entry in self._entries:
             if entry.group and entry.group not in rendered_groups:
@@ -158,6 +162,8 @@ class LogWidget(QFrame):
                 self._content_layout.insertWidget(self._content_layout.count() - 1, group_label)
 
             self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_entry_widget(entry))
+
+        self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_boundary_widget(self._END_BOUNDARY_TEXT))
 
     def _build_entry_widget(self, entry: _LogEntry) -> QWidget:
         card = QFrame()
@@ -183,7 +189,19 @@ class LogWidget(QFrame):
 
         close_button = QPushButton("×")
         close_button.setObjectName("LogCloseButton")
-        close_button.setFixedWidth(24)
+        close_button.setFixedSize(16, 16)
+        close_button.setStyleSheet(
+            "QPushButton#LogCloseButton {"
+            "padding: 0px;"
+            "font-size: 10px;"
+            "font-weight: 700;"
+            "border-radius: 8px;"
+            "min-width: 16px;"
+            "max-width: 16px;"
+            "min-height: 16px;"
+            "max-height: 16px;"
+            "}"
+        )
         close_button.clicked.connect(lambda: self._remove_entry(entry.entry_id))
         header.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)
 
@@ -197,6 +215,25 @@ class LogWidget(QFrame):
             layout.addWidget(progress)
 
         return card
+
+    def _build_boundary_widget(self, text: str) -> QWidget:
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 2, 0, 2)
+        layout.setSpacing(2)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setFrameShadow(QFrame.Shadow.Plain)
+        line.setStyleSheet("color: #56616a;")
+        layout.addWidget(line)
+
+        label = QLabel(text)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet("color: #8f9aa3; font-size: 10px;")
+        layout.addWidget(label)
+
+        return container
 
     def _remove_entry(self, entry_id: int):
         entry = next((item for item in self._entries if item.entry_id == entry_id), None)
