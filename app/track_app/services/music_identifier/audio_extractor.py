@@ -10,7 +10,7 @@ class AudioExtractor:
         self._sample_seconds = max(1, sample_seconds)
 
     def extract_sample(self, video_path: str) -> str | None:
-        ffmpeg = shutil.which("ffmpeg")
+        ffmpeg = self._resolve_ffmpeg_executable()
         if ffmpeg is None:
             return None
 
@@ -44,3 +44,19 @@ class AudioExtractor:
             return None
 
         return str(target)
+
+    @staticmethod
+    def _resolve_ffmpeg_executable() -> str | None:
+        """Prefer system ffmpeg, fallback to the imageio-ffmpeg bundled binary."""
+        system_ffmpeg = shutil.which("ffmpeg")
+        if system_ffmpeg is not None:
+            return system_ffmpeg
+
+        try:
+            import imageio_ffmpeg
+
+            bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            return None
+
+        return bundled_ffmpeg if bundled_ffmpeg else None
