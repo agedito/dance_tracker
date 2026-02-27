@@ -261,6 +261,9 @@ class MainWindow(QMainWindow):
             preload_done=self._preload_done,
         )
 
+        if loaded and frame == self.state.cur_frame:
+            self._viewer_panel.viewer.update()
+
     def _on_preload_finished(self, generation: int):
         if generation != self._active_preload_generation:
             return

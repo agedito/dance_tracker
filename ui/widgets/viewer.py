@@ -67,7 +67,11 @@ class ViewerWidget(QWidget):
     # ── Video rect calculation ───────────────────────────────────────
 
     def _video_rect(self) -> QRectF:
-        pixmap = self._frame_store.get_frame(self._frame, use_proxy=self._use_proxy)
+        pixmap = self._frame_store.get_frame(
+            self._frame,
+            use_proxy=self._use_proxy,
+            allow_disk_load=self._use_proxy,
+        )
         if pixmap is None:
             return QRectF(self.rect().adjusted(16, 16, -16, -16))
 
@@ -110,7 +114,11 @@ class ViewerWidget(QWidget):
             ev.ignore()
 
     def paintEvent(self, ev):
-        pixmap = self._frame_store.get_frame(self._frame, use_proxy=self._use_proxy)
+        pixmap = self._frame_store.get_frame(
+            self._frame,
+            use_proxy=self._use_proxy,
+            allow_disk_load=self._use_proxy,
+        )
         video_rect = self._video_rect()
 
         if pixmap is not None:

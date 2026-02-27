@@ -187,7 +187,7 @@ class FrameStore(QObject):
         chunks = re.split(r"(\d+)", path.name.lower())
         return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
 
-    def get_frame(self, frame_idx: int, use_proxy: bool = False) -> QPixmap | None:
+    def get_frame(self, frame_idx: int, use_proxy: bool = False, allow_disk_load: bool = True) -> QPixmap | None:
         if not self._frame_files or frame_idx < 0 or frame_idx >= len(self._frame_files):
             return None
 
@@ -204,6 +204,8 @@ class FrameStore(QObject):
 
             if full_image is not None:
                 pix = QPixmap.fromImage(full_image)
+            elif not allow_disk_load:
+                return None
             else:
                 pix = QPixmap(str(source_files[frame_idx]))
 
@@ -216,7 +218,7 @@ class FrameStore(QObject):
         else:
             self._cache.move_to_end(cache_key)
 
-        self._prefetch_neighbors(frame_idx, use_proxy=is_proxy)
+        self._prefetch_neighbors(frame_idx, use_proxy=is_proxy, allow_disk_load=allow_disk_load)
         return pix
 
     def get_display_size(self, frame_idx: int) -> tuple[int, int] | None:
@@ -261,7 +263,7 @@ class FrameStore(QObject):
 
         self._base_sizes[frame_idx] = (base_pix.width(), base_pix.height())
 
-    def _prefetch_neighbors(self, center_frame: int, use_proxy: bool):
+    def _prefetch_neighbors(self, center_frame: int, use_proxy: bool, allow_disk_load: bool):
         source_files = self._proxy_files if use_proxy and self._proxy_files else self._frame_files
         source_key = source_files is self._proxy_files
         for idx in range(
@@ -277,6 +279,8 @@ class FrameStore(QObject):
 
             if image is not None:
                 pix = QPixmap.fromImage(image)
+            elif not allow_disk_load:
+                continue
             else:
                 pix = QPixmap(str(source_files[idx]))
 
