@@ -1,0 +1,1 @@
+- All source code, comments, commit messages, UI strings, logs, and user-facing messages must be in English.
