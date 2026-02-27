@@ -1,8 +1,15 @@
-from pathlib import Path
+from typing import Callable
 
-from PySide6.QtCore import QEvent, QSize, Qt
+from PySide6.QtCore import QPoint, QEvent, QSize, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QMenu,
+)
 
 from app.interface.media import MediaPort
 from ui.widgets.drop_handler import DropHandler
@@ -13,10 +20,16 @@ from ui.window.sections.preferences_manager import PreferencesManager
 class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
 
-    def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
+    def __init__(
+            self,
+            preferences: PreferencesManager,
+            media_manager: MediaPort,
+            on_sequence_removed: Callable[[str], None] | None = None,
+    ):
         super().__init__()
         self._prefs = preferences
         self._media_manager = media_manager
+        self._on_sequence_removed = on_sequence_removed
         self._drop_handler = DropHandler(media_manager, parent=self)
         self._selected_path: str | None = None
         self._folders: list[str] = []
@@ -87,7 +100,6 @@ class SequencesTabWidget(QWidget):
             self._grid.addWidget(self._sequence_button(folder), row, col)
 
     def _sequence_button(self, folder_path: str) -> QPushButton:
-        path = Path(folder_path).expanduser()
         button = QPushButton("")
         button.setObjectName("SequenceThumbnail")
         button.setProperty("isSelected", folder_path == self._selected_path)
@@ -96,12 +108,32 @@ class SequencesTabWidget(QWidget):
         button.setToolTip(folder_path)
         button.setFixedSize(self._THUMBNAIL_SIZE)
         button.clicked.connect(lambda _=False, selected_path=folder_path: self._select_and_load(selected_path))
+        button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        button.customContextMenuRequested.connect(
+            lambda pos, origin=button, selected_path=folder_path: self._show_sequence_menu(origin, selected_path, pos)
+        )
+
 
         thumbnail = self._prefs.thumbnail_for_folder(folder_path)
         if thumbnail:
             button.setIcon(QIcon(thumbnail))
             button.setIconSize(QSize(146, 82))
         return button
+
+    def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
+        menu = QMenu(self)
+        delete_action = menu.addAction("Borrar video")
+        selected_action = menu.exec(origin.mapToGlobal(pos))
+        if selected_action is delete_action:
+            self._remove_sequence(folder_path)
+
+    def _remove_sequence(self, folder_path: str):
+        self._prefs.remove_recent_folder(folder_path)
+        if self._selected_path == folder_path:
+            self._selected_path = None
+        if self._on_sequence_removed:
+            self._on_sequence_removed(folder_path)
+        self.refresh()
 
     def _select_and_load(self, folder_path: str):
         self._selected_path = folder_path
