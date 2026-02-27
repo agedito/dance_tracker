@@ -7,6 +7,14 @@ from app.interface.sequence_data import Bookmark, SequenceVideoData
 class SequenceDataService:
     _SEQUENCE_METADATA_SUFFIX = ".dance_tracker.json"
     _MIN_BOOKMARK_DISTANCE_FRAMES = 25
+    _DEFAULT_DANCE_INFO = {
+        "dance_style": "Argentine Tango",
+        "song": "Golden Night",
+        "follower": "Alex Morgan",
+        "leader": "Jamie Rivera",
+        "event": "Milonga Sunset",
+        "year": "2024",
+    }
 
     def read_video_data(self, frames_folder_path: str) -> SequenceVideoData | None:
         frames_folder = Path(frames_folder_path).expanduser().resolve()
@@ -28,6 +36,7 @@ class SequenceDataService:
         parent = frames_folder.parent
         video_path = parent / video_name
         data = video_data.get("data") if isinstance(video_data.get("data"), dict) else {}
+        sequence_data = metadata.get("sequence") if isinstance(metadata.get("sequence"), dict) else {}
 
         width = self._to_int(data.get("resolution", {}).get("width"))
         height = self._to_int(data.get("resolution", {}).get("height"))
@@ -43,6 +52,16 @@ class SequenceDataService:
         if frames > 0 and fps <= 0:
             fps = round(frames / duration_seconds, 3) if duration_seconds > 0 else 0.0
 
+        dance_style = self._string_or_default(
+            sequence_data.get("dance_style"),
+            self._DEFAULT_DANCE_INFO["dance_style"],
+        )
+        song = self._string_or_default(sequence_data.get("song"), self._DEFAULT_DANCE_INFO["song"])
+        follower = self._string_or_default(sequence_data.get("follower"), self._DEFAULT_DANCE_INFO["follower"])
+        leader = self._string_or_default(sequence_data.get("leader"), self._DEFAULT_DANCE_INFO["leader"])
+        event = self._string_or_default(sequence_data.get("event"), self._DEFAULT_DANCE_INFO["event"])
+        year = self._string_or_default(sequence_data.get("year"), self._DEFAULT_DANCE_INFO["year"])
+
         return SequenceVideoData(
             resolution_width=width,
             resolution_height=height,
@@ -50,6 +69,12 @@ class SequenceDataService:
             duration_seconds=duration_seconds,
             frames=frames,
             fps=fps,
+            dance_style=dance_style,
+            song=song,
+            follower=follower,
+            leader=leader,
+            event=event,
+            year=year,
         )
 
     def read_bookmarks(self, frames_folder_path: str) -> list[Bookmark]:
@@ -251,6 +276,13 @@ class SequenceDataService:
         if not isinstance(value, str):
             return ""
         return value.strip()
+
+    @staticmethod
+    def _string_or_default(value: object, default: str) -> str:
+        if not isinstance(value, str):
+            return default
+        normalized = value.strip()
+        return normalized or default
 
     @staticmethod
     def _resolve_metadata_path(value: object, root: Path) -> Path | None:

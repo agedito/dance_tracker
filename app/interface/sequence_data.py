@@ -10,6 +10,12 @@ class SequenceVideoData:
     duration_seconds: float
     frames: int
     fps: float
+    dance_style: str
+    song: str
+    follower: str
+    leader: str
+    event: str
+    year: str
 
 
 @dataclass(frozen=True)
