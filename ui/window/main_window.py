@@ -14,7 +14,7 @@ Each concern lives in its own class:
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QMainWindow
 
@@ -50,6 +50,12 @@ class MainWindow(QMainWindow):
             state=self.state,
             on_frame_changed=self.set_frame,
         )
+        self._scrubbing = False
+        self._pending_scrub_frame: int | None = None
+        self._scrub_timer = QTimer(self)
+        self._scrub_timer.setSingleShot(True)
+        self._scrub_timer.setInterval(16)
+        self._scrub_timer.timeout.connect(self._flush_scrub_frame)
 
         self._folder_session = FolderSessionManager(
             preferences=self._prefs,
@@ -93,9 +99,9 @@ class MainWindow(QMainWindow):
         self._timeline = TimelinePanel(
             total_frames=self.state.total_frames,
             layers=self.state.layers,
-            on_frame_changed=self.set_frame,
-            on_scrub_start=lambda: self._viewer_panel.viewer.set_proxy_frames_enabled(True),
-            on_scrub_end=lambda: self._viewer_panel.viewer.set_proxy_frames_enabled(False),
+            on_frame_changed=self._on_timeline_frame_changed,
+            on_scrub_start=self._on_scrub_start,
+            on_scrub_end=self._on_scrub_end,
         )
 
         self._status = StatusPanel(
@@ -117,6 +123,8 @@ class MainWindow(QMainWindow):
         bindings = [
             (Qt.Key.Key_Left, lambda: self._playback.step(-1)),
             (Qt.Key.Key_Right, lambda: self._playback.step(1)),
+            (Qt.Key.Key_PageUp, lambda: self._playback.step(-10)),
+            (Qt.Key.Key_PageDown, lambda: self._playback.step(10)),
             (Qt.Key.Key_Home, self._playback.go_to_start),
             (Qt.Key.Key_End, self._playback.go_to_end),
         ]
@@ -168,6 +176,39 @@ class MainWindow(QMainWindow):
             is_error=cur in self.state.error_frames,
             is_playing=self.state.playing,
         )
+
+    def _set_frame_lightweight(self, frame: int):
+        self.state.set_frame(frame)
+        cur = self.state.cur_frame
+        self._viewer_panel.viewer.set_frame(cur)
+        self._viewer_panel.update_frame_label(cur)
+        self._timeline.set_frame(cur)
+
+    def _on_timeline_frame_changed(self, frame: int):
+        if not self._scrubbing:
+            self.set_frame(frame)
+            return
+
+        self._pending_scrub_frame = frame
+        self._set_frame_lightweight(frame)
+        if not self._scrub_timer.isActive():
+            self._scrub_timer.start()
+
+    def _flush_scrub_frame(self):
+        if self._pending_scrub_frame is None:
+            return
+        self.set_frame(self._pending_scrub_frame)
+        self._pending_scrub_frame = None
+
+    def _on_scrub_start(self):
+        self._scrubbing = True
+        self._pending_scrub_frame = None
+        self._viewer_panel.viewer.set_proxy_frames_enabled(True)
+
+    def _on_scrub_end(self):
+        self._scrubbing = False
+        self._viewer_panel.viewer.set_proxy_frames_enabled(False)
+        self._flush_scrub_frame()
 
     # ── Folder / session events ──────────────────────────────────────
 
