@@ -85,7 +85,13 @@ class SequenceDataService:
                     break
 
             updated = [bookmark for bookmark in bookmarks if bookmark.frame != source_frame]
-            return self._insert_bookmark(updated, target_frame, source_name)
+            preferred_direction = 1 if source_frame > target_frame else -1
+            adjusted_target = self._resolve_move_target_frame(
+                bookmarks=updated,
+                target_frame=target_frame,
+                preferred_direction=preferred_direction,
+            )
+            return self._insert_bookmark(updated, adjusted_target, source_name, allow_nearby=False)
 
         return self._update_bookmarks(frames_folder_path, updater=_move)
 
@@ -190,21 +196,55 @@ class SequenceDataService:
         ]
 
     @staticmethod
-    def _insert_bookmark(bookmarks: list[Bookmark], frame: int, name: str = "") -> list[Bookmark]:
+    def _insert_bookmark(
+        bookmarks: list[Bookmark],
+        frame: int,
+        name: str = "",
+        allow_nearby: bool = False,
+    ) -> list[Bookmark]:
         normalized = max(0, int(frame))
         normalized_name = SequenceDataService._normalize_name(name)
         by_frame = {bookmark.frame: bookmark.name for bookmark in bookmarks}
 
-        if SequenceDataService._is_too_close_to_existing_bookmark(bookmarks, normalized):
+        if not allow_nearby and SequenceDataService._is_too_close_to_existing_bookmark(bookmarks, normalized):
             return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
 
         by_frame[normalized] = normalized_name
         return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
 
     @staticmethod
-    def _is_too_close_to_existing_bookmark(bookmarks: list[Bookmark], frame: int) -> bool:
+    def _resolve_move_target_frame(bookmarks: list[Bookmark], target_frame: int, preferred_direction: int) -> int:
+        candidate = max(0, int(target_frame))
+        if not SequenceDataService._is_too_close_to_existing_bookmark(bookmarks, candidate):
+            return candidate
+
+        direction = 1 if preferred_direction >= 0 else -1
+        while True:
+            conflict = SequenceDataService._find_conflict(bookmarks, candidate)
+            if conflict is None:
+                return candidate
+
+            if direction > 0:
+                candidate = conflict + SequenceDataService._MIN_BOOKMARK_DISTANCE_FRAMES
+                continue
+
+            next_candidate = conflict - SequenceDataService._MIN_BOOKMARK_DISTANCE_FRAMES
+            if next_candidate < 0:
+                direction = 1
+                continue
+            candidate = next_candidate
+
+    @staticmethod
+    def _find_conflict(bookmarks: list[Bookmark], frame: int) -> int | None:
         minimum_gap = SequenceDataService._MIN_BOOKMARK_DISTANCE_FRAMES
-        return any(abs(bookmark.frame - frame) < minimum_gap for bookmark in bookmarks)
+        for bookmark in sorted(bookmarks, key=lambda item: abs(item.frame - frame)):
+            if abs(bookmark.frame - frame) < minimum_gap:
+                return bookmark.frame
+        return None
+
+    @staticmethod
+    def _is_too_close_to_existing_bookmark(bookmarks: list[Bookmark], frame: int) -> bool:
+        return SequenceDataService._find_conflict(bookmarks, frame) is not None
 
     @staticmethod
     def _normalize_name(value: object) -> str:
