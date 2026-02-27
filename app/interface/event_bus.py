@@ -5,10 +5,21 @@ from typing import Any, Callable, Protocol
 
 class Event(Enum):
     FramesLoaded = auto()
+    SongIdentified = auto()
 
 
 class EventsListener(Protocol):
     def on_frames_loaded(self, path: str) -> None: ...
+
+    def on_song_identified(
+            self,
+            status: str,
+            title: str,
+            artist: str,
+            album: str,
+            provider: str,
+            message: str,
+    ) -> None: ...
 
 
 class EventBus:
@@ -31,3 +42,4 @@ class EventBus:
 
     def connect(self, listener: EventsListener) -> None:
         self.on(Event.FramesLoaded, listener.on_frames_loaded)
+        self.on(Event.SongIdentified, listener.on_song_identified)

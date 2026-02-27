@@ -29,6 +29,14 @@ class RightPanel(QFrame):
         detections = self._mock_yolo_pose_detections(frame)
         self.pose_3d_viewer.set_detections(detections)
 
+    def update_song_info(self, status: str, title: str, artist: str, album: str, provider: str, message: str):
+        self._music_status_value.setText(status)
+        self._music_title_value.setText(title or "—")
+        self._music_artist_value.setText(artist or "—")
+        self._music_album_value.setText(album or "—")
+        self._music_provider_value.setText(provider or "—")
+        self._music_message_value.setText(message or "")
+
     # ── Private helpers ──────────────────────────────────────────────
 
     @staticmethod
@@ -67,7 +75,29 @@ class RightPanel(QFrame):
         tab = QWidget()
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
         layout.addWidget(self._section_label("Music"))
+
+        self._music_status_value = QLabel("not_run")
+        self._music_title_value = QLabel("—")
+        self._music_artist_value = QLabel("—")
+        self._music_album_value = QLabel("—")
+        self._music_provider_value = QLabel("—")
+        self._music_message_value = QLabel("")
+        self._music_message_value.setWordWrap(True)
+
+        for label, value in (
+            ("Estado", self._music_status_value),
+            ("Título", self._music_title_value),
+            ("Artista", self._music_artist_value),
+            ("Álbum", self._music_album_value),
+            ("Proveedor", self._music_provider_value),
+        ):
+            layout.addWidget(QLabel(f"{label}:"))
+            layout.addWidget(value)
+
+        layout.addWidget(self._music_message_value)
         layout.addStretch(1)
         return tab
 

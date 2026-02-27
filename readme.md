@@ -32,3 +32,9 @@ make dependencies
 
 - Drag and drop a local folder with images (`png`, `jpg`, `jpeg`, `bmp`, `webp`) over the main viewer to load frames.
 - The app preloads frames around the current one using `FRAME_CACHE_RADIUS` from `config.env` (default: `25`).
+
+## Music identification
+
+- When dropping a local video, the app extracts a short audio sample (requires `ffmpeg`) and tries to identify the song using `audd.io`.
+- Configure `AUDD_API_TOKEN` in `preferences/app.env`.
+- Song metadata is displayed in the **Music** tab.

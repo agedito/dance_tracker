@@ -83,6 +83,17 @@ class MainWindow(QMainWindow):
     def on_frames_loaded(self, path: str) -> None:
         self._folder_session.load_folder(path)
 
+    def on_song_identified(
+            self,
+            status: str,
+            title: str,
+            artist: str,
+            album: str,
+            provider: str,
+            message: str,
+    ) -> None:
+        self._right_panel.update_song_info(status, title, artist, album, provider, message)
+
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
 
