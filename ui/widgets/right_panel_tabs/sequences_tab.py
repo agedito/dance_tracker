@@ -124,7 +124,7 @@ class SequencesTabWidget(QWidget):
             size=self._THUMBNAIL_SIZE,
             sequence_mime_type=self._SEQUENCE_MIME_TYPE,
         )
-        button.folderDropped.connect(self._move_folder_before)
+        button.folderDropped.connect(self._move_folder_relative)
         button.setObjectName("SequenceThumbnail")
         button.setProperty("isSelected", folder_path == self._selected_path)
         button.style().unpolish(button)
@@ -142,7 +142,7 @@ class SequencesTabWidget(QWidget):
             button.setIconSize(QSize(146, 82))
         return button
 
-    def _move_folder_before(self, dragged_folder: str, target_folder: str):
+    def _move_folder_relative(self, dragged_folder: str, target_folder: str, drop_after: bool):
         if dragged_folder == target_folder:
             return
         if dragged_folder not in self._folders or target_folder not in self._folders:
@@ -150,6 +150,8 @@ class SequencesTabWidget(QWidget):
 
         updated = [folder for folder in self._folders if folder != dragged_folder]
         target_idx = updated.index(target_folder)
+        if drop_after:
+            target_idx += 1
         updated.insert(target_idx, dragged_folder)
 
         self._folders = updated
@@ -222,7 +224,7 @@ class SequencesTabWidget(QWidget):
 
 
 class _SequenceThumbnailButton(QPushButton):
-    folderDropped = Signal(str, str)
+    folderDropped = Signal(str, str, bool)
 
     def __init__(self, folder_path: str, size: QSize, sequence_mime_type: str):
         super().__init__("")
@@ -268,5 +270,6 @@ class _SequenceThumbnailButton(QPushButton):
             return
 
         dragged = bytes(event.mimeData().data(self._sequence_mime_type)).decode("utf-8")
-        self.folderDropped.emit(dragged, self._folder_path)
+        drop_after = event.position().x() >= self.width() / 2
+        self.folderDropped.emit(dragged, self._folder_path, drop_after)
         event.acceptProposedAction()
