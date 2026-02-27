@@ -109,10 +109,9 @@ class TopBar(QWidget):
         if not isinstance(sequence, dict):
             return default_name
 
-        for key in ("name", "nombre"):
-            value = sequence.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
+        value = sequence.get("name")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
         return default_name
 
     def _save_sequence_name(self, sequence_name: str):
@@ -129,7 +128,6 @@ class TopBar(QWidget):
             payload["sequence"] = sequence
 
         sequence["name"] = sequence_name
-        sequence["nombre"] = sequence_name
 
         self._active_metadata_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
