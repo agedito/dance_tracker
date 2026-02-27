@@ -1,6 +1,6 @@
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QInputDialog, QMenu, QWidget
+from PySide6.QtWidgets import QLineEdit, QMenu, QWidget
 
 from app.interface.sequence_data import Bookmark
 from app.track_app.frame_state.layers import Segment
@@ -31,6 +31,11 @@ class TimelineTrack(QWidget):
         self._dragging_bookmark = False
         self._drag_source_bookmark: int | None = None
         self._drag_bookmark_frame: int | None = None
+        self._editing_bookmark_frame: int | None = None
+        self._bookmark_editor = QLineEdit(self)
+        self._bookmark_editor.hide()
+        self._bookmark_editor.editingFinished.connect(self._finish_bookmark_rename)
+        self._bookmark_editor.setPlaceholderText("Bookmark name")
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
@@ -63,10 +68,22 @@ class TimelineTrack(QWidget):
                 return bookmark.name
         return ""
 
+    def _bookmark_label_rect(self, frame: int) -> QRectF:
+        x = self._frame_x(frame)
+        return QRectF(x - 90, 0, 180, 12)
+
+    def _bookmark_at_position(self, x: float, y: float) -> int | None:
+        for bookmark in self.bookmarks:
+            if self._bookmark_label_rect(bookmark.frame).adjusted(-4, -2, 4, 2).contains(QPointF(x, y)):
+                return bookmark.frame
+        return self._bookmark_near_pos(x)
+
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
         self.frame = clamp(self.frame, 0, self.total_frames - 1)
         self.bookmarks = [bookmark for bookmark in self.bookmarks if bookmark.frame < self.total_frames]
+        if self._editing_bookmark_frame is not None and self._editing_bookmark_frame >= self.total_frames:
+            self._cancel_bookmark_rename()
         self.loaded_flags = [False] * self.total_frames
         self.update()
 
@@ -83,6 +100,14 @@ class TimelineTrack(QWidget):
             Bookmark(frame=frame, name=name)
             for frame, name in sorted(by_frame.items())
         ]
+        if self._editing_bookmark_frame is not None:
+            current = self._bookmark_name(self._editing_bookmark_frame)
+            if not any(bookmark.frame == self._editing_bookmark_frame for bookmark in self.bookmarks):
+                self._cancel_bookmark_rename()
+            else:
+                self._bookmark_editor.setText(current)
+                self._bookmark_editor.selectAll()
+                self._position_bookmark_editor(self._editing_bookmark_frame)
         self.update()
 
     def set_loaded_flags(self, flags: list[bool]):
@@ -109,6 +134,9 @@ class TimelineTrack(QWidget):
 
         if ev.button() != Qt.MouseButton.LeftButton:
             return
+
+        if self._editing_bookmark_frame is not None:
+            self._finish_bookmark_rename()
 
         bookmark = self._bookmark_near_pos(ev.position().x())
         if bookmark is not None:
@@ -149,6 +177,15 @@ class TimelineTrack(QWidget):
             self.scrubFinished.emit()
         super().mouseReleaseEvent(ev)
 
+    def mouseDoubleClickEvent(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            bookmark = self._bookmark_at_position(ev.position().x(), ev.position().y())
+            if bookmark is not None:
+                self._start_bookmark_rename(bookmark)
+                ev.accept()
+                return
+        super().mouseDoubleClickEvent(ev)
+
     def _show_bookmark_context_menu(self, ev) -> None:
         bookmark = self._bookmark_near_pos(ev.position().x())
         if bookmark is None:
@@ -159,12 +196,42 @@ class TimelineTrack(QWidget):
         delete_action = menu.addAction("Delete bookmark")
         chosen_action = menu.exec(ev.globalPosition().toPoint())
         if chosen_action == edit_name_action:
-            current_name = self._bookmark_name(bookmark)
-            name, ok = QInputDialog.getText(self, "Bookmark name", "Name:", text=current_name)
-            if ok:
-                self.bookmarkNameChanged.emit(bookmark, name)
+            self._start_bookmark_rename(bookmark)
         elif chosen_action == delete_action:
+            if self._editing_bookmark_frame == bookmark:
+                self._cancel_bookmark_rename()
             self.bookmarkRemoved.emit(bookmark)
+
+    def resizeEvent(self, ev):
+        if self._editing_bookmark_frame is not None:
+            self._position_bookmark_editor(self._editing_bookmark_frame)
+        super().resizeEvent(ev)
+
+    def _position_bookmark_editor(self, frame: int) -> None:
+        label_rect = self._bookmark_label_rect(frame)
+        edit_rect = label_rect.adjusted(0, 0, 0, 10)
+        self._bookmark_editor.setGeometry(edit_rect.toRect())
+
+    def _start_bookmark_rename(self, frame: int) -> None:
+        self._editing_bookmark_frame = frame
+        self._bookmark_editor.setText(self._bookmark_name(frame))
+        self._position_bookmark_editor(frame)
+        self._bookmark_editor.show()
+        self._bookmark_editor.setFocus()
+        self._bookmark_editor.selectAll()
+
+    def _finish_bookmark_rename(self) -> None:
+        if self._editing_bookmark_frame is None:
+            return
+
+        frame = self._editing_bookmark_frame
+        self._editing_bookmark_frame = None
+        self._bookmark_editor.hide()
+        self.bookmarkNameChanged.emit(frame, self._bookmark_editor.text())
+
+    def _cancel_bookmark_rename(self) -> None:
+        self._editing_bookmark_frame = None
+        self._bookmark_editor.hide()
 
     def paintEvent(self, ev):
         w, h = self.width(), self.height()
