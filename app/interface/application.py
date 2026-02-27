@@ -15,7 +15,7 @@ class DanceTrackerPort(Protocol):
 
 
 #
-# ¿com
+# TODO: define complete application contract if needed
 # class DanceTrackerPort(Protocol):
 #     """Contract that the UI expects from the application layer."""
 #

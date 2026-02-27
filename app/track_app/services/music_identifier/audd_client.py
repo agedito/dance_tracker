@@ -20,7 +20,7 @@ class AuddSongIdentifier:
             return SongMetadata(
                 status=SongStatus.UNAVAILABLE,
                 provider="audd.io",
-                message="Configura AUDD_API_TOKEN para habilitar la identificación.",
+                message="Set AUDD_API_TOKEN to enable identification.",
             )
 
         sample_file = Path(audio_path)
@@ -28,7 +28,7 @@ class AuddSongIdentifier:
             return SongMetadata(
                 status=SongStatus.ERROR,
                 provider="audd.io",
-                message="No se pudo leer la muestra de audio.",
+                message="Could not read the audio sample.",
             )
 
         with sample_file.open("rb") as fd:
@@ -51,7 +51,7 @@ class AuddSongIdentifier:
             return SongMetadata(
                 status=SongStatus.ERROR,
                 provider="audd.io",
-                message=f"Error de red al identificar canción: {err}",
+                message=f"Network error while identifying song: {err}",
             )
 
         try:
@@ -60,7 +60,7 @@ class AuddSongIdentifier:
             return SongMetadata(
                 status=SongStatus.ERROR,
                 provider="audd.io",
-                message="Respuesta inválida del servicio de identificación.",
+                message="Invalid response from the identification service.",
             )
 
         result = data.get("result")
@@ -68,7 +68,7 @@ class AuddSongIdentifier:
             return SongMetadata(
                 status=SongStatus.NOT_FOUND,
                 provider="audd.io",
-                message="No se pudo identificar la canción con esta muestra.",
+                message="Could not identify the song with this sample.",
             )
 
         return SongMetadata(

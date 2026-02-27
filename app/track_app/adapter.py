@@ -27,7 +27,7 @@ class MediaAdapter:
                 song = SongMetadata(
                     status=SongStatus.ERROR,
                     provider="music_identifier",
-                    message=f"Error identificando canción: {err}",
+                    message=f"Error identifying song: {err}",
                 )
 
             self._events.emit(Event.SongIdentified, song)

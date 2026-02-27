@@ -21,11 +21,11 @@ class MusicTabWidget(QWidget):
         self._message_value.setWordWrap(True)
 
         for label, value in (
-            ("Estado", self._status_value),
-            ("Título", self._title_value),
-            ("Artista", self._artist_value),
-            ("Álbum", self._album_value),
-            ("Proveedor", self._provider_value),
+            ("Status", self._status_value),
+            ("Title", self._title_value),
+            ("Artist", self._artist_value),
+            ("Album", self._album_value),
+            ("Provider", self._provider_value),
         ):
             layout.addWidget(QLabel(f"{label}:"))
             layout.addWidget(value)

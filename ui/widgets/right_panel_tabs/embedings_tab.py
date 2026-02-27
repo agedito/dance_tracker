@@ -10,7 +10,7 @@ class EmbedingsTabWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(section_label("Embedings"))
 
-        info = QLabel("Sección reservada para futuras visualizaciones de embeddings.")
+        info = QLabel("Section reserved for future embedding visualizations.")
         info.setWordWrap(True)
         layout.addWidget(info)
         layout.addStretch(1)

@@ -104,7 +104,7 @@ class SequencesTabWidget(QWidget):
                 widget.deleteLater()
 
         if not self._folders:
-            empty = QLabel("Aún no hay secuencias recientes.")
+            empty = QLabel("There are no recent sequences yet.")
             empty.setObjectName("Muted")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._grid.addWidget(empty, 0, 0)
