@@ -14,7 +14,7 @@ Each concern lives in its own class:
 
 from pathlib import Path
 
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QEvent, QTimer, Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QMainWindow
 
@@ -79,6 +79,7 @@ class MainWindow(QMainWindow):
         self._layout = MainWindowLayout(self, cfg.get_css())
         self._build_ui()
         self.set_frame(0)
+        QApplication.instance().installEventFilter(self)
 
     # ── UI construction ──────────────────────────────────────────────
 
@@ -166,10 +167,6 @@ class MainWindow(QMainWindow):
             (QKeySequence(Qt.Key.Key_PageDown), lambda: self._playback.step(10)),
             (QKeySequence(Qt.Key.Key_Home), self._playback.go_to_start),
             (QKeySequence(Qt.Key.Key_End), self._playback.go_to_end),
-            (QKeySequence("Ctrl+A"), self._playback.go_to_start),
-            (QKeySequence("Ctrl+D"), self._playback.go_to_end),
-            (QKeySequence("Shift+A"), self._go_to_previous_bookmark),
-            (QKeySequence("Shift+D"), self._go_to_next_bookmark),
         ]
         self._shortcuts = []
         for shortcut, cb in bindings:
@@ -183,6 +180,32 @@ class MainWindow(QMainWindow):
             self._playback.pause()
             return
         self._playback.play()
+
+    def eventFilter(self, watched, event):
+        if event.type() != QEvent.Type.KeyPress:
+            return super().eventFilter(watched, event)
+
+        modifiers = event.modifiers()
+        if modifiers & (Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier):
+            return super().eventFilter(watched, event)
+
+        if modifiers == Qt.KeyboardModifier.ShiftModifier:
+            if event.key() == Qt.Key.Key_A:
+                self._go_to_previous_bookmark()
+                return True
+            if event.key() == Qt.Key.Key_D:
+                self._go_to_next_bookmark()
+                return True
+
+        if modifiers == Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_A:
+                self._playback.go_to_start()
+                return True
+            if event.key() == Qt.Key.Key_D:
+                self._playback.go_to_end()
+                return True
+
+        return super().eventFilter(watched, event)
 
     # ── Splitter layout persistence ──────────────────────────────────
 

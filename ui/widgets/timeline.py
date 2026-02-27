@@ -150,14 +150,23 @@ class TimelineTrack(QWidget):
         super().mouseReleaseEvent(ev)
 
     def _show_bookmark_context_menu(self, ev) -> None:
+        clicked_frame = self._frame_from_pos(ev.position().x())
         bookmark = self._bookmark_near_pos(ev.position().x())
-        if bookmark is None:
-            return
 
         menu = QMenu(self)
-        edit_name_action = menu.addAction("Edit bookmark name")
-        delete_action = menu.addAction("Delete bookmark")
+        add_action = menu.addAction("Add bookmark")
+        edit_name_action = None
+        delete_action = None
+        if bookmark is not None:
+            menu.addSeparator()
+            edit_name_action = menu.addAction("Edit bookmark name")
+            delete_action = menu.addAction("Delete bookmark")
+
         chosen_action = menu.exec(ev.globalPosition().toPoint())
+        if chosen_action == add_action:
+            self.bookmarkRequested.emit(clicked_frame)
+            return
+
         if chosen_action == edit_name_action:
             current_name = self._bookmark_name(bookmark)
             name, ok = QInputDialog.getText(self, "Bookmark name", "Name:", text=current_name)
