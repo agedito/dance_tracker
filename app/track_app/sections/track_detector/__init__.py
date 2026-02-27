@@ -1,3 +1,3 @@
-from app.track_app.sections.track_detector.service import MockPersonDetector, TrackDetectorService
+from app.track_app.sections.track_detector.service import MockPersonDetector, NearbyMockPersonDetector, TrackDetectorService
 
-__all__ = ["MockPersonDetector", "TrackDetectorService"]
+__all__ = ["MockPersonDetector", "NearbyMockPersonDetector", "TrackDetectorService"]

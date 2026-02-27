@@ -8,7 +8,12 @@ from app.interface.track_detector import BoundingBox, PersonDetection, PersonDet
 
 
 class MockPersonDetector:
-    def detect_people_in_frame(self, frame_path: str) -> list[PersonDetection]:
+    def detect_people_in_frame(
+        self,
+        frame_path: str,
+        previous_detections: list[PersonDetection] | None = None,
+    ) -> list[PersonDetection]:
+        _ = previous_detections
         width, height = _image_size(frame_path)
         rng = random.Random(frame_path)
 
@@ -33,19 +38,63 @@ class MockPersonDetector:
         ]
 
 
+class NearbyMockPersonDetector:
+    def detect_people_in_frame(
+        self,
+        frame_path: str,
+        previous_detections: list[PersonDetection] | None = None,
+    ) -> list[PersonDetection]:
+        width, height = _image_size(frame_path)
+        rng = random.Random(frame_path)
+
+        if not previous_detections:
+            return MockPersonDetector().detect_people_in_frame(frame_path=frame_path)
+
+        detections: list[PersonDetection] = []
+        for prev in previous_detections:
+            box = _jitter_box_from_previous(rng=rng, previous=prev.bbox_relative, width=width, height=height)
+            detections.append(_to_detection(rng=rng, box=box, width=width, height=height))
+        return detections
+
+
 class TrackDetectorService:
     _VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-    def __init__(self, detector: PersonDetector):
-        self._detector = detector
+    def __init__(self, detectors: dict[str, PersonDetector], default_detector_name: str):
+        self._detectors = dict(detectors)
+        self._active_detector_name = default_detector_name if default_detector_name in self._detectors else next(iter(self._detectors), "")
         self._detections_by_frame: dict[int, list[PersonDetection]] = {}
 
+    def available_detectors(self) -> list[str]:
+        return list(self._detectors.keys())
+
+    def active_detector(self) -> str:
+        return self._active_detector_name
+
+    def set_active_detector(self, detector_name: str) -> bool:
+        if detector_name not in self._detectors:
+            return False
+        self._active_detector_name = detector_name
+        return True
+
     def detect_people_for_sequence(self, frames_folder_path: str) -> int:
+        detector = self._detectors.get(self._active_detector_name)
+        if detector is None:
+            self._detections_by_frame = {}
+            self._write_json(frames_folder_path, {})
+            return 0
+
         frame_files = self._frame_files(frames_folder_path)
         detections: dict[int, list[PersonDetection]] = {}
+        previous_detections: list[PersonDetection] | None = None
 
         for index, frame_path in enumerate(frame_files):
-            detections[index] = self._detector.detect_people_in_frame(str(frame_path))
+            frame_detections = detector.detect_people_in_frame(
+                frame_path=str(frame_path),
+                previous_detections=previous_detections,
+            )
+            detections[index] = frame_detections
+            previous_detections = frame_detections
 
         self._detections_by_frame = detections
         self._write_json(frames_folder_path, detections)
@@ -74,6 +123,7 @@ class TrackDetectorService:
 
     def _write_json(self, frames_folder_path: str, detections: dict[int, list[PersonDetection]]) -> None:
         payload = {
+            "detector": self._active_detector_name,
             "frames": {
                 str(frame_index): [asdict(detection) for detection in frame_detections]
                 for frame_index, frame_detections in detections.items()
@@ -93,6 +143,9 @@ class TrackDetectorService:
             return {}
 
         frames_data = payload.get("frames") if isinstance(payload, dict) else None
+        detector_name = payload.get("detector") if isinstance(payload, dict) else None
+        if isinstance(detector_name, str) and detector_name in self._detectors:
+            self._active_detector_name = detector_name
         if not isinstance(frames_data, dict):
             return {}
 
@@ -156,6 +209,26 @@ def _random_box(rng: random.Random, width: int, height: int, min_x_ratio: float,
     min_y = max(0, int(height * 0.05))
     y = rng.randint(min_y, max_y if max_y >= min_y else min_y)
     return BoundingBox(x=x, y=y, width=box_width, height=box_height)
+
+
+def _jitter_box_from_previous(rng: random.Random, previous: RelativeBoundingBox, width: int, height: int) -> BoundingBox:
+    prev_x = previous.x * width
+    prev_y = previous.y * height
+    prev_width = previous.width * width
+    prev_height = previous.height * height
+
+    new_width = max(20, int(prev_width * rng.uniform(0.92, 1.08)))
+    new_height = max(20, int(prev_height * rng.uniform(0.92, 1.08)))
+
+    x_shift = int(width * rng.uniform(-0.03, 0.03))
+    y_shift = int(height * rng.uniform(-0.03, 0.03))
+
+    x = int(prev_x) + x_shift
+    y = int(prev_y) + y_shift
+
+    x = max(0, min(x, max(0, width - new_width)))
+    y = max(0, min(y, max(0, height - new_height)))
+    return BoundingBox(x=x, y=y, width=new_width, height=new_height)
 
 
 def _to_detection(rng: random.Random, box: BoundingBox, width: int, height: int) -> PersonDetection:

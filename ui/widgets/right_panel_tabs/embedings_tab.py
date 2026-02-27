@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
 from ui.widgets.right_panel_tabs.common import section_label
@@ -26,11 +26,33 @@ class EmbedingsTabWidget(QWidget):
         info.setWordWrap(True)
         layout.addWidget(info)
 
+        controls_layout = QHBoxLayout()
+
+        self._detectors_combo = QComboBox()
+        self._detectors_combo.addItems(self._app.track_detector.available_detectors())
+        active_detector = self._app.track_detector.active_detector()
+        active_index = self._detectors_combo.findText(active_detector)
+        if active_index >= 0:
+            self._detectors_combo.setCurrentIndex(active_index)
+        self._detectors_combo.currentTextChanged.connect(self._on_detector_changed)
+        controls_layout.addWidget(self._detectors_combo, 1)
+
         self._detect_button = QPushButton("Detect people")
         self._detect_button.clicked.connect(self._on_detect_people_clicked)
-        layout.addWidget(self._detect_button)
+        controls_layout.addWidget(self._detect_button)
 
+        layout.addLayout(controls_layout)
         layout.addStretch(1)
+
+    def _on_detector_changed(self, detector_name: str) -> None:
+        if not detector_name:
+            return
+
+        if self._app.track_detector.set_active_detector(detector_name):
+            self._log_message(f"Detector selected: {detector_name}.")
+            return
+
+        self._log_message(f"Unable to select detector: {detector_name}.")
 
     def _on_detect_people_clicked(self) -> None:
         frames_folder_path = self._get_current_folder()
@@ -38,6 +60,7 @@ class EmbedingsTabWidget(QWidget):
             self._log_message("No sequence loaded. Load a sequence before running detection.")
             return
 
-        self._log_message("Person detection started.")
+        detector_name = self._app.track_detector.active_detector()
+        self._log_message(f"Person detection started with detector: {detector_name}.")
         total_frames = self._app.track_detector.detect_people_for_sequence(frames_folder_path)
         self._log_message(f"Person detection finished. Processed {total_frames} frames.")
