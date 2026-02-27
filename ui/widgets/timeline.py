@@ -15,6 +15,8 @@ class TimelineTrack(QWidget):
     frameChanged = Signal(int)
     scrubStarted = Signal()
     scrubFinished = Signal()
+    bookmarkRequested = Signal(int)
+    bookmarkMoved = Signal(int, int)
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -22,6 +24,10 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
+        self.bookmarks: list[int] = []
+        self._dragging_bookmark = False
+        self._drag_source_bookmark: int | None = None
+        self._drag_bookmark_frame: int | None = None
         self.setFixedHeight(28)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
@@ -29,14 +35,39 @@ class TimelineTrack(QWidget):
         norm_x = clamp(int(x), 0, self.width())
         return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
 
+    def _frame_x(self, frame: int) -> int:
+        return int((clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)) * self.width())
+
+    def _bookmark_near_pos(self, x: float, threshold_px: int = 6) -> int | None:
+        if not self.bookmarks:
+            return None
+
+        nearest: int | None = None
+        nearest_distance: float | None = None
+        for frame in self.bookmarks:
+            marker_x = self._frame_x(frame)
+            distance = abs(marker_x - x)
+            if distance > threshold_px:
+                continue
+            if nearest_distance is None or distance < nearest_distance:
+                nearest_distance = distance
+                nearest = frame
+        return nearest
+
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
         self.frame = clamp(self.frame, 0, self.total_frames - 1)
+        self.bookmarks = [value for value in self.bookmarks if value < self.total_frames]
         self.loaded_flags = [False] * self.total_frames
         self.update()
 
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
+        self.update()
+
+    def set_bookmarks(self, bookmarks: list[int]):
+        normalized = {clamp(value, 0, self.total_frames - 1) for value in bookmarks}
+        self.bookmarks = sorted(normalized)
         self.update()
 
     def set_loaded_flags(self, flags: list[bool]):
@@ -53,17 +84,48 @@ class TimelineTrack(QWidget):
         self.update()
 
     def mousePressEvent(self, ev):
+        if ev.button() == Qt.MouseButton.MiddleButton:
+            self.bookmarkRequested.emit(self._frame_from_pos(ev.position().x()))
+            return
+
         if ev.button() != Qt.MouseButton.LeftButton:
             return
+
+        bookmark = self._bookmark_near_pos(ev.position().x())
+        if bookmark is not None:
+            self._dragging_bookmark = True
+            self._drag_source_bookmark = bookmark
+            self._drag_bookmark_frame = bookmark
+            self.update()
+            return
+
         self.scrubStarted.emit()
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def mouseMoveEvent(self, ev):
         if not (ev.buttons() & Qt.MouseButton.LeftButton):
             return
+
+        if self._dragging_bookmark:
+            self._drag_bookmark_frame = self._frame_from_pos(ev.position().x())
+            self.update()
+            return
+
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton and self._dragging_bookmark:
+            source = self._drag_source_bookmark
+            target = self._drag_bookmark_frame
+            self._dragging_bookmark = False
+            self._drag_source_bookmark = None
+            self._drag_bookmark_frame = None
+            self.update()
+            if source is not None and target is not None and source != target:
+                self.bookmarkMoved.emit(source, target)
+            super().mouseReleaseEvent(ev)
+            return
+
         if ev.button() == Qt.MouseButton.LeftButton:
             self.scrubFinished.emit()
         super().mouseReleaseEvent(ev)
@@ -86,6 +148,7 @@ class TimelineTrack(QWidget):
             p.drawRect(QRectF(left, 1, seg_w, h - 5))
 
         self._draw_loaded_indicator(p, w, h)
+        self._draw_bookmarks(p, h)
 
         xph = int((self.frame / max(1, self.total_frames - 1)) * w)
         p.setPen(QPen(QColor(255, 80, 80, 240), 2))
@@ -109,3 +172,16 @@ class TimelineTrack(QWidget):
             color = QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200)
             painter.setBrush(color)
             painter.drawRect(QRectF(x, y, 1, bar_h))
+
+    def _draw_bookmarks(self, painter: QPainter, h: int):
+        bookmarks_to_draw = self.bookmarks
+        if self._dragging_bookmark and self._drag_bookmark_frame is not None:
+            bookmarks_to_draw = [frame for frame in self.bookmarks if frame != self._drag_source_bookmark]
+            bookmarks_to_draw.append(self._drag_bookmark_frame)
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        for frame in sorted(set(bookmarks_to_draw)):
+            x = self._frame_x(frame)
+            color = QColor(247, 193, 45, 240)
+            painter.setBrush(color)
+            painter.drawRect(QRectF(x - 1, 2, 3, h - 8))

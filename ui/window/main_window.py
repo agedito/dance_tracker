@@ -134,6 +134,8 @@ class MainWindow(QMainWindow):
             on_frame_changed=self._on_timeline_frame_changed,
             on_scrub_start=self._on_scrub_start,
             on_scrub_end=self._on_scrub_end,
+            on_bookmark_requested=self._on_bookmark_requested,
+            on_bookmark_moved=self._on_bookmark_moved,
         )
 
         self._status = StatusPanel(
@@ -271,6 +273,38 @@ class MainWindow(QMainWindow):
         self._flush_scrub_frame()
 
 
+    def _refresh_timeline_bookmarks(self):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            self._timeline.set_bookmarks([])
+            return
+
+        bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
+        valid_bookmarks = [
+            frame
+            for frame in bookmarks
+            if 0 <= frame < self._frames.total_frames
+        ]
+        self._timeline.set_bookmarks(valid_bookmarks)
+
+    def _on_bookmark_requested(self, frame: int):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        safe_frame = max(0, min(frame, self._frames.total_frames - 1))
+        self._app.sequence_data.add_bookmark(folder_path, safe_frame)
+        self._refresh_timeline_bookmarks()
+
+    def _on_bookmark_moved(self, source_frame: int, target_frame: int):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        safe_target = max(0, min(target_frame, self._frames.total_frames - 1))
+        self._app.sequence_data.move_bookmark(folder_path, source_frame, safe_target)
+        self._refresh_timeline_bookmarks()
+
     def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
         if generation != self._active_preload_generation:
             return
@@ -318,6 +352,7 @@ class MainWindow(QMainWindow):
         self._timeline.set_loaded_flags(loaded_flags)
         self._loaded_frames = {i for i, loaded in enumerate(loaded_flags) if loaded}
         self._loaded_count = min(total_frames, len(self._loaded_frames))
+        self._refresh_timeline_bookmarks()
         self._active_preload_generation = self._frame_store.preload_generation
         self._preload_done = self._loaded_count >= total_frames
         source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"
@@ -347,6 +382,7 @@ class MainWindow(QMainWindow):
         self._preload_done = False
         self._topbar.set_active_folder(None)
         self._right_panel.clear_sequence_data()
+        self._timeline.set_bookmarks([])
         self.set_frame(0)
 
     # ── Lifecycle ────────────────────────────────────────────────────

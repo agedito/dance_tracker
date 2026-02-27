@@ -51,7 +51,43 @@ class SequenceDataService:
             fps=fps,
         )
 
+    def read_bookmarks(self, frames_folder_path: str) -> list[int]:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        if not frames_folder.is_dir():
+            return []
+
+        metadata_path = self._find_matching_metadata_path(frames_folder)
+        if metadata_path is None:
+            return []
+
+        payload = self._read_json(metadata_path)
+        if payload is None:
+            return []
+
+        return self._extract_bookmarks(payload)
+
+    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+        return self._update_bookmarks(
+            frames_folder_path,
+            updater=lambda bookmarks: self._insert_bookmark(bookmarks, frame),
+        )
+
+    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[int]:
+        def _move(bookmarks: list[int]) -> list[int]:
+            if source_frame not in bookmarks:
+                return bookmarks
+            updated = [value for value in bookmarks if value != source_frame]
+            return self._insert_bookmark(updated, target_frame)
+
+        return self._update_bookmarks(frames_folder_path, updater=_move)
+
     def _find_matching_metadata(self, frames_folder: Path) -> dict | None:
+        metadata_path = self._find_matching_metadata_path(frames_folder)
+        if metadata_path is None:
+            return None
+        return self._read_json(metadata_path)
+
+    def _find_matching_metadata_path(self, frames_folder: Path) -> Path | None:
         metadata_files = sorted(frames_folder.parent.glob(f"*{self._SEQUENCE_METADATA_SUFFIX}"))
         target = frames_folder.resolve()
 
@@ -63,9 +99,53 @@ class SequenceDataService:
             frames_value = payload.get("frames") or payload.get("frames_path")
             resolved_frames = self._resolve_metadata_path(frames_value, metadata_path.parent)
             if resolved_frames and resolved_frames == target:
-                return payload
+                return metadata_path
 
         return None
+
+    def _update_bookmarks(self, frames_folder_path: str, updater) -> list[int]:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        if not frames_folder.is_dir():
+            return []
+
+        metadata_path = self._find_matching_metadata_path(frames_folder)
+        if metadata_path is None:
+            return []
+
+        payload = self._read_json(metadata_path)
+        if payload is None:
+            return []
+
+        bookmarks = self._extract_bookmarks(payload)
+        updated = updater(bookmarks)
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            sequence = {}
+            payload["sequence"] = sequence
+        sequence["bookmarks"] = updated
+
+        metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return updated
+
+    @staticmethod
+    def _extract_bookmarks(payload: dict) -> list[int]:
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            return []
+
+        raw_bookmarks = sequence.get("bookmarks")
+        if not isinstance(raw_bookmarks, list):
+            return []
+
+        values = {item for item in (SequenceDataService._to_int(value) for value in raw_bookmarks) if item >= 0}
+        return sorted(values)
+
+    @staticmethod
+    def _insert_bookmark(bookmarks: list[int], frame: int) -> list[int]:
+        normalized = max(0, int(frame))
+        updated = set(bookmarks)
+        updated.add(normalized)
+        return sorted(updated)
 
     @staticmethod
     def _resolve_metadata_path(value: object, root: Path) -> Path | None:

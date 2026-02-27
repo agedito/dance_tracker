@@ -394,6 +394,15 @@ class SequenceDataAdapter:
     def read_video_data(self, frames_folder_path: str):
         return self._service.read_video_data(frames_folder_path)
 
+    def read_bookmarks(self, frames_folder_path: str) -> list[int]:
+        return self._service.read_bookmarks(frames_folder_path)
+
+    def add_bookmark(self, frames_folder_path: str, frame: int) -> list[int]:
+        return self._service.add_bookmark(frames_folder_path, frame)
+
+    def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[int]:
+        return self._service.move_bookmark(frames_folder_path, source_frame, target_frame)
+
 
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):

@@ -18,6 +18,8 @@ class TimelinePanel(QFrame):
             on_frame_changed: Callable[[int], None],
             on_scrub_start: Callable,
             on_scrub_end: Callable,
+            on_bookmark_requested: Callable[[int], None],
+            on_bookmark_moved: Callable[[int, int], None],
     ):
         super().__init__()
         self.setObjectName("Panel")
@@ -64,6 +66,8 @@ class TimelinePanel(QFrame):
             track.frameChanged.connect(on_frame_changed)
             track.scrubStarted.connect(on_scrub_start)
             track.scrubFinished.connect(on_scrub_end)
+            track.bookmarkRequested.connect(on_bookmark_requested)
+            track.bookmarkMoved.connect(on_bookmark_moved)
             self.track_widgets.append(track)
 
             rl.addWidget(name)
@@ -81,6 +85,10 @@ class TimelinePanel(QFrame):
     def set_total_frames(self, total: int):
         for track in self.track_widgets:
             track.set_total_frames(total)
+
+    def set_bookmarks(self, bookmarks: list[int]):
+        for track in self.track_widgets:
+            track.set_bookmarks(bookmarks)
 
     def set_loaded_flags(self, flags: list[bool]):
         for track in self.track_widgets:
