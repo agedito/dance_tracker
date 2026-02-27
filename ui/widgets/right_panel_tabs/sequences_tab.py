@@ -1,17 +1,20 @@
+from pathlib import Path
 from typing import Callable
+import shutil
 
-from PySide6.QtCore import QPoint, QEvent, QSize, Qt
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
+from PySide6.QtCore import QPoint, QEvent, QSize, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QIcon
 from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QMenu,
 )
 
 from app.interface.media import MediaPort
+from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.right_panel_tabs.drag_scroll_area import DragScrollArea
 from ui.window.sections.preferences_manager import PreferencesManager
@@ -113,7 +116,6 @@ class SequencesTabWidget(QWidget):
             lambda pos, origin=button, selected_path=folder_path: self._show_sequence_menu(origin, selected_path, pos)
         )
 
-
         thumbnail = self._prefs.thumbnail_for_folder(folder_path)
         if thumbnail:
             button.setIcon(QIcon(thumbnail))
@@ -122,10 +124,54 @@ class SequencesTabWidget(QWidget):
 
     def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
         menu = QMenu(self)
-        delete_action = menu.addAction("Borrar video")
+        open_folder_action = menu.addAction("Open Folder")
+        remove_action = menu.addAction("Remove")
+        delete_video_and_frames_action = menu.addAction("Delete Video and Frames")
+
         selected_action = menu.exec(origin.mapToGlobal(pos))
-        if selected_action is delete_action:
+        if selected_action is open_folder_action:
+            self._open_folder(folder_path)
+            return
+        if selected_action is remove_action:
             self._remove_sequence(folder_path)
+            return
+        if selected_action is delete_video_and_frames_action:
+            self._delete_video_and_frames(folder_path)
+
+    def _open_folder(self, folder_path: str):
+        folder = Path(folder_path).expanduser()
+        target = folder if folder.exists() else folder.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
+    def _delete_video_and_frames(self, folder_path: str):
+        folder = Path(folder_path).expanduser()
+        video_file = self._find_video_for_frames(folder)
+
+        if folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+
+        if folder.name == "frames":
+            frames_mino = folder.parent / "frames_mino"
+            if frames_mino.is_dir():
+                shutil.rmtree(frames_mino, ignore_errors=True)
+
+        if video_file and video_file.exists():
+            video_file.unlink(missing_ok=True)
+
+        self._remove_sequence(folder_path)
+
+    @staticmethod
+    def _find_video_for_frames(folder: Path) -> Path | None:
+        parent = folder.parent
+        if not parent.is_dir():
+            return None
+
+        videos = [
+            file
+            for file in sorted(parent.iterdir())
+            if file.is_file() and file.suffix.lower() in VIDEO_SUFFIXES
+        ]
+        return videos[0] if videos else None
 
     def _remove_sequence(self, folder_path: str):
         self._prefs.remove_recent_folder(folder_path)
