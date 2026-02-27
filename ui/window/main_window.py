@@ -78,7 +78,6 @@ class MainWindow(QMainWindow):
 
         self._layout = MainWindowLayout(self, cfg.get_css())
         self._build_ui()
-        self._app.sequences.refresh()
         self.set_frame(0)
 
     # ── UI construction ──────────────────────────────────────────────

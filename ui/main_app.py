@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
@@ -16,5 +17,10 @@ class GraphicApp:
         qt_app = QApplication(sys.argv)
         wnd = MainWindow(cfg, self._app, bus)
         bus.connect(wnd)
+
+        self._app.sequences.refresh()
+        last_folder = self._app.sequences.last_opened_folder()
+        if isinstance(last_folder, str) and Path(last_folder).expanduser().is_dir():
+            self._app.sequences.load(last_folder)
 
         sys.exit(qt_app.exec())
