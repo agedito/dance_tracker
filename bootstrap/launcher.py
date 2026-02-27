@@ -7,15 +7,12 @@ from ui.main_app import GraphicApp
 
 
 def launch():
-    # Dance tracker app
     app_cfg = AppConfig()
     app = DanceTrackerApp(app_cfg)
 
-    # create event buses
     events = EventBus()
     adapter = AppAdapter(app, events)
 
-    # Graphic user interface
     ui_cfg = UiConfig()
-    ui_app = GraphicApp(app, adapter)
+    ui_app = GraphicApp(adapter)
     ui_app.launch(ui_cfg, events)
