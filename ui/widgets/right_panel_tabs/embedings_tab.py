@@ -29,11 +29,10 @@ class EmbedingsTabWidget(QWidget):
         controls_layout = QHBoxLayout()
 
         self._detectors_combo = QComboBox()
-        self._detectors_combo.addItems(self._app.track_detector.available_detectors())
-        active_detector = self._app.track_detector.active_detector()
-        active_index = self._detectors_combo.findText(active_detector)
-        if active_index >= 0:
-            self._detectors_combo.setCurrentIndex(active_index)
+        self.load_detectors(
+            detector_names=self._app.track_detector.available_detectors(),
+            active_detector=self._app.track_detector.active_detector(),
+        )
         self._detectors_combo.currentTextChanged.connect(self._on_detector_changed)
         controls_layout.addWidget(self._detectors_combo, 1)
 
@@ -43,6 +42,15 @@ class EmbedingsTabWidget(QWidget):
 
         layout.addLayout(controls_layout)
         layout.addStretch(1)
+
+    def load_detectors(self, detector_names: list[str], active_detector: str) -> None:
+        self._detectors_combo.blockSignals(True)
+        self._detectors_combo.clear()
+        self._detectors_combo.addItems(detector_names)
+        active_index = self._detectors_combo.findText(active_detector)
+        if active_index >= 0:
+            self._detectors_combo.setCurrentIndex(active_index)
+        self._detectors_combo.blockSignals(False)
 
     def _on_detector_changed(self, detector_name: str) -> None:
         if not detector_name:
