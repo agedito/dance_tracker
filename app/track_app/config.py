@@ -6,4 +6,7 @@ class Config(BaseSettings):
     audd_api_token: str = ""
     audio_sample_seconds: int = 20
 
-    model_config = SettingsConfigDict(frozen=True, env_file="preferences/app.env")
+    model_config = SettingsConfigDict(
+        frozen=True,
+        env_file=("preferences/app.env", "secrets.env"),
+    )
