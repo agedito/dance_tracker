@@ -136,3 +136,18 @@ QFrame#ThumbFrame {
     border-style: solid;
     border-radius: 10px;
 }
+
+QPushButton#SequenceThumbnail {
+    background: #0C0F12;
+    border: 1px solid #2B343B;
+    border-radius: 10px;
+    padding: 0px;
+}
+
+QPushButton#SequenceThumbnail:hover {
+    background: #12171B;
+}
+
+QPushButton#SequenceThumbnail[isSelected="true"] {
+    border: 3px solid #35C76F;
+}

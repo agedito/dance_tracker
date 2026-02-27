@@ -30,16 +30,15 @@ class RightPanel(QFrame):
         v.setSpacing(10)
 
         tabs = QTabWidget()
-        tabs.addTab(LayerViewersTabWidget(), "Layer viewers")
-
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
         self.sequences_tab = SequencesTabWidget(preferences, media_manager)
 
+        tabs.addTab(self.sequences_tab, "Sequences")
+        tabs.addTab(LayerViewersTabWidget(), "Layer viewers")
         tabs.addTab(self.pose_3d_viewer, "Visor 3D")
         tabs.addTab(self.music_tab, "Music")
         tabs.addTab(EmbedingsTabWidget(), "Embedings")
-        tabs.addTab(self.sequences_tab, "Sequences")
         v.addWidget(tabs, 1)
 
     def update_pose(self, frame: int):
