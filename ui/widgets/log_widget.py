@@ -9,10 +9,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.widgets.right_panel_tabs.drag_scroll_area import DragScrollArea
 
 
 @dataclass
@@ -53,9 +54,8 @@ class LogWidget(QFrame):
         self.empty_label.setWordWrap(True)
         root.addWidget(self.empty_label)
 
-        self.scroll_area = QScrollArea()
+        self.scroll_area = DragScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
 
         self._content = QWidget()
