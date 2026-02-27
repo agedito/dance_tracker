@@ -99,6 +99,20 @@ class PreferencesManager:
     def save_fullscreen(self, is_fullscreen: bool):
         self._prefs["fullscreen"] = is_fullscreen
 
+    # ── Right panel tabs ───────────────────────────────────────────
+
+    def right_panel_tab_order(self) -> list[str]:
+        order = self._prefs.get("right_panel_tab_order", [])
+        if not isinstance(order, list):
+            return []
+        return [tab_id for tab_id in order if isinstance(tab_id, str) and tab_id]
+
+    def save_right_panel_tab_order(self, order: list[str]):
+        self._prefs["right_panel_tab_order"] = [
+            tab_id for tab_id in order if isinstance(tab_id, str) and tab_id
+        ]
+        self.save()
+
     # ── Recent folder thumbnails ────────────────────────────────────
 
     def _remember_folder_thumbnail(self, folder_path: str):
