@@ -294,6 +294,7 @@ class MainWindow(QMainWindow):
         self._preload_done = self._loaded_count >= total_frames
         self._topbar.set_active_folder(self._folder_session.current_folder_path)
         self._right_panel.refresh_sequences()
+        self._right_panel.set_active_sequence(self._folder_session.current_folder_path)
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
@@ -328,6 +329,7 @@ class MainWindow(QMainWindow):
         self._loaded_count = 0
         self._preload_done = False
         self._topbar.set_active_folder(None)
+        self._right_panel.set_active_sequence(None)
         self.set_frame(0)
 
     # ── Lifecycle ────────────────────────────────────────────────────

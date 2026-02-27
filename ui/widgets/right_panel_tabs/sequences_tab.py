@@ -43,6 +43,7 @@ class SequencesTabWidget(QWidget):
         self._on_sequence_removed = on_sequence_removed
         self._drop_handler = DropHandler(media_manager, parent=self)
         self._selected_path: str | None = None
+        self._active_folder: str | None = None
         self._folders: list[str] = []
 
         self.setAcceptDrops(True)
@@ -89,6 +90,12 @@ class SequencesTabWidget(QWidget):
         self._folders = self._prefs.recent_folders()
         if self._selected_path not in self._folders:
             self._selected_path = None
+        if self._active_folder not in self._folders:
+            self._active_folder = self._prefs.last_opened_folder()
+        self._rebuild_grid()
+
+    def set_active_folder(self, folder_path: str | None):
+        self._active_folder = folder_path
         self._rebuild_grid()
 
     def eventFilter(self, watched: QWidget, event: QEvent) -> bool:
@@ -126,7 +133,8 @@ class SequencesTabWidget(QWidget):
         )
         button.folderDropped.connect(self._move_folder_relative)
         button.setObjectName("SequenceThumbnail")
-        button.setProperty("isSelected", folder_path == self._selected_path)
+        is_selected = folder_path == self._selected_path or folder_path == self._active_folder
+        button.setProperty("isSelected", is_selected)
         button.style().unpolish(button)
         button.style().polish(button)
         button.setToolTip(folder_path)
@@ -213,12 +221,15 @@ class SequencesTabWidget(QWidget):
         self._prefs.remove_recent_folder(folder_path)
         if self._selected_path == folder_path:
             self._selected_path = None
+        if self._active_folder == folder_path:
+            self._active_folder = None
         if self._on_sequence_removed:
             self._on_sequence_removed(folder_path)
         self.refresh()
 
     def _select_and_load(self, folder_path: str):
         self._selected_path = folder_path
+        self._active_folder = folder_path
         self._media_manager.load(folder_path)
         self._rebuild_grid()
 
