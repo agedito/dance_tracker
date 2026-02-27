@@ -55,12 +55,12 @@ class MediaAdapter:
 
         metadata_root = Path(path).expanduser().parent
 
-        frames_path = metadata.get("frames_path")
+        frames_path = metadata.get("frames") or metadata.get("frames_path")
         resolved_frames = self._resolve_metadata_path(frames_path, metadata_root)
         if resolved_frames and resolved_frames.is_dir():
             return str(resolved_frames)
 
-        video_path = metadata.get("video_path")
+        video_path = self._video_path_from_metadata(metadata)
         resolved_video = self._resolve_metadata_path(video_path, metadata_root)
         if resolved_video and self._app.video_manager.is_video(str(resolved_video)):
             return self._load_video(str(resolved_video), on_progress=on_progress, should_cancel=should_cancel)
@@ -76,6 +76,22 @@ class MediaAdapter:
         if candidate.is_absolute():
             return candidate
         return (root / candidate).resolve()
+
+    @staticmethod
+    def _video_path_from_metadata(metadata: dict) -> str | None:
+        legacy_video_path = metadata.get("video_path")
+        if isinstance(legacy_video_path, str) and legacy_video_path.strip():
+            return legacy_video_path
+
+        video_data = metadata.get("video")
+        if not isinstance(video_data, dict):
+            return None
+
+        video_name = video_data.get("nombre")
+        if not isinstance(video_name, str) or not video_name.strip():
+            return None
+
+        return video_name
 
     def _load_video(
         self,
