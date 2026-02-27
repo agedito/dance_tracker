@@ -229,7 +229,32 @@ class TrackDetectorService:
                 if parsed_detection is not None:
                     parsed.append(parsed_detection)
             detections[frame_index] = parsed
+        return _normalize_frame_indexing(detections)
+
+
+def _normalize_frame_indexing(detections: dict[int, list[PersonDetection]]) -> dict[int, list[PersonDetection]]:
+    """Normalize persisted detections to zero-based frame indexes.
+
+    Some old exports were stored with one-based frame keys ("1" for the
+    first frame). The viewer and timeline use zero-based indexing, so
+    those files would never align with the current frame and boxes would
+    not be rendered. When the payload does not contain frame 0 and all
+    frame keys are positive, we treat it as one-based data.
+    """
+    if not detections:
+        return {}
+
+    frame_indexes = list(detections.keys())
+    has_zero_based_key = 0 in detections
+    is_one_based = not has_zero_based_key and min(frame_indexes) >= 1
+    if not is_one_based:
         return detections
+
+    return {
+        frame_index - 1: frame_detections
+        for frame_index, frame_detections in detections.items()
+        if frame_index > 0
+    }
 
 
 def _from_dict(data: dict) -> PersonDetection | None:
