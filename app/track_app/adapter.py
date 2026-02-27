@@ -87,7 +87,7 @@ class MediaAdapter:
         if not isinstance(video_data, dict):
             return None
 
-        video_name = video_data.get("nombre")
+        video_name = video_data.get("name") or video_data.get("nombre")
         if not isinstance(video_name, str) or not video_name.strip():
             return None
 

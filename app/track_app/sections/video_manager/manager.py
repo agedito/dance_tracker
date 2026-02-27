@@ -123,14 +123,17 @@ class VideoManager:
 
         payload = {
             "sequence": {
-                "nombre": source.stem,
+                "name": source.stem,
             },
             "video": {
-                "nombre": source.name,
-                "duracion_segundos": video_info["duration_seconds"],
-                "resolucion": {
-                    "ancho": video_info["width"],
-                    "alto": video_info["height"],
+                "name": source.name,
+                "data": {
+                    "duration_seconds": video_info["duration_seconds"],
+                    "resolution": {
+                        "width": video_info["width"],
+                        "height": video_info["height"],
+                    },
+                    "frames_count": video_info["frames_count"],
                 },
             },
             "frames": cls._relative_to_parent_or_absolute(frames_dir, source.parent),
@@ -154,6 +157,7 @@ class VideoManager:
                 "duration_seconds": 0.0,
                 "width": 0,
                 "height": 0,
+                "frames_count": 0,
             }
 
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -167,6 +171,7 @@ class VideoManager:
             "duration_seconds": duration_seconds,
             "width": width,
             "height": height,
+            "frames_count": frame_count,
         }
 
     @classmethod
