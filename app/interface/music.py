@@ -38,3 +38,9 @@ class AudioTempoAnalyzerPort(Protocol):
 
 class MusicIdentifierPort(Protocol):
     def identify_from_video(self, video_path: str) -> SongMetadata: ...
+
+    def analyze_tempo_from_video(self, video_path: str) -> SongMetadata: ...
+
+
+class MusicPort(Protocol):
+    def analyze_for_sequence(self, frames_folder_path: str) -> SongMetadata: ...

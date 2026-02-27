@@ -27,7 +27,10 @@ class RightPanel(QFrame):
         tabs.setMovable(True)
         self.logger_widget = LogWidget(display_ms=5000, history_limit=100)
         self.pose_3d_viewer = Pose3DViewerWidget()
-        self.music_tab = MusicTabWidget()
+        self.music_tab = MusicTabWidget(
+            analyze_music=app.music.analyze_for_sequence,
+            get_current_folder=self.current_folder_path,
+        )
         self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
         self.data_tab = DataTabWidget(app.sequence_data)
 

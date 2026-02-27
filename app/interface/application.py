@@ -1,6 +1,7 @@
 from typing import Protocol
 
 from app.interface.media import MediaPort
+from app.interface.music import MusicPort
 from app.interface.sequence_data import SequenceDataPort
 from app.interface.sequences import SequencePort
 from app.interface.track_detector import TrackDetectorPort
@@ -38,6 +39,7 @@ class FramesPort(Protocol):
 
 class DanceTrackerPort(Protocol):
     media: MediaPort
+    music: MusicPort
     sequences: SequencePort
     frames: FramesPort
     sequence_data: SequenceDataPort

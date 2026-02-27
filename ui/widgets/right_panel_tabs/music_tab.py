@@ -1,16 +1,29 @@
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from collections.abc import Callable
+
+from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.music import SongMetadata
 from ui.widgets.right_panel_tabs.common import section_label
 
 
 class MusicTabWidget(QWidget):
-    def __init__(self):
+    def __init__(
+        self,
+        analyze_music: Callable[[str], SongMetadata],
+        get_current_folder: Callable[[], str | None],
+    ):
         super().__init__()
+        self._analyze_music = analyze_music
+        self._get_current_folder = get_current_folder
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
         layout.addWidget(section_label("Music"))
+
+        self._analyze_button = QPushButton("Extract and analyze song")
+        self._analyze_button.clicked.connect(self._on_analyze_clicked)
+        layout.addWidget(self._analyze_button)
 
         self._status_value = QLabel("not_run")
         self._title_value = QLabel("—")
@@ -40,6 +53,14 @@ class MusicTabWidget(QWidget):
 
         layout.addWidget(self._message_value)
         layout.addStretch(1)
+
+    def _on_analyze_clicked(self) -> None:
+        folder = self._get_current_folder()
+        if not folder:
+            self._message_value.setText("Load a sequence first to analyze its music.")
+            return
+
+        self._analyze_music(folder)
 
     def update_song_info(self, song: SongMetadata):
         self._status_value.setText(song.status)
