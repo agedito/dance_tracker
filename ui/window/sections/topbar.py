@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
 
 from ui.window.sections.preferences_manager import PreferencesManager
@@ -71,9 +71,7 @@ class TopBar(QWidget):
             is_active = normalized == self._active_folder
             btn.setProperty("isActive", is_active)
 
-            thumbnail = self._prefs.thumbnail_for_folder(folder)
-            if thumbnail:
-                btn.setIcon(QIcon(thumbnail))
+            btn.setText("📁")
             btn.setIconSize(QSize(42, 42))
             btn.setFixedSize(QSize(46, 46))
 
