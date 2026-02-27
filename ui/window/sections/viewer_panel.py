@@ -14,6 +14,7 @@ class ViewerPanel(QFrame):
             self,
             app: DanceTrackerPort,
             total_frames: int,
+            fps: int,
             frame_store: FrameStore,
             on_play_pause_toggle: Callable,
             on_step: Callable[[int], None],
@@ -22,8 +23,9 @@ class ViewerPanel(QFrame):
     ):
         super().__init__()
         self.setObjectName("Panel")
+        self._fps = max(1, int(fps))
 
-        self.frame_info = QLabel("Frame: 0")
+        self.frame_info = QLabel("Frame: 0 · Time: 00:00.000")
         self.frame_info.setObjectName("Muted")
 
         self.viewer = ViewerWidget(app, total_frames, frame_store=frame_store)
@@ -77,7 +79,12 @@ class ViewerPanel(QFrame):
         root.addWidget(footer)
 
     def update_frame_label(self, frame: int):
-        self.frame_info.setText(f"Frame: {frame}")
+        total_ms = int((max(0, frame) / self._fps) * 1000)
+        minutes, rem_ms = divmod(total_ms, 60_000)
+        seconds, milliseconds = divmod(rem_ms, 1000)
+        self.frame_info.setText(
+            f"Frame: {frame} · Time: {minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+        )
 
     def update_playback_button(self, is_playing: bool) -> None:
         if is_playing:

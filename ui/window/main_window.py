@@ -121,6 +121,7 @@ class MainWindow(QMainWindow):
         self._viewer_panel = ViewerPanel(
             app=self._app,
             total_frames=self._frames.total_frames,
+            fps=self._frames.fps,
             frame_store=self._frame_store,
             on_play_pause_toggle=self._toggle_playback,
             on_step=self._playback.step,
