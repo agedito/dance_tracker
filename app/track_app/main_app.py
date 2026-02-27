@@ -1,3 +1,5 @@
+import logging
+
 from app.interface.music import MusicIdentifierPort
 from app.interface.track_detector import TrackDetectorPort
 from app.track_app.config import Config
@@ -14,6 +16,9 @@ from app.track_app.sections.track_detector.service import (
 from app.track_app.sections.video_manager.manager import VideoManager
 
 
+logger = logging.getLogger(__name__)
+
+
 class DanceTrackerApp:
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -27,9 +32,20 @@ class DanceTrackerApp:
         self.track_detector: TrackDetectorPort = TrackDetectorService(detector=detector)
 
     def _build_person_detector(self):
-        if self.cfg.detector_backend == "yolo_nas" and YoloNasPersonDetector.is_available():
+        if self.cfg.detector_backend != "yolo_nas":
+            logger.info(
+                "YOLO-NAS disabled by configuration. Selected detector backend: %s",
+                self.cfg.detector_backend,
+            )
+            return MockPersonDetector()
+
+        available, reason = YoloNasPersonDetector.availability_status()
+        if available:
+            logger.info("YOLO-NAS is available: %s", reason)
             return YoloNasPersonDetector(
                 model_name=self.cfg.yolo_nas_model_name,
                 confidence_threshold=self.cfg.yolo_nas_confidence_threshold,
             )
+
+        logger.warning("YOLO-NAS is not available. Cause: %s", reason)
         return MockPersonDetector()

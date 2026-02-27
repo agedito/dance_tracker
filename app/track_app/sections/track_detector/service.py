@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 import re
 from dataclasses import asdict
@@ -35,6 +36,9 @@ class MockPersonDetector:
         ]
 
 
+logger = logging.getLogger(__name__)
+
+
 class YoloNasPersonDetector:
     _PERSON_CLASS_ID = 0
 
@@ -43,14 +47,24 @@ class YoloNasPersonDetector:
         self._confidence_threshold = confidence_threshold
         self._model = None
 
-    @staticmethod
-    def is_available() -> bool:
+    @classmethod
+    def availability_status(cls) -> tuple[bool, str]:
         try:
             import cv2  # noqa: F401
+        except ImportError as exc:
+            return False, f"OpenCV import failed: {exc}"
+
+        try:
             from super_gradients.training import models  # noqa: F401
-        except ImportError:
-            return False
-        return True
+        except ImportError as exc:
+            return False, f"SuperGradients import failed: {exc}"
+
+        return True, "All YOLO-NAS dependencies are available"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        available, _ = cls.availability_status()
+        return available
 
     def detect_people_in_frame(self, frame_path: str) -> list[PersonDetection]:
         model = self._load_model()
@@ -99,7 +113,8 @@ class YoloNasPersonDetector:
             from super_gradients.training import models
 
             self._model = models.get(self._model_name, pretrained_weights="coco")
-        except Exception:
+        except Exception as exc:
+            logger.warning("YOLO-NAS model load failed: %s", exc)
             return None
         return self._model
 
