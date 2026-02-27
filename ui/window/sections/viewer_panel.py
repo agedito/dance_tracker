@@ -15,10 +15,10 @@ class ViewerPanel(QFrame):
             app: DanceTrackerPort,
             total_frames: int,
             frame_store: FrameStore,
-            on_play: Callable,
-            on_pause: Callable,
+            on_play_pause_toggle: Callable,
             on_step: Callable[[int], None],
-            on_next_error: Callable,
+            on_prev_bookmark: Callable,
+            on_next_bookmark: Callable,
     ):
         super().__init__()
         self.setObjectName("Panel")
@@ -52,17 +52,21 @@ class ViewerPanel(QFrame):
         fl.setContentsMargins(10, 10, 10, 10)
         fl.setSpacing(8)
 
+        self.play_pause_btn = QPushButton("▶")
+        self.play_pause_btn.setObjectName("PrimaryButton")
+        self.play_pause_btn.setToolTip("Play")
+        self.play_pause_btn.clicked.connect(on_play_pause_toggle)
+        fl.addWidget(self.play_pause_btn)
+
         buttons = [
-            ("PLAY", "PrimaryButton", on_play),
-            ("PAUSE", None, on_pause),
-            ("STEP BACK", None, lambda: on_step(-1)),
-            ("STEP FORWARD", None, lambda: on_step(1)),
-            ("NEXT ERROR", None, on_next_error),
+            ("⏮", "Go to previous bookmark", on_prev_bookmark),
+            ("⏪", "Step back one frame", lambda: on_step(-1)),
+            ("⏩", "Step forward one frame", lambda: on_step(1)),
+            ("⏭", "Go to next bookmark", on_next_bookmark),
         ]
-        for label, obj_name, callback in buttons:
-            btn = QPushButton(label)
-            if obj_name:
-                btn.setObjectName(obj_name)
+        for icon, tooltip, callback in buttons:
+            btn = QPushButton(icon)
+            btn.setToolTip(tooltip)
             btn.clicked.connect(callback)
             fl.addWidget(btn)
 
@@ -71,3 +75,11 @@ class ViewerPanel(QFrame):
 
     def update_frame_label(self, frame: int):
         self.frame_info.setText(f"Frame: {frame}")
+
+    def update_playback_button(self, is_playing: bool) -> None:
+        if is_playing:
+            self.play_pause_btn.setText("⏸")
+            self.play_pause_btn.setToolTip("Pause")
+            return
+        self.play_pause_btn.setText("▶")
+        self.play_pause_btn.setToolTip("Play")

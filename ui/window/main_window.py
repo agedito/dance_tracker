@@ -122,10 +122,10 @@ class MainWindow(QMainWindow):
             app=self._app,
             total_frames=self._frames.total_frames,
             frame_store=self._frame_store,
-            on_play=self._playback.play,
-            on_pause=self._playback.pause,
+            on_play_pause_toggle=self._toggle_playback,
             on_step=self._playback.step,
-            on_next_error=self._playback.next_error,
+            on_prev_bookmark=self._go_to_previous_bookmark,
+            on_next_bookmark=self._go_to_next_bookmark,
         )
         self._viewer_panel.viewer.folderLoaded.connect(self._on_folder_dropped)
 
@@ -235,6 +235,7 @@ class MainWindow(QMainWindow):
 
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
+        self._viewer_panel.update_playback_button(self._frames.playing)
 
         self._timeline.set_frame(cur)
         self._timeline.update_info(
@@ -259,6 +260,7 @@ class MainWindow(QMainWindow):
         self._frame_store.request_preload_priority(cur)
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
+        self._viewer_panel.update_playback_button(self._frames.playing)
         self._timeline.set_frame(cur)
 
     def _on_timeline_frame_changed(self, frame: int):
