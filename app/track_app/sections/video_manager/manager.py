@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from pathlib import Path
+import shutil
 
 import cv2
 
@@ -79,10 +80,8 @@ class VideoManager:
         capture.release()
 
         if canceled:
-            for output_dir in (frames_dir, frames_mino_dir):
-                for item in output_dir.iterdir():
-                    if item.is_file() and item.suffix.lower() in VALID_SUFFIXES:
-                        item.unlink()
+            shutil.rmtree(frames_dir, ignore_errors=True)
+            shutil.rmtree(frames_mino_dir, ignore_errors=True)
             return None
 
         if frame_idx == 0:

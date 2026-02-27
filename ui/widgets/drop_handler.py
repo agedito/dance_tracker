@@ -1,4 +1,4 @@
-from PySide6.QtCore import QCoreApplication, QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from pathlib import Path
 
@@ -40,6 +40,7 @@ class DropHandler(QObject):
 
     def _load_with_progress(self, path: str) -> None:
         progress = QProgressDialog("Cargando video...", "Cancelar", 0, 100, self._parent_widget())
+        progress.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
         progress.setWindowTitle("Procesando video")
         progress.setMinimumDuration(0)
         progress.setAutoClose(True)
