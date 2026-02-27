@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
 
     def _setup_shortcuts(self):
         bindings = [
+            (QKeySequence(Qt.Key.Key_Space), self._toggle_playback),
             (QKeySequence(Qt.Key.Key_Left), lambda: self._playback.step(-1)),
             (QKeySequence(Qt.Key.Key_Right), lambda: self._playback.step(1)),
             (QKeySequence(Qt.Key.Key_A), lambda: self._playback.step(-1)),
@@ -160,6 +161,12 @@ class MainWindow(QMainWindow):
             sc.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             sc.activated.connect(cb)
             self._shortcuts.append(sc)
+
+    def _toggle_playback(self):
+        if self.state.playing:
+            self._playback.pause()
+            return
+        self._playback.play()
 
     # ── Splitter layout persistence ──────────────────────────────────
 
