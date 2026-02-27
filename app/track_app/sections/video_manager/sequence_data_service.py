@@ -6,6 +6,7 @@ from app.interface.sequence_data import Bookmark, SequenceVideoData
 
 class SequenceDataService:
     _SEQUENCE_METADATA_SUFFIX = ".dance_tracker.json"
+    _MIN_BOOKMARK_DISTANCE_FRAMES = 25
 
     def read_video_data(self, frames_folder_path: str) -> SequenceVideoData | None:
         frames_folder = Path(frames_folder_path).expanduser().resolve()
@@ -193,8 +194,17 @@ class SequenceDataService:
         normalized = max(0, int(frame))
         normalized_name = SequenceDataService._normalize_name(name)
         by_frame = {bookmark.frame: bookmark.name for bookmark in bookmarks}
+
+        if SequenceDataService._is_too_close_to_existing_bookmark(bookmarks, normalized):
+            return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
+
         by_frame[normalized] = normalized_name
         return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
+
+    @staticmethod
+    def _is_too_close_to_existing_bookmark(bookmarks: list[Bookmark], frame: int) -> bool:
+        minimum_gap = SequenceDataService._MIN_BOOKMARK_DISTANCE_FRAMES
+        return any(abs(bookmark.frame - frame) < minimum_gap for bookmark in bookmarks)
 
     @staticmethod
     def _normalize_name(value: object) -> str:
