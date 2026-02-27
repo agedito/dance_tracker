@@ -1,10 +1,20 @@
 from pathlib import Path
+from typing import Callable
+import shutil
 
-from PySide6.QtCore import QEvent, QSize, Qt
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QPoint, QEvent, QSize, Qt, QUrl
+from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent, QIcon
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.interface.media import MediaPort
+from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.right_panel_tabs.drag_scroll_area import DragScrollArea
 from ui.window.sections.preferences_manager import PreferencesManager
@@ -13,10 +23,16 @@ from ui.window.sections.preferences_manager import PreferencesManager
 class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
 
-    def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
+    def __init__(
+            self,
+            preferences: PreferencesManager,
+            media_manager: MediaPort,
+            on_sequence_removed: Callable[[str], None] | None = None,
+    ):
         super().__init__()
         self._prefs = preferences
         self._media_manager = media_manager
+        self._on_sequence_removed = on_sequence_removed
         self._drop_handler = DropHandler(media_manager, parent=self)
         self._selected_path: str | None = None
         self._folders: list[str] = []
@@ -87,7 +103,6 @@ class SequencesTabWidget(QWidget):
             self._grid.addWidget(self._sequence_button(folder), row, col)
 
     def _sequence_button(self, folder_path: str) -> QPushButton:
-        path = Path(folder_path).expanduser()
         button = QPushButton("")
         button.setObjectName("SequenceThumbnail")
         button.setProperty("isSelected", folder_path == self._selected_path)
@@ -96,12 +111,75 @@ class SequencesTabWidget(QWidget):
         button.setToolTip(folder_path)
         button.setFixedSize(self._THUMBNAIL_SIZE)
         button.clicked.connect(lambda _=False, selected_path=folder_path: self._select_and_load(selected_path))
+        button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        button.customContextMenuRequested.connect(
+            lambda pos, origin=button, selected_path=folder_path: self._show_sequence_menu(origin, selected_path, pos)
+        )
 
         thumbnail = self._prefs.thumbnail_for_folder(folder_path)
         if thumbnail:
             button.setIcon(QIcon(thumbnail))
             button.setIconSize(QSize(146, 82))
         return button
+
+    def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
+        menu = QMenu(self)
+        open_folder_action = menu.addAction("Open Folder")
+        remove_action = menu.addAction("Remove")
+        delete_video_and_frames_action = menu.addAction("Delete Video and Frames")
+
+        selected_action = menu.exec(origin.mapToGlobal(pos))
+        if selected_action is open_folder_action:
+            self._open_folder(folder_path)
+            return
+        if selected_action is remove_action:
+            self._remove_sequence(folder_path)
+            return
+        if selected_action is delete_video_and_frames_action:
+            self._delete_video_and_frames(folder_path)
+
+    def _open_folder(self, folder_path: str):
+        folder = Path(folder_path).expanduser()
+        target = folder if folder.exists() else folder.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
+    def _delete_video_and_frames(self, folder_path: str):
+        folder = Path(folder_path).expanduser()
+        video_file = self._find_video_for_frames(folder)
+
+        if folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+
+        if folder.name == "frames":
+            frames_mino = folder.parent / "frames_mino"
+            if frames_mino.is_dir():
+                shutil.rmtree(frames_mino, ignore_errors=True)
+
+        if video_file and video_file.exists():
+            video_file.unlink(missing_ok=True)
+
+        self._remove_sequence(folder_path)
+
+    @staticmethod
+    def _find_video_for_frames(folder: Path) -> Path | None:
+        parent = folder.parent
+        if not parent.is_dir():
+            return None
+
+        videos = [
+            file
+            for file in sorted(parent.iterdir())
+            if file.is_file() and file.suffix.lower() in VIDEO_SUFFIXES
+        ]
+        return videos[0] if videos else None
+
+    def _remove_sequence(self, folder_path: str):
+        self._prefs.remove_recent_folder(folder_path)
+        if self._selected_path == folder_path:
+            self._selected_path = None
+        if self._on_sequence_removed:
+            self._on_sequence_removed(folder_path)
+        self.refresh()
 
     def _select_and_load(self, folder_path: str):
         self._selected_path = folder_path

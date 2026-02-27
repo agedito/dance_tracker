@@ -52,20 +52,24 @@ class FrameStore(QObject):
     def shutdown(self):
         self._stop_preload_thread(wait=True)
 
+    def clear(self):
+        self._stop_preload_thread(wait=True)
+        self._frame_files = []
+        self._proxy_files = []
+        self._cache.clear()
+        self._base_sizes.clear()
+        self._proxy_cache_loaded = False
+        with self._lock:
+            self._full_images = []
+            self._loaded_flags = []
+            self._preload_priority = 0
+
     def load_folder(self, folder_path: str) -> int:
         self._stop_preload_thread(wait=True)
 
         folder = Path(folder_path)
         if not folder.exists() or not folder.is_dir():
-            self._frame_files = []
-            self._proxy_files = []
-            self._cache.clear()
-            self._base_sizes.clear()
-            self._proxy_cache_loaded = False
-            with self._lock:
-                self._full_images = []
-                self._loaded_flags = []
-                self._preload_priority = 0
+            self.clear()
             return 0
 
         files = [
