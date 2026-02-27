@@ -251,6 +251,8 @@ class _SequenceThumbnailButton(QPushButton):
         mime_data = QMimeData()
         mime_data.setData(self._sequence_mime_type, self._folder_path.encode("utf-8"))
         drag.setMimeData(mime_data)
+        drag.setPixmap(self.grab())
+        drag.setHotSpot(event.position().toPoint())
         drag.exec(Qt.DropAction.MoveAction)
         self._drag_start_pos = None
 
