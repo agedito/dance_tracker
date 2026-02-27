@@ -7,13 +7,8 @@ from utils.numbers import clamp
 
 
 def status_color(t: str) -> QColor:
-    if t == "ok":
-        return QColor(46, 204, 113, 190)
-    if t == "warn":
-        return QColor(241, 196, 15, 200)
-    if t == "err":
-        return QColor(231, 76, 60, 220)
-    return QColor(120, 120, 120, 180)
+    _ = t
+    return QColor(0, 0, 0, 220)
 
 
 class TimelineTrack(QWidget):
@@ -27,7 +22,7 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
-        self.setFixedHeight(20)
+        self.setFixedHeight(28)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def _frame_from_pos(self, x: float) -> int:
