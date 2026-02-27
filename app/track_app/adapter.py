@@ -6,6 +6,8 @@ from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import SongMetadata, SongStatus
+from app.interface.sequence_data import SequenceDataPort
+from app.interface.track_detector import PersonDetection
 from app.interface.sequence_data import Bookmark, SequenceDataPort
 from app.interface.sequences import SequenceItem, SequenceState
 from app.track_app.main_app import DanceTrackerApp
@@ -410,9 +412,28 @@ class SequenceDataAdapter:
         return self._service.set_bookmark_name(frames_folder_path, frame, name)
 
 
+class TrackDetectorAdapter:
+    def __init__(self, app: DanceTrackerApp, events: EventBus):
+        self._service = app.track_detector
+        self._events = events
+
+    def detect_people_for_sequence(self, frames_folder_path: str) -> int:
+        detected_frames = self._service.detect_people_for_sequence(frames_folder_path)
+        self._events.emit(Event.DetectionsUpdated, frames_folder_path)
+        return detected_frames
+
+    def load_detections(self, frames_folder_path: str) -> None:
+        self._service.load_detections(frames_folder_path)
+        self._events.emit(Event.DetectionsUpdated, frames_folder_path)
+
+    def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
+        return self._service.detections_for_frame(frame_index)
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self.media = MediaAdapter(app, events)
         self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
         self.frames = FramesAdapter(app)
         self.sequence_data = SequenceDataAdapter()
+        self.track_detector = TrackDetectorAdapter(app, events)
