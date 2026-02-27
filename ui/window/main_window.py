@@ -57,6 +57,9 @@ class MainWindow(QMainWindow):
         self._scrub_timer.setInterval(16)
         self._scrub_timer.timeout.connect(self._flush_scrub_frame)
         self._loaded_count = 0
+        self._loaded_frames: set[int] = set()
+        self._active_preload_generation = 0
+        self._preload_done = False
         self._frame_store.frame_preloaded.connect(self._on_frame_preloaded)
         self._frame_store.preload_finished.connect(self._on_preload_finished)
 
@@ -173,6 +176,7 @@ class MainWindow(QMainWindow):
             self.state.total_frames,
             len(self.state.error_frames),
             loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
         )
 
         self._right_panel.update_pose(cur)
@@ -220,21 +224,38 @@ class MainWindow(QMainWindow):
         self._flush_scrub_frame()
 
 
-    def _on_frame_preloaded(self, frame: int, loaded: bool):
+    def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
+        if generation != self._active_preload_generation:
+            return
+        if frame < 0 or frame >= self.state.total_frames:
+            return
+
         if loaded:
-            self._loaded_count += 1
+            self._loaded_frames.add(frame)
+        else:
+            self._loaded_frames.discard(frame)
+
+        flags = self._frame_store.loaded_flags
+        self._loaded_frames = {i for i, is_loaded in enumerate(flags) if is_loaded}
+        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
         self._timeline.set_frame_loaded(frame, loaded)
         self._timeline.update_info(
             self.state.total_frames,
             len(self.state.error_frames),
             loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
         )
 
-    def _on_preload_finished(self):
+    def _on_preload_finished(self, generation: int):
+        if generation != self._active_preload_generation:
+            return
+        self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
+        self._preload_done = True
         self._timeline.update_info(
             self.state.total_frames,
             len(self.state.error_frames),
             loaded_count=self._loaded_count,
+            preload_done=self._preload_done,
         )
 
     # ── Folder / session events ──────────────────────────────────────
@@ -245,8 +266,12 @@ class MainWindow(QMainWindow):
         self.state.set_total_frames(total_frames)
         self._viewer_panel.viewer.set_total_frames(total_frames)
         self._timeline.set_total_frames(total_frames)
-        self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
-        self._loaded_count = sum(1 for loaded in self._frame_store.loaded_flags if loaded)
+        loaded_flags = self._frame_store.loaded_flags
+        self._timeline.set_loaded_flags(loaded_flags)
+        self._loaded_frames = {i for i, loaded in enumerate(loaded_flags) if loaded}
+        self._loaded_count = min(total_frames, len(self._loaded_frames))
+        self._active_preload_generation = self._frame_store.preload_generation
+        self._preload_done = self._loaded_count >= total_frames
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):

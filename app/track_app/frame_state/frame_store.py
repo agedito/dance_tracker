@@ -11,8 +11,8 @@ class FrameStore(QObject):
     VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
     VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
-    frame_preloaded = Signal(int, bool)
-    preload_finished = Signal()
+    frame_preloaded = Signal(int, bool, int)
+    preload_finished = Signal(int)
 
     def __init__(self, cache_radius: int):
         super().__init__()
@@ -44,6 +44,10 @@ class FrameStore(QObject):
     def loaded_flags(self) -> list[bool]:
         with self._lock:
             return list(self._loaded_flags)
+
+    @property
+    def preload_generation(self) -> int:
+        return self._preload_generation
 
     def shutdown(self):
         self._stop_preload_thread(wait=True)
@@ -142,7 +146,7 @@ class FrameStore(QObject):
                     return
 
                 if image.isNull():
-                    self._safe_emit_frame_preloaded(idx, False)
+                    self._safe_emit_frame_preloaded(idx, False, generation)
                     continue
 
                 with self._lock:
@@ -153,20 +157,20 @@ class FrameStore(QObject):
                         self._loaded_flags[idx] = True
 
                 self._base_sizes[idx] = (image.width(), image.height())
-                self._safe_emit_frame_preloaded(idx, True)
+                self._safe_emit_frame_preloaded(idx, True, generation)
 
             if not self._preload_stop.is_set() and generation == self._preload_generation:
                 try:
-                    self.preload_finished.emit()
+                    self.preload_finished.emit(generation)
                 except RuntimeError:
                     return
 
         self._preload_thread = threading.Thread(target=preload_worker, daemon=True)
         self._preload_thread.start()
 
-    def _safe_emit_frame_preloaded(self, idx: int, loaded: bool):
+    def _safe_emit_frame_preloaded(self, idx: int, loaded: bool, generation: int):
         try:
-            self.frame_preloaded.emit(idx, loaded)
+            self.frame_preloaded.emit(idx, loaded, generation)
         except RuntimeError:
             return
 
