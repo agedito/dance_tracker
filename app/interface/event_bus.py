@@ -10,6 +10,7 @@ class Event(Enum):
     FramesLoaded = auto()
     SongIdentified = auto()
     SequencesChanged = auto()
+    DetectionsUpdated = auto()
 
 
 class EventsListener(Protocol):
@@ -18,6 +19,8 @@ class EventsListener(Protocol):
     def on_song_identified(self, song: SongMetadata) -> None: ...
 
     def on_sequences_changed(self, state: "SequenceState") -> None: ...
+
+    def on_detections_updated(self, frames_folder_path: str) -> None: ...
 
 
 class EventBus:
@@ -42,3 +45,4 @@ class EventBus:
         self.on(Event.FramesLoaded, listener.on_frames_loaded)
         self.on(Event.SongIdentified, listener.on_song_identified)
         self.on(Event.SequencesChanged, listener.on_sequences_changed)
+        self.on(Event.DetectionsUpdated, listener.on_detections_updated)

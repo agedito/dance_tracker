@@ -16,6 +16,7 @@ class RightPanel(QFrame):
     def __init__(self, preferences: PreferencesManager, app, event_bus):
         super().__init__()
         self._preferences = preferences
+        self._current_folder_path: str | None = None
         self.setObjectName("Panel")
 
         v = QVBoxLayout(self)
@@ -24,6 +25,7 @@ class RightPanel(QFrame):
 
         tabs = QTabWidget()
         tabs.setMovable(True)
+        self.logger_widget = LogWidget(display_ms=5000, history_limit=100)
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
         self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
@@ -36,7 +38,11 @@ class RightPanel(QFrame):
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
             "data": self.data_tab,
-            "embedings": EmbedingsTabWidget(),
+            "embedings": EmbedingsTabWidget(
+                app=app,
+                get_current_folder=self.current_folder_path,
+                log_message=self.logger_widget.log,
+            ),
         }
         self._tab_labels_by_id: dict[str, str] = {
             "sequences": "Sequences",
@@ -49,8 +55,6 @@ class RightPanel(QFrame):
 
         self._add_tabs_in_saved_order()
         tabs.tabBar().tabMoved.connect(self._save_tab_order)
-
-        self.logger_widget = LogWidget(display_ms=5000, history_limit=100)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.setChildrenCollapsible(False)
@@ -88,6 +92,13 @@ class RightPanel(QFrame):
                 current_order.append(tab_id)
 
         self._preferences.save_right_panel_tab_order(current_order)
+
+
+    def set_current_folder_path(self, folder_path: str | None) -> None:
+        self._current_folder_path = folder_path
+
+    def current_folder_path(self) -> str | None:
+        return self._current_folder_path
 
     def update_pose(self, frame: int):
         detections = self._mock_yolo_pose_detections(frame)

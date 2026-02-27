@@ -132,6 +132,7 @@ class ViewerWidget(QWidget):
             draw_viewer_frame(self, self._frame, self._total_frames)
             painter = QPainter(self)
             self._draw_border(painter, video_rect)
+            self._draw_detections(painter, video_rect)
             painter.end()
 
         # Keep the radial menu in sync with the current video rect
@@ -166,6 +167,7 @@ class ViewerWidget(QWidget):
         y = (self.height() - scaled.height()) // 2
         painter.drawPixmap(x, y, scaled)
         self._draw_border(painter, video_rect)
+        self._draw_detections(painter, video_rect)
         painter.end()
 
     def _draw_border(self, painter: QPainter, video_rect: QRectF):
@@ -174,6 +176,37 @@ class ViewerWidget(QWidget):
         painter.setPen(QPen(self._border_color, 4))
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.drawRect(video_rect.adjusted(1, 1, -1, -1))
+        painter.restore()
+
+
+    def _draw_detections(self, painter: QPainter, video_rect: QRectF):
+        detections = self._app.track_detector.detections_for_frame(self._frame)
+        if not detections:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        font = painter.font()
+        font.setPointSize(10)
+        painter.setFont(font)
+
+        for detection in detections:
+            rel_box = detection.bbox_relative
+            x = video_rect.x() + rel_box.x * video_rect.width()
+            y = video_rect.y() + rel_box.y * video_rect.height()
+            w = rel_box.width * video_rect.width()
+            h = rel_box.height * video_rect.height()
+
+            rect = QRectF(x, y, w, h)
+            painter.setPen(QPen(QColor(0, 220, 120), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRect(rect)
+
+            label_rect = QRectF(rect.x(), max(video_rect.y(), rect.y() - 20), 88, 18)
+            painter.fillRect(label_rect, QColor(0, 0, 0, 170))
+            painter.setPen(QPen(QColor(0, 255, 150), 1))
+            painter.drawText(label_rect.adjusted(4, 0, -2, 0), Qt.AlignmentFlag.AlignVCenter, f"person {detection.confidence:.2f}")
+
         painter.restore()
 
     # ── Slots ────────────────────────────────────────────────────────
