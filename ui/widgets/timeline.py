@@ -149,6 +149,28 @@ class TimelineTrack(QWidget):
             self.scrubFinished.emit()
         super().mouseReleaseEvent(ev)
 
+    def _prompt_bookmark_name(self, current_name: str) -> tuple[str, bool]:
+        dialog = QInputDialog(self)
+        dialog.setInputMode(QInputDialog.InputMode.TextInput)
+        dialog.setWindowTitle("Bookmark name")
+        dialog.setLabelText("Name:")
+        dialog.setTextValue(current_name)
+        dialog.setOkButtonText("OK")
+        dialog.setCancelButtonText("Cancel")
+
+        flags = dialog.windowFlags()
+        flags |= Qt.WindowType.Dialog
+        flags |= Qt.WindowType.CustomizeWindowHint
+        flags |= Qt.WindowType.WindowTitleHint
+        flags |= Qt.WindowType.WindowCloseButtonHint
+        flags &= ~Qt.WindowType.WindowMinimizeButtonHint
+        flags &= ~Qt.WindowType.WindowMaximizeButtonHint
+        flags &= ~Qt.WindowType.WindowContextHelpButtonHint
+        dialog.setWindowFlags(flags)
+
+        accepted = dialog.exec() == QInputDialog.DialogCode.Accepted
+        return dialog.textValue(), accepted
+
     def _show_bookmark_context_menu(self, ev) -> None:
         clicked_frame = self._frame_from_pos(ev.position().x())
         bookmark = self._bookmark_near_pos(ev.position().x())
@@ -192,7 +214,7 @@ class TimelineTrack(QWidget):
 
         if chosen_action == edit_name_action:
             current_name = self._bookmark_name(bookmark)
-            name, ok = QInputDialog.getText(self, "Bookmark name", "Name:", text=current_name)
+            name, ok = self._prompt_bookmark_name(current_name)
             if ok:
                 self.bookmarkNameChanged.emit(bookmark, name)
         elif chosen_action == delete_action:
