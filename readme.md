@@ -36,6 +36,7 @@ make dependencies
 
 ## Music identification
 
-- When dropping a local video, the app extracts a short audio sample using ffmpeg (bundled via `imageio-ffmpeg`, no global installation required) and tries to identify the song using `audd.io`.
+- When dropping a local video, the app extracts short audio snippets at configurable points using ffmpeg (bundled via `imageio-ffmpeg`, no global installation required) and tries to identify the song using `audd.io`.
+- Configure `AUDIO_SAMPLE_SECONDS` and `AUDIO_SAMPLE_POINTS` in `preferences/app.env` to control snippet length and how many equidistant points are used (always including the beginning and the end of the video).
 - Configure `AUDD_API_TOKEN` and any other sensitive variables in `secrets.env` at the repository root.
 - Song metadata is displayed in the **Music** tab.
