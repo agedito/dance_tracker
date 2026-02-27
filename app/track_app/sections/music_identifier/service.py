@@ -19,7 +19,7 @@ class MusicIdentifierService:
             return SongMetadata(
                 status=SongStatus.UNAVAILABLE,
                 provider="ffmpeg",
-                message="No se pudo extraer audio (instala ffmpeg para habilitarlo).",
+                message="No se pudo extraer audio (verifica la instalación de dependencias).",
             )
 
         return self._identifier.identify(audio_sample)
