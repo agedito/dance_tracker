@@ -154,11 +154,13 @@ class TimelineTrack(QWidget):
         bookmark = self._bookmark_near_pos(ev.position().x())
 
         menu = QMenu(self)
-        add_action = menu.addAction("Add bookmark")
+        add_action = None
         edit_name_action = None
         delete_action = None
-        if bookmark is not None:
-            menu.addSeparator()
+
+        if bookmark is None:
+            add_action = menu.addAction("Add bookmark")
+        else:
             edit_name_action = menu.addAction("Edit bookmark name")
             delete_action = menu.addAction("Delete bookmark")
 
