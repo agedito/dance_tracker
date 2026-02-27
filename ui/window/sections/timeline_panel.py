@@ -82,7 +82,31 @@ class TimelinePanel(QFrame):
         for track in self.track_widgets:
             track.set_total_frames(total)
 
-    def update_info(self, total_frames: int, error_count: int):
+    def set_loaded_flags(self, flags: list[bool]):
+        for track in self.track_widgets:
+            track.set_loaded_flags(flags)
+
+    def set_frame_loaded(self, frame: int, loaded: bool):
+        for track in self.track_widgets:
+            track.set_frame_loaded(frame, loaded)
+
+    def update_info(
+            self,
+            total_frames: int,
+            error_count: int,
+            loaded_count: int | None = None,
+            preload_done: bool = False,
+    ):
+        loaded_text = ""
+        if loaded_count is not None:
+            safe_total = max(1, total_frames)
+            safe_loaded = max(0, min(loaded_count, safe_total))
+            if preload_done or safe_loaded >= safe_total:
+                loaded_text = f" · Loaded: {safe_loaded}/{safe_total}"
+            else:
+                pct = (safe_loaded / safe_total) * 100.0
+                loaded_text = f" · Loaded: {safe_loaded}/{safe_total} ({pct:.2f}%)"
+
         self.time_info.setText(
-            f"Total frames: {total_frames} · Error frames: {error_count}"
+            f"Total frames: {total_frames} · Error frames: {error_count}{loaded_text}"
         )
