@@ -7,7 +7,12 @@ from app.track_app.services.music_identifier.audio_extractor import AudioExtract
 from app.track_app.services.music_identifier.audd_client import AuddSongIdentifier
 from app.track_app.services.music_identifier.service import MusicIdentifierService
 from app.track_app.services.music_identifier.tempo_analyzer import ScipyTempoAnalyzer
-from app.track_app.sections.track_detector.service import MockPersonDetector, NearbyMockPersonDetector, TrackDetectorService
+from app.track_app.sections.track_detector.service import (
+    MediaPipePoseDetector,
+    MockPersonDetector,
+    NearbyMockPersonDetector,
+    TrackDetectorService,
+)
 from app.track_app.sections.video_manager.manager import VideoManager
 
 
@@ -27,4 +32,8 @@ class DanceTrackerApp:
                 "Nearby random detector": NearbyMockPersonDetector(),
             },
             default_detector_name="Random detector",
+            pose_detectors={
+                "MediaPipe": MediaPipePoseDetector(),
+            },
+            default_pose_detector_name="MediaPipe",
         )

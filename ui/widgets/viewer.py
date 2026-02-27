@@ -30,6 +30,7 @@ class ViewerWidget(QWidget):
         self._app = app
         self._is_closing = False
         self._show_detections = True
+        self._show_poses = True
 
         self.setMinimumHeight(320)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -72,6 +73,24 @@ class ViewerWidget(QWidget):
         )
         self._detection_toggle_button.toggled.connect(self._on_detection_visibility_toggled)
         overlay_layout.addWidget(self._detection_toggle_button)
+
+        self._pose_toggle_button = QToolButton(self._detection_toggle_overlay)
+        self._pose_toggle_button.setCheckable(True)
+        self._pose_toggle_button.setChecked(True)
+        self._pose_toggle_button.setText("🕺")
+        self._pose_toggle_button.setToolTip("Show or hide poses")
+        self._pose_toggle_button.setStyleSheet(
+            "QToolButton {"
+            "color: white;"
+            "font-size: 15px;"
+            "background: transparent;"
+            "border: none;"
+            "padding: 2px 4px;"
+            "}"
+            "QToolButton:checked { color: #6DFFB4; }"
+        )
+        self._pose_toggle_button.toggled.connect(self._on_pose_visibility_toggled)
+        overlay_layout.addWidget(self._pose_toggle_button)
         self._detection_toggle_overlay.adjustSize()
 
     # ── Public API ───────────────────────────────────────────────────
@@ -165,6 +184,7 @@ class ViewerWidget(QWidget):
             painter = QPainter(self)
             self._draw_border(painter, video_rect)
             self._draw_detections(painter, video_rect)
+            self._draw_poses(painter, video_rect)
             painter.end()
 
         # Keep the radial menu in sync with the current video rect
@@ -201,6 +221,7 @@ class ViewerWidget(QWidget):
         painter.drawPixmap(x, y, scaled)
         self._draw_border(painter, video_rect)
         self._draw_detections(painter, video_rect)
+        self._draw_poses(painter, video_rect)
         painter.end()
 
     def _draw_border(self, painter: QPainter, video_rect: QRectF):
@@ -245,6 +266,28 @@ class ViewerWidget(QWidget):
 
         painter.restore()
 
+    def _draw_poses(self, painter: QPainter, video_rect: QRectF):
+        if not self._show_poses:
+            return
+
+        poses = self._app.track_detector.poses_for_frame(self._frame)
+        if not poses:
+            return
+
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(QPen(QColor(255, 178, 64), 2))
+
+        for pose in poses:
+            for keypoint in pose.keypoints:
+                if keypoint.confidence < 0.2:
+                    continue
+                px = video_rect.x() + keypoint.x * video_rect.width()
+                py = video_rect.y() + keypoint.y * video_rect.height()
+                painter.drawEllipse(QRectF(px - 2.5, py - 2.5, 5, 5))
+
+        painter.restore()
+
     def _position_detection_toggle(self, video_rect: QRectF):
         if self._is_closing:
             return
@@ -266,4 +309,8 @@ class ViewerWidget(QWidget):
 
     def _on_detection_visibility_toggled(self, checked: bool):
         self._show_detections = checked
+        self.update()
+
+    def _on_pose_visibility_toggled(self, checked: bool):
+        self._show_poses = checked
         self.update()

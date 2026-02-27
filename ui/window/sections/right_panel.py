@@ -1,9 +1,8 @@
-import math
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QSplitter, QWidget, QTabWidget, QVBoxLayout
 
 from app.interface.music import SongMetadata
+from app.interface.track_detector import PoseDetection
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.right_panel_tabs import DataTabWidget, EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
@@ -103,9 +102,12 @@ class RightPanel(QFrame):
     def current_folder_path(self) -> str | None:
         return self._current_folder_path
 
-    def update_pose(self, frame: int):
-        detections = self._mock_yolo_pose_detections(frame)
-        self.pose_3d_viewer.set_detections(detections)
+    def update_pose(self, detections: list[PoseDetection]):
+        payload = [
+            {"keypoints": [[kp.x, kp.y, kp.confidence] for kp in pose.keypoints]}
+            for pose in detections
+        ]
+        self.pose_3d_viewer.set_detections(payload)
 
     def update_song_info(self, song: SongMetadata):
         self.music_tab.update_song_info(song)
@@ -116,39 +118,3 @@ class RightPanel(QFrame):
 
     def clear_sequence_data(self) -> None:
         self.data_tab.clear()
-
-    @staticmethod
-    def _mock_yolo_pose_detections(frame: int) -> list[dict]:
-        t = frame * 0.08
-
-        def person(cx: float, arm_offset: float, confidence: float = 0.95):
-            kp = [
-                [cx, 0.25, confidence],
-                [cx - 0.03, 0.24, confidence],
-                [cx + 0.03, 0.24, confidence],
-                [cx - 0.06, 0.27, confidence],
-                [cx + 0.06, 0.27, confidence],
-                [cx - 0.10, 0.36, confidence],
-                [cx + 0.10, 0.36, confidence],
-                [cx - 0.16 - arm_offset, 0.46, confidence],
-                [cx + 0.16 + arm_offset, 0.46, confidence],
-                [cx - 0.20 - arm_offset, 0.56, confidence],
-                [cx + 0.20 + arm_offset, 0.56, confidence],
-                [cx - 0.08, 0.60, confidence],
-                [cx + 0.08, 0.60, confidence],
-                [cx - 0.09, 0.77, confidence],
-                [cx + 0.09, 0.77, confidence],
-                [cx - 0.09, 0.95, confidence],
-                [cx + 0.09, 0.95, confidence],
-            ]
-            return {"keypoints": kp}
-
-        characters = frame % 3
-        if characters == 0:
-            return []
-        if characters == 1:
-            return [person(0.5, 0.04 * math.sin(t))]
-        return [
-            person(0.36, 0.04 * math.sin(t)),
-            person(0.64, 0.04 * math.cos(t + 0.5)),
-        ]

@@ -4,7 +4,21 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
-from app.interface.track_detector import BoundingBox, PersonDetection, PersonDetector, RelativeBoundingBox
+import cv2
+
+from app.interface.track_detector import (
+    BoundingBox,
+    PersonDetection,
+    PersonDetector,
+    PoseDetection,
+    PoseKeypoint,
+    RelativeBoundingBox,
+)
+
+try:
+    import mediapipe as mp
+except ImportError:  # pragma: no cover - optional runtime dependency
+    mp = None
 
 
 class MockPersonDetector:
@@ -57,13 +71,67 @@ class NearbyMockPersonDetector:
         return detections
 
 
+class PoseDetector:
+    def detect_poses_in_frame(self, frame_path: str) -> list[PoseDetection]:
+        raise NotImplementedError
+
+
+class MediaPipePoseDetector(PoseDetector):
+    def __init__(self, min_detection_confidence: float = 0.4, min_tracking_confidence: float = 0.4):
+        self._min_detection_confidence = min_detection_confidence
+        self._min_tracking_confidence = min_tracking_confidence
+
+    def detect_poses_in_frame(self, frame_path: str) -> list[PoseDetection]:
+        if mp is None:
+            return []
+
+        image_bgr = cv2.imread(frame_path)
+        if image_bgr is None:
+            return []
+
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        pose_api = mp.solutions.pose
+        with pose_api.Pose(
+            static_image_mode=True,
+            model_complexity=1,
+            min_detection_confidence=self._min_detection_confidence,
+            min_tracking_confidence=self._min_tracking_confidence,
+        ) as pose:
+            result = pose.process(image_rgb)
+
+        if result.pose_landmarks is None:
+            return []
+
+        mapped_keypoints = _landmarks_to_coco17(result.pose_landmarks.landmark)
+        if not mapped_keypoints:
+            return []
+
+        return [
+            PoseDetection(
+                keypoints=mapped_keypoints,
+                source="MediaPipe Pose",
+            )
+        ]
+
+
 class TrackDetectorService:
     _VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-    def __init__(self, detectors: dict[str, PersonDetector], default_detector_name: str):
+    def __init__(
+        self,
+        detectors: dict[str, PersonDetector],
+        default_detector_name: str,
+        pose_detectors: dict[str, PoseDetector],
+        default_pose_detector_name: str,
+    ):
         self._detectors = dict(detectors)
         self._active_detector_name = default_detector_name if default_detector_name in self._detectors else next(iter(self._detectors), "")
+        self._pose_detectors = dict(pose_detectors)
+        self._active_pose_detector_name = (
+            default_pose_detector_name if default_pose_detector_name in self._pose_detectors else next(iter(self._pose_detectors), "")
+        )
         self._detections_by_frame: dict[int, list[PersonDetection]] = {}
+        self._poses_by_frame: dict[int, list[PoseDetection]] = {}
 
     def available_detectors(self) -> list[str]:
         return list(self._detectors.keys())
@@ -106,6 +174,40 @@ class TrackDetectorService:
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return list(self._detections_by_frame.get(frame_index, []))
+
+    def available_pose_detectors(self) -> list[str]:
+        return list(self._pose_detectors.keys())
+
+    def active_pose_detector(self) -> str:
+        return self._active_pose_detector_name
+
+    def set_active_pose_detector(self, detector_name: str) -> bool:
+        if detector_name not in self._pose_detectors:
+            return False
+        self._active_pose_detector_name = detector_name
+        return True
+
+    def detect_poses_for_sequence(self, frames_folder_path: str) -> int:
+        detector = self._pose_detectors.get(self._active_pose_detector_name)
+        if detector is None:
+            self._poses_by_frame = {}
+            self._write_poses_json(frames_folder_path, {})
+            return 0
+
+        frame_files = self._frame_files(frames_folder_path)
+        poses: dict[int, list[PoseDetection]] = {}
+        for index, frame_path in enumerate(frame_files):
+            poses[index] = detector.detect_poses_in_frame(str(frame_path))
+
+        self._poses_by_frame = poses
+        self._write_poses_json(frames_folder_path, poses)
+        return len(frame_files)
+
+    def load_poses(self, frames_folder_path: str) -> None:
+        self._poses_by_frame = self._read_poses_json(frames_folder_path)
+
+    def poses_for_frame(self, frame_index: int) -> list[PoseDetection]:
+        return list(self._poses_by_frame.get(frame_index, []))
 
     def _frame_files(self, frames_folder_path: str) -> list[Path]:
         folder = Path(frames_folder_path).expanduser()
@@ -163,6 +265,110 @@ class TrackDetectorService:
                     parsed.append(parsed_detection)
             detections[frame_index] = parsed
         return detections
+
+    def _poses_json_path(self, frames_folder_path: str) -> Path:
+        return Path(frames_folder_path).expanduser().parent / "poses.json"
+
+    def _write_poses_json(self, frames_folder_path: str, poses_by_frame: dict[int, list[PoseDetection]]) -> None:
+        payload = {
+            "detector": self._active_pose_detector_name,
+            "frames": {
+                str(frame_index): [asdict(pose_detection) for pose_detection in frame_poses]
+                for frame_index, frame_poses in poses_by_frame.items()
+            },
+        }
+        self._poses_json_path(frames_folder_path).write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _read_poses_json(self, frames_folder_path: str) -> dict[int, list[PoseDetection]]:
+        json_path = self._poses_json_path(frames_folder_path)
+        if not json_path.exists():
+            return {}
+
+        try:
+            payload = json.loads(json_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+        frames_data = payload.get("frames") if isinstance(payload, dict) else None
+        detector_name = payload.get("detector") if isinstance(payload, dict) else None
+        if isinstance(detector_name, str) and detector_name in self._pose_detectors:
+            self._active_pose_detector_name = detector_name
+        if not isinstance(frames_data, dict):
+            return {}
+
+        poses: dict[int, list[PoseDetection]] = {}
+        for frame_key, items in frames_data.items():
+            if not isinstance(frame_key, str) or not frame_key.isdigit() or not isinstance(items, list):
+                continue
+            parsed: list[PoseDetection] = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                parsed_detection = _pose_from_dict(item)
+                if parsed_detection is not None:
+                    parsed.append(parsed_detection)
+            poses[int(frame_key)] = parsed
+        return poses
+
+
+def _pose_from_dict(data: dict) -> PoseDetection | None:
+    keypoints_data = data.get("keypoints")
+    source = data.get("source")
+    if not isinstance(keypoints_data, list):
+        return None
+    if not isinstance(source, str):
+        source = "Unknown"
+
+    keypoints: list[PoseKeypoint] = []
+    for item in keypoints_data:
+        if not isinstance(item, dict):
+            return None
+        x = item.get("x")
+        y = item.get("y")
+        confidence = item.get("confidence")
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)) or not isinstance(confidence, (int, float)):
+            return None
+        keypoints.append(PoseKeypoint(x=float(x), y=float(y), confidence=float(confidence)))
+
+    return PoseDetection(keypoints=keypoints, source=source)
+
+
+def _landmarks_to_coco17(landmarks) -> list[PoseKeypoint]:
+    if mp is None:
+        return []
+
+    pose_landmark = mp.solutions.pose.PoseLandmark
+    mapping = [
+        pose_landmark.NOSE,
+        pose_landmark.LEFT_EYE,
+        pose_landmark.RIGHT_EYE,
+        pose_landmark.LEFT_EAR,
+        pose_landmark.RIGHT_EAR,
+        pose_landmark.LEFT_SHOULDER,
+        pose_landmark.RIGHT_SHOULDER,
+        pose_landmark.LEFT_ELBOW,
+        pose_landmark.RIGHT_ELBOW,
+        pose_landmark.LEFT_WRIST,
+        pose_landmark.RIGHT_WRIST,
+        pose_landmark.LEFT_HIP,
+        pose_landmark.RIGHT_HIP,
+        pose_landmark.LEFT_KNEE,
+        pose_landmark.RIGHT_KNEE,
+        pose_landmark.LEFT_ANKLE,
+        pose_landmark.RIGHT_ANKLE,
+    ]
+
+    keypoints: list[PoseKeypoint] = []
+    for landmark_id in mapping:
+        landmark = landmarks[landmark_id.value]
+        keypoints.append(
+            PoseKeypoint(
+                x=float(landmark.x),
+                y=float(landmark.y),
+                confidence=float(landmark.visibility),
+            )
+        )
+    return keypoints
 
 
 def _from_dict(data: dict) -> PersonDetection | None:

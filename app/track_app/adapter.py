@@ -7,7 +7,7 @@ from pathlib import Path
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import MusicPort, SongMetadata, SongStatus
 from app.interface.sequence_data import SequenceDataPort
-from app.interface.track_detector import PersonDetection
+from app.interface.track_detector import PersonDetection, PoseDetection
 from app.interface.sequence_data import Bookmark, SequenceDataPort
 from app.interface.sequences import SequenceItem, SequenceState
 from app.track_app.main_app import DanceTrackerApp
@@ -489,6 +489,27 @@ class TrackDetectorAdapter:
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return self._service.detections_for_frame(frame_index)
+
+    def available_pose_detectors(self) -> list[str]:
+        return self._service.available_pose_detectors()
+
+    def active_pose_detector(self) -> str:
+        return self._service.active_pose_detector()
+
+    def set_active_pose_detector(self, detector_name: str) -> bool:
+        return self._service.set_active_pose_detector(detector_name)
+
+    def detect_poses_for_sequence(self, frames_folder_path: str) -> int:
+        detected_frames = self._service.detect_poses_for_sequence(frames_folder_path)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+        return detected_frames
+
+    def load_poses(self, frames_folder_path: str) -> None:
+        self._service.load_poses(frames_folder_path)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+
+    def poses_for_frame(self, frame_index: int) -> list[PoseDetection]:
+        return self._service.poses_for_frame(frame_index)
 
 
 class AppAdapter:

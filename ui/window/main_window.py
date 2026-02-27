@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self._right_panel.set_current_folder_path(path)
         self._right_panel.update_sequence_data(path)
         self._app.track_detector.load_detections(path)
+        self._app.track_detector.load_poses(path)
         self._folder_session.load_folder(path)
 
     def on_song_identified(self, song: SongMetadata) -> None:
@@ -106,6 +107,11 @@ class MainWindow(QMainWindow):
         self._viewer_panel.viewer.update()
         source_name = Path(frames_folder_path).name or "sequence"
         self._log_message(f"Detections updated for: {source_name}.")
+
+    def on_poses_updated(self, frames_folder_path: str) -> None:
+        self._viewer_panel.viewer.update()
+        source_name = Path(frames_folder_path).name or "sequence"
+        self._log_message(f"Poses updated for: {source_name}.")
 
     def _log_message(self, message: str) -> None:
         self._right_panel.logger_widget.log(message)
@@ -244,7 +250,7 @@ class MainWindow(QMainWindow):
             preload_done=self._preload_done,
         )
 
-        self._right_panel.update_pose(cur)
+        self._right_panel.update_pose(self._app.track_detector.poses_for_frame(cur))
 
         self._status.update_status(
             cur_frame=cur,
