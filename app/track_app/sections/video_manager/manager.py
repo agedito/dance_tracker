@@ -113,13 +113,57 @@ class VideoManager:
             return None
 
         metadata_path = cls.metadata_path_for_video(video_path)
+        frames_dir = Path(frames_path).resolve()
+        low_frames_dir = frames_dir.with_name("frames_mino")
+        video_info = cls._read_video_info(source)
+
         payload = {
-            "version": 1,
-            "video_path": str(source.resolve()),
-            "frames_path": str(Path(frames_path).resolve()),
+            "sequence": {
+                "nombre": source.stem,
+            },
+            "video": {
+                "nombre": source.name,
+                "duracion_segundos": video_info["duration_seconds"],
+                "resolucion": {
+                    "ancho": video_info["width"],
+                    "alto": video_info["height"],
+                },
+            },
+            "frames": cls._relative_to_parent_or_absolute(frames_dir, source.parent),
+            "low_frames": cls._relative_to_parent_or_absolute(low_frames_dir, source.parent),
         }
         metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return str(metadata_path)
+
+    @staticmethod
+    def _relative_to_parent_or_absolute(path: Path, parent: Path) -> str:
+        try:
+            return str(path.relative_to(parent.resolve()))
+        except ValueError:
+            return str(path)
+
+    @staticmethod
+    def _read_video_info(video_path: Path) -> dict[str, float | int]:
+        capture = cv2.VideoCapture(str(video_path))
+        if not capture.isOpened():
+            return {
+                "duration_seconds": 0.0,
+                "width": 0,
+                "height": 0,
+            }
+
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        capture.release()
+
+        duration_seconds = round(frame_count / fps, 3) if fps > 0 else 0.0
+        return {
+            "duration_seconds": duration_seconds,
+            "width": width,
+            "height": height,
+        }
 
     @classmethod
     def read_sequence_metadata(cls, metadata_path: str) -> dict | None:
