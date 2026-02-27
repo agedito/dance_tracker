@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
+from app.interface.music import SongMetadata, SongStatus
 from app.track_app.main_app import DanceTrackerApp
 
 
@@ -13,7 +14,16 @@ class MediaAdapter:
         print("Loading", path)
 
         if self._app.video_manager.is_video(path):
-            song = self._app.music_identifier.identify_from_video(path)
+            song = SongMetadata(status=SongStatus.NOT_RUN)
+            try:
+                song = self._app.music_identifier.identify_from_video(path)
+            except Exception as err:  # Defensive: never break media load on music service errors.
+                song = SongMetadata(
+                    status=SongStatus.ERROR,
+                    provider="music_identifier",
+                    message=f"Error identificando canción: {err}",
+                )
+
             self._events.emit(Event.SongIdentified, song)
 
             path = self._app.video_manager.extract_frames(path)
