@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFrame, QSplitter, QWidget, QTabWidget, QVBoxLayou
 from app.interface.music import SongMetadata
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
-from ui.widgets.right_panel_tabs import EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
+from ui.widgets.right_panel_tabs import DataTabWidget, EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
@@ -27,6 +27,7 @@ class RightPanel(QFrame):
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
         self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
+        self.data_tab = DataTabWidget(app.sequence_data)
 
         self._tabs = tabs
         self._tab_widgets_by_id: dict[str, QWidget] = {
@@ -34,6 +35,7 @@ class RightPanel(QFrame):
             "layer_viewers": LayerViewersTabWidget(),
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
+            "data": self.data_tab,
             "embedings": EmbedingsTabWidget(),
         }
         self._tab_labels_by_id: dict[str, str] = {
@@ -41,6 +43,7 @@ class RightPanel(QFrame):
             "layer_viewers": "Layer viewers",
             "visor_3d": "Visor 3D",
             "music": "Music",
+            "data": "Data",
             "embedings": "Embedings",
         }
 
@@ -92,6 +95,13 @@ class RightPanel(QFrame):
 
     def update_song_info(self, song: SongMetadata):
         self.music_tab.update_song_info(song)
+
+
+    def update_sequence_data(self, frames_folder_path: str) -> None:
+        self.data_tab.update_from_sequence(frames_folder_path)
+
+    def clear_sequence_data(self) -> None:
+        self.data_tab.clear()
 
     @staticmethod
     def _mock_yolo_pose_detections(frame: int) -> list[dict]:

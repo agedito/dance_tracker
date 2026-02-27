@@ -134,6 +134,8 @@ class VideoManager:
                         "height": video_info["height"],
                     },
                     "frames_count": video_info["frames_count"],
+                    "fps": video_info["fps"],
+                    "length_bytes": video_info["length_bytes"],
                 },
             },
             "frames": cls._relative_to_parent_or_absolute(frames_dir, source.parent),
@@ -158,6 +160,8 @@ class VideoManager:
                 "width": 0,
                 "height": 0,
                 "frames_count": 0,
+                "fps": 0.0,
+                "length_bytes": 0,
             }
 
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -172,6 +176,8 @@ class VideoManager:
             "width": width,
             "height": height,
             "frames_count": frame_count,
+            "fps": fps,
+            "length_bytes": video_path.stat().st_size if video_path.is_file() else 0,
         }
 
     @classmethod

@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
     # ── UI construction ──────────────────────────────────────────────
 
     def on_frames_loaded(self, path: str) -> None:
+        self._right_panel.update_sequence_data(path)
         self._folder_session.load_folder(path)
 
     def on_song_identified(self, song: SongMetadata) -> None:
@@ -345,6 +346,7 @@ class MainWindow(QMainWindow):
         self._loaded_count = 0
         self._preload_done = False
         self._topbar.set_active_folder(None)
+        self._right_panel.clear_sequence_data()
         self.set_frame(0)
 
     # ── Lifecycle ────────────────────────────────────────────────────

@@ -6,9 +6,11 @@ from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import SongMetadata, SongStatus
+from app.interface.sequence_data import SequenceDataPort
 from app.interface.sequences import SequenceItem, SequenceState
 from app.track_app.main_app import DanceTrackerApp
 from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
+from app.track_app.sections.video_manager.sequence_data_service import SequenceDataService
 
 _PREFS_PATH = Path.home() / ".dance_tracker_prefs.json"
 
@@ -385,8 +387,17 @@ class FramesAdapter:
         return self._state.advance_if_playing()
 
 
+class SequenceDataAdapter:
+    def __init__(self):
+        self._service: SequenceDataPort = SequenceDataService()
+
+    def read_video_data(self, frames_folder_path: str):
+        return self._service.read_video_data(frames_folder_path)
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):
         self.media = MediaAdapter(app, events)
         self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
         self.frames = FramesAdapter(app)
+        self.sequence_data = SequenceDataAdapter()
