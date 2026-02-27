@@ -23,6 +23,7 @@ class RightPanel(QFrame):
         self.pose_3d_viewer = Pose3DViewerWidget()
         tabs.addTab(self.pose_3d_viewer, "Visor 3D")
         tabs.addTab(self._build_music_tab(), "Music")
+        tabs.addTab(self._build_data_tab(), "Data")
         v.addWidget(tabs, 1)
 
     def update_pose(self, frame: int):
@@ -68,6 +69,14 @@ class RightPanel(QFrame):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._section_label("Music"))
+        layout.addStretch(1)
+        return tab
+
+    def _build_data_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._section_label("Data"))
         layout.addStretch(1)
         return tab
 
