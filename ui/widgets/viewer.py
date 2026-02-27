@@ -1,6 +1,6 @@
 from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QResizeEvent
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QToolButton, QWidget
 from shiboken6 import isValid
 
 from app.interface.application import DanceTrackerPort
@@ -29,6 +29,7 @@ class ViewerWidget(QWidget):
         self._use_proxy = False
         self._app = app
         self._is_closing = False
+        self._show_detections = True
 
         self.setMinimumHeight(320)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -43,6 +44,35 @@ class ViewerWidget(QWidget):
         self._drop_handler = DropHandler(app.media, parent=self)
         self._drop_handler.framesLoaded.connect(self.framesLoaded)
         self._drop_handler.folderLoaded.connect(self.folderLoaded)
+
+        # ── Detection overlay controls ──────────────────────────────
+        self._detection_toggle_overlay = QWidget(self)
+        self._detection_toggle_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._detection_toggle_overlay.setStyleSheet(
+            "background-color: rgba(70, 70, 70, 150); border-radius: 12px;"
+        )
+
+        overlay_layout = QHBoxLayout(self._detection_toggle_overlay)
+        overlay_layout.setContentsMargins(6, 4, 6, 4)
+
+        self._detection_toggle_button = QToolButton(self._detection_toggle_overlay)
+        self._detection_toggle_button.setCheckable(True)
+        self._detection_toggle_button.setChecked(True)
+        self._detection_toggle_button.setText("👁")
+        self._detection_toggle_button.setToolTip("Show or hide detections")
+        self._detection_toggle_button.setStyleSheet(
+            "QToolButton {"
+            "color: white;"
+            "font-size: 15px;"
+            "background: transparent;"
+            "border: none;"
+            "padding: 2px 4px;"
+            "}"
+            "QToolButton:checked { color: #6DFFB4; }"
+        )
+        self._detection_toggle_button.toggled.connect(self._on_detection_visibility_toggled)
+        overlay_layout.addWidget(self._detection_toggle_button)
+        self._detection_toggle_overlay.adjustSize()
 
     # ── Public API ───────────────────────────────────────────────────
 
@@ -99,7 +129,9 @@ class ViewerWidget(QWidget):
         if self._is_closing:
             return
         self._radial_menu.setGeometry(self.rect())
-        self._sync_radial_menu_anchor(self._video_rect())
+        video_rect = self._video_rect()
+        self._sync_radial_menu_anchor(video_rect)
+        self._position_detection_toggle(video_rect)
 
     def closeEvent(self, ev):
         self._is_closing = True
@@ -137,6 +169,7 @@ class ViewerWidget(QWidget):
 
         # Keep the radial menu in sync with the current video rect
         self._sync_radial_menu_anchor(video_rect)
+        self._position_detection_toggle(video_rect)
 
     def _sync_radial_menu_anchor(self, video_rect: QRectF):
         if self._is_closing or not isValid(self._radial_menu):
@@ -180,6 +213,9 @@ class ViewerWidget(QWidget):
 
 
     def _draw_detections(self, painter: QPainter, video_rect: QRectF):
+        if not self._show_detections:
+            return
+
         detections = self._app.track_detector.detections_for_frame(self._frame)
         if not detections:
             return
@@ -209,8 +245,25 @@ class ViewerWidget(QWidget):
 
         painter.restore()
 
+    def _position_detection_toggle(self, video_rect: QRectF):
+        if self._is_closing:
+            return
+
+        self._detection_toggle_overlay.adjustSize()
+        overlay_size = self._detection_toggle_overlay.sizeHint()
+        margin = 10
+
+        x = int(video_rect.right() - overlay_size.width() - margin)
+        y = int(video_rect.top() + margin)
+        self._detection_toggle_overlay.setGeometry(x, y, overlay_size.width(), overlay_size.height())
+        self._detection_toggle_overlay.raise_()
+
     # ── Slots ────────────────────────────────────────────────────────
 
     def _on_border_color_changed(self, color: QColor):
         self._border_color = color
+        self.update()
+
+    def _on_detection_visibility_toggled(self, checked: bool):
+        self._show_detections = checked
         self.update()
