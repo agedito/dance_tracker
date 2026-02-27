@@ -154,6 +154,27 @@ class TimelineTrack(QWidget):
         bookmark = self._bookmark_near_pos(ev.position().x())
 
         menu = QMenu(self)
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #1A1F23;
+                border: 1px solid #2B343B;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #3A3F45;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #4B525A;
+                margin: 6px 4px;
+            }
+            """
+        )
         add_action = None
         edit_name_action = None
         delete_action = None
