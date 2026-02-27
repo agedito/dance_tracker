@@ -14,6 +14,7 @@ class FramesPort(Protocol):
     cur_frame: int
     playing: bool
     frame_cache_radius: int
+    preload_anchor_points: int
 
     def set_frame(self, frame: int) -> int: ...
 

@@ -46,7 +46,10 @@ class MainWindow(QMainWindow):
         # ── Collaborators ────────────────────────────────────────────
         self._prefs = PreferencesManager(cfg.max_recent_folders)
 
-        self._frame_store = FrameStore(cache_radius=self._frames.frame_cache_radius)
+        self._frame_store = FrameStore(
+            cache_radius=self._frames.frame_cache_radius,
+            preload_anchor_points=self._frames.preload_anchor_points,
+        )
 
         self._playback = PlaybackController(
             fps=self._frames.fps,

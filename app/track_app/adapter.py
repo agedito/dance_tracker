@@ -358,6 +358,10 @@ class FramesAdapter:
     def frame_cache_radius(self) -> int:
         return self._state.config.frame_cache_radius
 
+    @property
+    def preload_anchor_points(self) -> int:
+        return self._state.config.preload_anchor_points
+
     def set_frame(self, frame: int) -> int:
         return self._state.set_frame(frame)
 

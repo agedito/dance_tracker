@@ -15,9 +15,10 @@ class FrameStore(QObject):
     frame_preloaded = Signal(int, bool, int)
     preload_finished = Signal(int)
 
-    def __init__(self, cache_radius: int):
+    def __init__(self, cache_radius: int, preload_anchor_points: int = 3):
         super().__init__()
         self.cache_radius = cache_radius
+        self.preload_anchor_points = max(1, preload_anchor_points)
         self._frame_files: list[Path] = []
         self._proxy_files: list[Path] = []
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
@@ -170,7 +171,12 @@ class FrameStore(QObject):
         total_frames = len(self._frame_files)
         pending = set(range(total_frames))
 
-        anchors = [0, total_frames // 2, total_frames - 1]
+        if self.preload_anchor_points <= 1 or total_frames <= 1:
+            anchors = [0]
+        else:
+            max_index = total_frames - 1
+            anchors = [round((max_index * point) / (self.preload_anchor_points - 1)) for point in range(self.preload_anchor_points)]
+
         unique_anchors: list[int] = []
         for anchor in anchors:
             if anchor not in unique_anchors:
