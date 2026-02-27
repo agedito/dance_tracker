@@ -36,6 +36,7 @@ make dependencies
 
 ## Music identification
 
-- When dropping a local video, the app extracts a short audio sample using ffmpeg (bundled via `imageio-ffmpeg`, no global installation required) and tries to identify the song using `audd.io`.
+- When dropping a local video, the app extracts a short audio sample using ffmpeg (bundled via `imageio-ffmpeg`, no global installation required).
+- The app tries to identify the song using `audd.io` and also runs local tempo analysis (BPM, pulse count, and analyzed audio duration) with `scipy` + `numpy`.
 - Configure `AUDD_API_TOKEN` and any other sensitive variables in `secrets.env` at the repository root.
-- Song metadata is displayed in the **Music** tab.
+- Song metadata and tempo metrics are displayed in the **Music** tab.

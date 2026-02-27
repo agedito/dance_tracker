@@ -6,6 +6,7 @@ from app.track_app.frame_state.logic import ReviewState
 from app.track_app.services.music_identifier.audio_extractor import AudioExtractor
 from app.track_app.services.music_identifier.audd_client import AuddSongIdentifier
 from app.track_app.services.music_identifier.service import MusicIdentifierService
+from app.track_app.services.music_identifier.tempo_analyzer import ScipyTempoAnalyzer
 from app.track_app.sections.track_detector.service import MockPersonDetector, NearbyMockPersonDetector, TrackDetectorService
 from app.track_app.sections.video_manager.manager import VideoManager
 
@@ -18,6 +19,7 @@ class DanceTrackerApp:
         self.music_identifier: MusicIdentifierPort = MusicIdentifierService(
             extractor=AudioExtractor(sample_seconds=cfg.audio_sample_seconds),
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
+            analyzer=ScipyTempoAnalyzer(),
         )
         self.track_detector: TrackDetectorPort = TrackDetectorService(
             detectors={
