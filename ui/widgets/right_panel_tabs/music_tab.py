@@ -17,6 +17,10 @@ class MusicTabWidget(QWidget):
         self._artist_value = QLabel("—")
         self._album_value = QLabel("—")
         self._provider_value = QLabel("—")
+        self._tempo_value = QLabel("—")
+        self._pulses_value = QLabel("—")
+        self._duration_value = QLabel("—")
+        self._analysis_provider_value = QLabel("—")
         self._message_value = QLabel("")
         self._message_value.setWordWrap(True)
 
@@ -26,6 +30,10 @@ class MusicTabWidget(QWidget):
             ("Artist", self._artist_value),
             ("Album", self._album_value),
             ("Provider", self._provider_value),
+            ("Tempo (BPM)", self._tempo_value),
+            ("Pulse count", self._pulses_value),
+            ("Audio duration", self._duration_value),
+            ("Analysis provider", self._analysis_provider_value),
         ):
             layout.addWidget(QLabel(f"{label}:"))
             layout.addWidget(value)
@@ -39,4 +47,8 @@ class MusicTabWidget(QWidget):
         self._artist_value.setText(song.artist or "—")
         self._album_value.setText(song.album or "—")
         self._provider_value.setText(song.provider or "—")
+        self._tempo_value.setText(f"{song.tempo_bpm:.1f}" if song.tempo_bpm is not None else "—")
+        self._pulses_value.setText(str(song.pulse_count) if song.pulse_count is not None else "—")
+        self._duration_value.setText(f"{song.audio_duration_s:.1f} s" if song.audio_duration_s is not None else "—")
+        self._analysis_provider_value.setText(song.analysis_provider or "—")
         self._message_value.setText(song.message or "")
