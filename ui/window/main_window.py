@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
         self._right_panel = RightPanel(
             preferences=self._prefs,
             media_manager=self._app.media,
+            on_sequence_removed=self._on_sequence_removed,
         )
 
         self._timeline = TimelinePanel(
@@ -309,6 +310,25 @@ class MainWindow(QMainWindow):
         if normalized == self._folder_session.current_folder_path:
             return
         self._folder_session.load_folder(folder_path)
+
+    def _on_sequence_removed(self, folder_path: str):
+        normalized = str(Path(folder_path).expanduser())
+        if normalized != self._folder_session.current_folder_path:
+            return
+
+        self._playback.pause()
+        self._viewer_panel.viewer.set_proxy_frames_enabled(False)
+        self._folder_session.current_folder_path = None
+        self._frame_store.clear()
+        self.state.set_total_frames(1000)
+        self._viewer_panel.viewer.set_total_frames(self.state.total_frames)
+        self._timeline.set_total_frames(self.state.total_frames)
+        self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
+        self._loaded_frames = set()
+        self._loaded_count = 0
+        self._preload_done = False
+        self._topbar.set_active_folder(None)
+        self.set_frame(0)
 
     # ── Lifecycle ────────────────────────────────────────────────────
 

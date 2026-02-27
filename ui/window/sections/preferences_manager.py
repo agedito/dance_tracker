@@ -44,6 +44,15 @@ class PreferencesManager:
     def remove_recent_folder(self, folder_path: str):
         folders = [p for p in self.recent_folders() if p != folder_path]
         self._prefs["recent_folders"] = folders[: self._max_recent]
+
+        if self._prefs.get("last_opened_folder") == folder_path:
+            self._prefs["last_opened_folder"] = folders[0] if folders else None
+
+        frames = self._prefs.get("last_frame_by_folder", {})
+        if isinstance(frames, dict):
+            frames.pop(folder_path, None)
+            self._prefs["last_frame_by_folder"] = frames
+
         thumbnails = self._prefs.get("recent_folder_thumbnails", {})
         if isinstance(thumbnails, dict):
             thumbnails.pop(folder_path, None)

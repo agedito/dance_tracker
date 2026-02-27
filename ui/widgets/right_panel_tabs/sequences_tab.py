@@ -1,8 +1,15 @@
-from pathlib import Path
+from typing import Callable
 
 from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from app.interface.media import MediaPort
 from ui.widgets.drop_handler import DropHandler
@@ -13,10 +20,16 @@ from ui.window.sections.preferences_manager import PreferencesManager
 class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
 
-    def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
+    def __init__(
+            self,
+            preferences: PreferencesManager,
+            media_manager: MediaPort,
+            on_sequence_removed: Callable[[str], None] | None = None,
+    ):
         super().__init__()
         self._prefs = preferences
         self._media_manager = media_manager
+        self._on_sequence_removed = on_sequence_removed
         self._drop_handler = DropHandler(media_manager, parent=self)
         self._selected_path: str | None = None
         self._folders: list[str] = []
@@ -84,10 +97,35 @@ class SequencesTabWidget(QWidget):
 
         for idx, folder in enumerate(self._folders):
             row, col = divmod(idx, columns)
-            self._grid.addWidget(self._sequence_button(folder), row, col)
+            self._grid.addWidget(self._sequence_tile(folder), row, col)
+
+    def _sequence_tile(self, folder_path: str) -> QWidget:
+        tile = QWidget()
+        tile_layout = QVBoxLayout(tile)
+        tile_layout.setContentsMargins(0, 0, 0, 0)
+        tile_layout.setSpacing(4)
+
+        tile_layout.addLayout(self._actions_bar(folder_path))
+        tile_layout.addWidget(self._sequence_button(folder_path))
+        return tile
+
+    def _actions_bar(self, folder_path: str) -> QHBoxLayout:
+        bar = QHBoxLayout()
+        bar.setContentsMargins(0, 0, 0, 0)
+        bar.addStretch(1)
+
+        delete_button = QPushButton("🗑")
+        delete_button.setObjectName("SequenceDeleteButton")
+        delete_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_button.setToolTip("Borrar video")
+        delete_button.setFixedSize(28, 24)
+        delete_button.clicked.connect(
+            lambda _=False, path_to_remove=folder_path: self._remove_sequence(path_to_remove)
+        )
+        bar.addWidget(delete_button)
+        return bar
 
     def _sequence_button(self, folder_path: str) -> QPushButton:
-        path = Path(folder_path).expanduser()
         button = QPushButton("")
         button.setObjectName("SequenceThumbnail")
         button.setProperty("isSelected", folder_path == self._selected_path)
@@ -102,6 +140,14 @@ class SequencesTabWidget(QWidget):
             button.setIcon(QIcon(thumbnail))
             button.setIconSize(QSize(146, 82))
         return button
+
+    def _remove_sequence(self, folder_path: str):
+        self._prefs.remove_recent_folder(folder_path)
+        if self._selected_path == folder_path:
+            self._selected_path = None
+        if self._on_sequence_removed:
+            self._on_sequence_removed(folder_path)
+        self.refresh()
 
     def _select_and_load(self, folder_path: str):
         self._selected_path = folder_path

@@ -22,7 +22,12 @@ from ui.window.sections.preferences_manager import PreferencesManager
 class RightPanel(QFrame):
     """Single responsibility: display right-side tools grouped in tabs."""
 
-    def __init__(self, preferences: PreferencesManager, media_manager: MediaPort):
+    def __init__(
+            self,
+            preferences: PreferencesManager,
+            media_manager: MediaPort,
+            on_sequence_removed=None,
+    ):
         super().__init__()
         self._preferences = preferences
         self.setObjectName("Panel")
@@ -35,7 +40,11 @@ class RightPanel(QFrame):
         tabs.setMovable(True)
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
-        self.sequences_tab = SequencesTabWidget(preferences, media_manager)
+        self.sequences_tab = SequencesTabWidget(
+            preferences,
+            media_manager,
+            on_sequence_removed=on_sequence_removed,
+        )
 
         self._tabs = tabs
         self._tab_widgets_by_id: dict[str, QWidget] = {
