@@ -217,9 +217,13 @@ class SequencesTabWidget(QWidget):
             shutil.rmtree(folder, ignore_errors=True)
 
         if folder.name == "frames":
-            frames_mino = folder.parent / "frames_mino"
-            if frames_mino.is_dir():
-                shutil.rmtree(frames_mino, ignore_errors=True)
+            low_frames = folder.parent / "low_frames"
+            if low_frames.is_dir():
+                shutil.rmtree(low_frames, ignore_errors=True)
+
+            legacy_low_frames = folder.parent / "frames_mino"
+            if legacy_low_frames.is_dir():
+                shutil.rmtree(legacy_low_frames, ignore_errors=True)
 
         if video_file and video_file.exists():
             video_file.unlink(missing_ok=True)
