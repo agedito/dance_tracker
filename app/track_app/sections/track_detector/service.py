@@ -4,6 +4,8 @@ import re
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
+
 from app.interface.track_detector import BoundingBox, PersonDetection, PersonDetector, RelativeBoundingBox
 
 
@@ -31,6 +33,86 @@ class MockPersonDetector:
             _to_detection(rng, left_box, width, height),
             _to_detection(rng, right_box, width, height),
         ]
+
+
+class YoloNasPersonDetector:
+    _PERSON_CLASS_ID = 0
+
+    def __init__(self, model_name: str = "yolo_nas_s", confidence_threshold: float = 0.35):
+        self._model_name = model_name
+        self._confidence_threshold = confidence_threshold
+        self._model = None
+
+    @staticmethod
+    def is_available() -> bool:
+        try:
+            import cv2  # noqa: F401
+            from super_gradients.training import models  # noqa: F401
+        except ImportError:
+            return False
+        return True
+
+    def detect_people_in_frame(self, frame_path: str) -> list[PersonDetection]:
+        model = self._load_model()
+        if model is None:
+            return []
+
+        try:
+            import cv2
+        except ImportError:
+            return []
+
+        frame = cv2.imread(frame_path)
+        if frame is None:
+            return []
+
+        height, width = frame.shape[:2]
+        prediction = self._predict(model, frame)
+        if prediction is None:
+            return []
+
+        boxes = _as_array(getattr(prediction, "bboxes_xyxy", None))
+        confidences = _as_array(getattr(prediction, "confidence", None))
+        labels = _as_array(getattr(prediction, "labels", None))
+        if boxes is None or confidences is None or labels is None:
+            return []
+
+        detections: list[PersonDetection] = []
+        for bbox, confidence, label in zip(boxes, confidences, labels):
+            if int(label) != self._PERSON_CLASS_ID:
+                continue
+            detection = _build_detection_from_xyxy(
+                bbox_xyxy=bbox,
+                confidence=float(confidence),
+                frame_width=width,
+                frame_height=height,
+            )
+            if detection is not None:
+                detections.append(detection)
+        return detections
+
+    def _load_model(self):
+        if self._model is not None:
+            return self._model
+
+        try:
+            from super_gradients.training import models
+
+            self._model = models.get(self._model_name, pretrained_weights="coco")
+        except Exception:
+            return None
+        return self._model
+
+    def _predict(self, model, frame: np.ndarray):
+        try:
+            prediction_batch = model.predict(frame, conf=self._confidence_threshold)
+        except Exception:
+            return None
+
+        predictions = getattr(prediction_batch, "_images_prediction_lst", None)
+        if isinstance(predictions, list) and predictions:
+            return getattr(predictions[0], "prediction", None)
+        return None
 
 
 class TrackDetectorService:
@@ -244,3 +326,47 @@ def _jpeg_size(data: bytes) -> tuple[int, int] | None:
 def _natural_sort_key(path: Path):
     chunks = re.split(r"(\d+)", path.name.lower())
     return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+
+
+def _as_array(value) -> np.ndarray | None:
+    if value is None:
+        return None
+    if isinstance(value, np.ndarray):
+        return value
+    if hasattr(value, "cpu") and hasattr(value, "numpy"):
+        return value.cpu().numpy()
+    if hasattr(value, "numpy"):
+        return value.numpy()
+    try:
+        return np.asarray(value)
+    except Exception:
+        return None
+
+
+def _build_detection_from_xyxy(
+    bbox_xyxy: np.ndarray,
+    confidence: float,
+    frame_width: int,
+    frame_height: int,
+) -> PersonDetection | None:
+    if bbox_xyxy.shape[0] < 4:
+        return None
+
+    x1 = max(0, min(frame_width, int(round(float(bbox_xyxy[0])))))
+    y1 = max(0, min(frame_height, int(round(float(bbox_xyxy[1])))))
+    x2 = max(0, min(frame_width, int(round(float(bbox_xyxy[2])))))
+    y2 = max(0, min(frame_height, int(round(float(bbox_xyxy[3])))))
+
+    width = max(0, x2 - x1)
+    height = max(0, y2 - y1)
+    if width == 0 or height == 0 or frame_width == 0 or frame_height == 0:
+        return None
+
+    bbox_pixels = BoundingBox(x=x1, y=y1, width=width, height=height)
+    bbox_relative = RelativeBoundingBox(
+        x=x1 / frame_width,
+        y=y1 / frame_height,
+        width=width / frame_width,
+        height=height / frame_height,
+    )
+    return PersonDetection(confidence=confidence, bbox_pixels=bbox_pixels, bbox_relative=bbox_relative)

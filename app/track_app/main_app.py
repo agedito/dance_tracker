@@ -6,7 +6,11 @@ from app.track_app.frame_state.logic import ReviewState
 from app.track_app.services.music_identifier.audio_extractor import AudioExtractor
 from app.track_app.services.music_identifier.audd_client import AuddSongIdentifier
 from app.track_app.services.music_identifier.service import MusicIdentifierService
-from app.track_app.sections.track_detector.service import MockPersonDetector, TrackDetectorService
+from app.track_app.sections.track_detector.service import (
+    MockPersonDetector,
+    TrackDetectorService,
+    YoloNasPersonDetector,
+)
 from app.track_app.sections.video_manager.manager import VideoManager
 
 
@@ -19,4 +23,13 @@ class DanceTrackerApp:
             extractor=AudioExtractor(sample_seconds=cfg.audio_sample_seconds),
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
         )
-        self.track_detector: TrackDetectorPort = TrackDetectorService(detector=MockPersonDetector())
+        detector = self._build_person_detector()
+        self.track_detector: TrackDetectorPort = TrackDetectorService(detector=detector)
+
+    def _build_person_detector(self):
+        if self.cfg.detector_backend == "yolo_nas" and YoloNasPersonDetector.is_available():
+            return YoloNasPersonDetector(
+                model_name=self.cfg.yolo_nas_model_name,
+                confidence_threshold=self.cfg.yolo_nas_confidence_threshold,
+            )
+        return MockPersonDetector()
