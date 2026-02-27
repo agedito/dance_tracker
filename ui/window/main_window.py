@@ -87,6 +87,9 @@ class MainWindow(QMainWindow):
     def on_song_identified(self, song: SongMetadata) -> None:
         self._right_panel.update_song_info(song)
 
+    def _log_message(self, message: str) -> None:
+        self._right_panel.logger_widget.log(message)
+
     def _on_recent_sources_changed(self):
         if hasattr(self, "_topbar"):
             self._topbar.refresh_icons()
@@ -271,6 +274,7 @@ class MainWindow(QMainWindow):
             return
         self._loaded_count = min(self.state.total_frames, len(self._loaded_frames))
         self._preload_done = True
+        self._log_message("Frame cache completed.")
         self._timeline.update_info(
             self.state.total_frames,
             len(self.state.error_frames),
@@ -295,6 +299,8 @@ class MainWindow(QMainWindow):
         self._topbar.set_active_folder(self._folder_session.current_folder_path)
         self._right_panel.refresh_sequences()
         self._right_panel.set_active_sequence(self._folder_session.current_folder_path)
+        source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"
+        self._log_message(f"Loaded media: {source_name}.")
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
