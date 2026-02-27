@@ -2,9 +2,9 @@ from app.interface.music import MusicIdentifierPort
 from app.track_app.config import Config
 from app.track_app.frame_state.layers import default_layers
 from app.track_app.frame_state.logic import ReviewState
-from app.track_app.sections.music_identifier.audio_extractor import AudioExtractor
-from app.track_app.sections.music_identifier.audd_client import AuddSongIdentifier
-from app.track_app.sections.music_identifier.service import MusicIdentifierService
+from app.track_app.services.music_identifier.audio_extractor import AudioExtractor
+from app.track_app.services.music_identifier.audd_client import AuddSongIdentifier
+from app.track_app.services.music_identifier.service import MusicIdentifierService
 from app.track_app.sections.video_manager.manager import VideoManager
 
 
