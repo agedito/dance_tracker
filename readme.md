@@ -27,6 +27,7 @@ make dependencies
 - opencv-python 4.13.0.92
 - PySide6 6.10.2 (ui)
 - pydantic-settings 2.13.1 (to use configs from .env files)
+- imageio-ffmpeg 0.6.0 (bundled ffmpeg binary for audio extraction)
 
 ## Frame folders and cache
 
@@ -35,6 +36,6 @@ make dependencies
 
 ## Music identification
 
-- When dropping a local video, the app extracts a short audio sample (requires `ffmpeg`) and tries to identify the song using `audd.io`.
+- When dropping a local video, the app extracts a short audio sample using ffmpeg (bundled via `imageio-ffmpeg`, no global installation required) and tries to identify the song using `audd.io`.
 - Configure `AUDD_API_TOKEN` in `preferences/app.env`.
 - Song metadata is displayed in the **Music** tab.
