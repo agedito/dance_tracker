@@ -1,7 +1,9 @@
 import math
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QSplitter,
     QWidget,
     QTabWidget,
     QVBoxLayout,
@@ -10,6 +12,7 @@ from PySide6.QtWidgets import (
 from app.interface.music import SongMetadata
 from app.interface.media import MediaPort
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
+from ui.widgets.log_widget import LogWidget
 from ui.widgets.right_panel_tabs import (
     EmbedingsTabWidget,
     LayerViewersTabWidget,
@@ -64,7 +67,18 @@ class RightPanel(QFrame):
 
         self._add_tabs_in_saved_order()
         tabs.tabBar().tabMoved.connect(self._save_tab_order)
-        v.addWidget(tabs, 1)
+
+        self.logger_widget = LogWidget(display_ms=5000, history_limit=100)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.addWidget(tabs)
+        splitter.addWidget(self.logger_widget)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([400, 200])
+
+        v.addWidget(splitter, 1)
 
     def _add_tabs_in_saved_order(self):
         desired_order = self._preferences.right_panel_tab_order()
