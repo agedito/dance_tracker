@@ -1,68 +1,226 @@
-from collections import deque
+from __future__ import annotations
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtWidgets import QFrame, QLabel, QListWidget, QVBoxLayout
+from dataclasses import dataclass
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
+
+
+@dataclass
+class _LogEntry:
+    entry_id: int
+    text: str
+    group: str | None = None
+    status: str | None = None
+    progress_key: str | None = None
+    progress_value: int | None = None
 
 
 class LogWidget(QFrame):
     _EMPTY_TEXT = "No logs"
+    _STATUS_COLORS = {
+        "success": "#2ecc71",
+        "error": "#e74c3c",
+        "warning": "#f1c40f",
+        "info": "#8a8a8a",
+    }
 
     def __init__(self, display_ms: int, history_limit: int, parent=None):
         super().__init__(parent)
         self.display_ms = max(100, int(display_ms))
         self.history_limit = max(1, int(history_limit))
-        self._history = deque(maxlen=self.history_limit)
-        self._current_message = ""
+        self._entries: list[_LogEntry] = []
+        self._entry_by_progress_key: dict[str, int] = {}
+        self._next_entry_id = 1
 
         self.setObjectName("LogWidget")
 
-        container = QVBoxLayout(self)
-        container.setContentsMargins(0, 0, 0, 0)
-        container.setSpacing(8)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(8)
 
-        self.current_label = QLabel(self._EMPTY_TEXT)
-        self.current_label.setObjectName("LogCurrent")
-        self.current_label.setWordWrap(True)
-        current_font = self.current_label.font()
-        current_font.setPointSize(current_font.pointSize() + 2)
-        self.current_label.setFont(current_font)
-        container.addWidget(self.current_label)
+        self.empty_label = QLabel(self._EMPTY_TEXT)
+        self.empty_label.setObjectName("LogEmpty")
+        self.empty_label.setWordWrap(True)
+        root.addWidget(self.empty_label)
 
-        self.history_list = QListWidget()
-        self.history_list.setObjectName("LogHistoryList")
-        self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.history_list.setWordWrap(True)
-        self.history_list.setSpacing(2)
-        container.addWidget(self.history_list)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
 
-        self._clear_timer = QTimer(self)
-        self._clear_timer.setSingleShot(True)
-        self._clear_timer.timeout.connect(self._clear_current)
+        self._content = QWidget()
+        self._content_layout = QVBoxLayout(self._content)
+        self._content_layout.setContentsMargins(0, 0, 0, 0)
+        self._content_layout.setSpacing(4)
+        self._content_layout.addStretch(1)
 
-    def log(self, text: str):
+        self.scroll_area.setWidget(self._content)
+        root.addWidget(self.scroll_area)
+
+    def log(self, text: str, group: str | None = None):
+        self.log_status(text=text, status="info", group=group)
+
+    def log_status(self, text: str, status: str, group: str | None = None):
         message = (text or "").strip()
         if not message:
             return
+        normalized_status = self._normalize_status(status)
+        self._append_entry(_LogEntry(entry_id=self._new_entry_id(), text=message, group=group, status=normalized_status))
 
-        self._archive_current_message()
-        self._current_message = message
-        self.current_label.setText(message)
-        self._clear_timer.start(self.display_ms)
-
-    def _clear_current(self):
-        self._archive_current_message()
-        self.current_label.setText(self._EMPTY_TEXT)
-
-    def _archive_current_message(self):
-        if not self._current_message:
+    def show_progress(self, key: str, text: str, group: str | None = None):
+        normalized_key = (key or "").strip()
+        message = (text or "").strip()
+        if not normalized_key or not message:
             return
 
-        self._history.appendleft(self._current_message)
-        self._current_message = ""
-        self._refresh_history()
+        existing_entry = self._find_progress_entry(normalized_key)
+        if existing_entry is not None:
+            existing_entry.text = message
+            existing_entry.group = group
+            existing_entry.progress_value = 0
+            existing_entry.status = None
+            self._refresh_entries()
+            return
 
-    def _refresh_history(self):
-        self.history_list.clear()
-        for message in self._history:
-            self.history_list.addItem(message)
+        entry = _LogEntry(
+            entry_id=self._new_entry_id(),
+            text=message,
+            group=group,
+            progress_key=normalized_key,
+            progress_value=0,
+        )
+        self._entry_by_progress_key[normalized_key] = entry.entry_id
+        self._append_entry(entry)
+
+    def update_progress(self, key: str, value: int, text: str | None = None):
+        entry = self._find_progress_entry(key)
+        if entry is None:
+            return
+
+        entry.progress_value = max(0, min(100, int(value)))
+        if text is not None and text.strip():
+            entry.text = text.strip()
+        self._refresh_entries()
+
+    def complete_progress(self, key: str, status: str, text: str | None = None):
+        entry = self._find_progress_entry(key)
+        if entry is None:
+            return
+
+        entry.progress_key = None
+        entry.progress_value = None
+        entry.status = self._normalize_status(status)
+        if text is not None and text.strip():
+            entry.text = text.strip()
+
+        normalized_key = (key or "").strip()
+        self._entry_by_progress_key.pop(normalized_key, None)
+        self._refresh_entries()
+
+    def _append_entry(self, entry: _LogEntry):
+        self._entries.insert(0, entry)
+        self._entries = self._entries[: self.history_limit]
+        valid_ids = {item.entry_id for item in self._entries}
+        self._entry_by_progress_key = {
+            key: entry_id for key, entry_id in self._entry_by_progress_key.items() if entry_id in valid_ids
+        }
+        self._refresh_entries()
+
+    def _refresh_entries(self):
+        while self._content_layout.count() > 1:
+            item = self._content_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        if not self._entries:
+            self.empty_label.show()
+            return
+
+        self.empty_label.hide()
+
+        rendered_groups: set[str] = set()
+        for entry in self._entries:
+            if entry.group and entry.group not in rendered_groups:
+                rendered_groups.add(entry.group)
+                group_label = QLabel(entry.group)
+                group_label.setObjectName("LogGroup")
+                self._content_layout.insertWidget(self._content_layout.count() - 1, group_label)
+
+            self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_entry_widget(entry))
+
+    def _build_entry_widget(self, entry: _LogEntry) -> QWidget:
+        card = QFrame()
+        card.setObjectName("LogEntryCard")
+
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(4)
+
+        header = QHBoxLayout()
+        header.setSpacing(6)
+
+        if entry.status is not None:
+            status_dot = QLabel("●")
+            status_dot.setObjectName("LogStatusDot")
+            status_dot.setStyleSheet(f"color: {self._STATUS_COLORS[entry.status]};")
+            header.addWidget(status_dot)
+
+        text_label = QLabel(entry.text)
+        text_label.setWordWrap(True)
+        text_label.setObjectName("LogEntryText")
+        header.addWidget(text_label, 1)
+
+        close_button = QPushButton("×")
+        close_button.setObjectName("LogCloseButton")
+        close_button.setFixedWidth(24)
+        close_button.clicked.connect(lambda: self._remove_entry(entry.entry_id))
+        header.addWidget(close_button, 0, Qt.AlignmentFlag.AlignTop)
+
+        layout.addLayout(header)
+
+        if entry.progress_value is not None:
+            progress = QProgressBar()
+            progress.setRange(0, 100)
+            progress.setValue(entry.progress_value)
+            progress.setObjectName("LogEntryProgress")
+            layout.addWidget(progress)
+
+        return card
+
+    def _remove_entry(self, entry_id: int):
+        entry = next((item for item in self._entries if item.entry_id == entry_id), None)
+        if entry is None:
+            return
+        if entry.progress_key is not None:
+            self._entry_by_progress_key.pop(entry.progress_key, None)
+        self._entries = [item for item in self._entries if item.entry_id != entry_id]
+        self._refresh_entries()
+
+    def _find_progress_entry(self, key: str) -> _LogEntry | None:
+        normalized_key = (key or "").strip()
+        entry_id = self._entry_by_progress_key.get(normalized_key)
+        if entry_id is None:
+            return None
+        return next((entry for entry in self._entries if entry.entry_id == entry_id), None)
+
+    def _new_entry_id(self) -> int:
+        value = self._next_entry_id
+        self._next_entry_id += 1
+        return value
+
+    def _normalize_status(self, status: str) -> str:
+        normalized = (status or "").strip().lower()
+        if normalized in self._STATUS_COLORS:
+            return normalized
+        return "info"
