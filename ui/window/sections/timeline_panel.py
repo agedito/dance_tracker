@@ -35,7 +35,7 @@ class TimelinePanel(QFrame):
         header.setObjectName("PanelHeader")
         hl = QHBoxLayout(header)
         hl.setContentsMargins(10, 8, 10, 8)
-        hl.addWidget(QLabel("MASTER TIMELINE"))
+        hl.addWidget(QLabel("Main timeline"))
         hl.addStretch(1)
         hl.addWidget(self.time_info)
         root.addWidget(header)
@@ -53,7 +53,8 @@ class TimelinePanel(QFrame):
         self.track_widgets.append(track)
 
         lay.addWidget(track)
-        root.addWidget(content, 1)
+        lay.addStretch(1)
+        root.addWidget(content, 1, 0)
 
     def set_frame(self, frame: int):
         for track in self.track_widgets:

@@ -17,7 +17,7 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
-        self.setFixedHeight(28)
+        self.setFixedHeight(20)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
     def _frame_from_pos(self, x: float) -> int:
@@ -80,8 +80,8 @@ class TimelineTrack(QWidget):
         p.end()
 
     def _draw_loaded_indicator(self, painter: QPainter, w: int, h: int):
-        bar_h = max(6, h - 6)
-        y = (h - bar_h) / 2
+        bar_h = 3
+        y = h - bar_h - 1
         painter.setPen(Qt.PenStyle.NoPen)
 
         if w <= 1:
