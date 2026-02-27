@@ -25,9 +25,12 @@ class FrameStore(QObject):
 
         self._full_images: list[QImage | None] = []
         self._loaded_flags: list[bool] = []
+
         self._preload_stop = threading.Event()
         self._preload_thread: threading.Thread | None = None
         self._preload_generation = 0
+        self._preload_priority = 0
+        self._lock = threading.Lock()
 
     @property
     def total_frames(self) -> int:
@@ -39,10 +42,14 @@ class FrameStore(QObject):
 
     @property
     def loaded_flags(self) -> list[bool]:
-        return list(self._loaded_flags)
+        with self._lock:
+            return list(self._loaded_flags)
+
+    def shutdown(self):
+        self._stop_preload_thread(wait=True)
 
     def load_folder(self, folder_path: str) -> int:
-        self._stop_preload_thread()
+        self._stop_preload_thread(wait=True)
 
         folder = Path(folder_path)
         if not folder.exists() or not folder.is_dir():
@@ -51,8 +58,10 @@ class FrameStore(QObject):
             self._cache.clear()
             self._base_sizes.clear()
             self._proxy_cache_loaded = False
-            self._full_images = []
-            self._loaded_flags = []
+            with self._lock:
+                self._full_images = []
+                self._loaded_flags = []
+                self._preload_priority = 0
             return 0
 
         files = [
@@ -65,12 +74,22 @@ class FrameStore(QObject):
         self._cache.clear()
         self._base_sizes.clear()
         self._proxy_cache_loaded = False
-        self._full_images = [None] * len(files)
-        self._loaded_flags = [False] * len(files)
+
+        with self._lock:
+            self._full_images = [None] * len(files)
+            self._loaded_flags = [False] * len(files)
+            self._preload_priority = 0
 
         self._preload_proxy_cache()
         self._start_full_preload_thread()
         return len(files)
+
+    def request_preload_priority(self, frame_idx: int):
+        if not self._frame_files:
+            return
+        target = max(0, min(frame_idx, len(self._frame_files) - 1))
+        with self._lock:
+            self._preload_priority = target
 
     def _find_proxy_files(self, folder: Path, expected_count: int) -> list[Path]:
         proxy_dir = folder.parent / "frames_mino"
@@ -107,30 +126,57 @@ class FrameStore(QObject):
         generation = self._preload_generation
 
         def preload_worker():
-            for idx, path in enumerate(self._frame_files):
+            pending = set(range(len(self._frame_files)))
+            while pending:
                 if self._preload_stop.is_set() or generation != self._preload_generation:
                     return
 
-                image = QImage(str(path))
+                with self._lock:
+                    priority = self._preload_priority
+
+                idx = min(pending, key=lambda i: abs(i - priority))
+                pending.remove(idx)
+
+                image = QImage(str(self._frame_files[idx]))
+                if self._preload_stop.is_set() or generation != self._preload_generation:
+                    return
+
                 if image.isNull():
-                    self.frame_preloaded.emit(idx, False)
+                    self._safe_emit_frame_preloaded(idx, False)
                     continue
 
-                self._full_images[idx] = image
+                with self._lock:
+                    if idx >= len(self._full_images):
+                        return
+                    self._full_images[idx] = image
+                    if idx < len(self._loaded_flags):
+                        self._loaded_flags[idx] = True
+
                 self._base_sizes[idx] = (image.width(), image.height())
-                self._loaded_flags[idx] = True
-                self.frame_preloaded.emit(idx, True)
+                self._safe_emit_frame_preloaded(idx, True)
 
             if not self._preload_stop.is_set() and generation == self._preload_generation:
-                self.preload_finished.emit()
+                try:
+                    self.preload_finished.emit()
+                except RuntimeError:
+                    return
 
         self._preload_thread = threading.Thread(target=preload_worker, daemon=True)
         self._preload_thread.start()
 
-    def _stop_preload_thread(self):
+    def _safe_emit_frame_preloaded(self, idx: int, loaded: bool):
+        try:
+            self.frame_preloaded.emit(idx, loaded)
+        except RuntimeError:
+            return
+
+    def _stop_preload_thread(self, wait: bool = False):
         self._preload_stop.set()
         self._preload_generation += 1
+        thread = self._preload_thread
         self._preload_thread = None
+        if wait and thread and thread.is_alive():
+            thread.join(timeout=0.5)
 
     @staticmethod
     def _natural_sort_key(path: Path):
@@ -147,8 +193,13 @@ class FrameStore(QObject):
 
         pix = self._cache.get(cache_key)
         if pix is None:
-            if not is_proxy and self._full_images[frame_idx] is not None:
-                pix = QPixmap.fromImage(self._full_images[frame_idx])
+            with self._lock:
+                full_image = None
+                if not is_proxy and frame_idx < len(self._full_images):
+                    full_image = self._full_images[frame_idx]
+
+            if full_image is not None:
+                pix = QPixmap.fromImage(full_image)
             else:
                 pix = QPixmap(str(source_files[frame_idx]))
 
@@ -171,8 +222,10 @@ class FrameStore(QObject):
         if frame_idx < 0 or frame_idx >= len(self._frame_files):
             return None
 
-        if self._full_images[frame_idx] is not None:
-            image = self._full_images[frame_idx]
+        with self._lock:
+            image = self._full_images[frame_idx] if frame_idx < len(self._full_images) else None
+
+        if image is not None:
             self._base_sizes[frame_idx] = (image.width(), image.height())
             return self._base_sizes[frame_idx]
 
@@ -187,7 +240,9 @@ class FrameStore(QObject):
         if frame_idx in self._base_sizes or frame_idx < 0 or frame_idx >= len(self._frame_files):
             return
 
-        image = self._full_images[frame_idx]
+        with self._lock:
+            image = self._full_images[frame_idx] if frame_idx < len(self._full_images) else None
+
         if image is not None:
             self._base_sizes[frame_idx] = (image.width(), image.height())
             return
@@ -213,8 +268,11 @@ class FrameStore(QObject):
             if key in self._cache:
                 continue
 
-            if not source_key and self._full_images[idx] is not None:
-                pix = QPixmap.fromImage(self._full_images[idx])
+            with self._lock:
+                image = self._full_images[idx] if (not source_key and idx < len(self._full_images)) else None
+
+            if image is not None:
+                pix = QPixmap.fromImage(image)
             else:
                 pix = QPixmap(str(source_files[idx]))
 

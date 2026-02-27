@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
     def set_frame(self, frame: int):
         self.state.set_frame(frame)
         cur = self.state.cur_frame
+        self._frame_store.request_preload_priority(cur)
 
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
@@ -187,6 +188,7 @@ class MainWindow(QMainWindow):
     def _set_frame_lightweight(self, frame: int):
         self.state.set_frame(frame)
         cur = self.state.cur_frame
+        self._frame_store.request_preload_priority(cur)
         self._viewer_panel.viewer.set_frame(cur)
         self._viewer_panel.update_frame_label(cur)
         self._timeline.set_frame(cur)
@@ -261,6 +263,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         self._folder_session.remember_current_frame(self.state.cur_frame)
         self._save_splitters()
+        self._frame_store.shutdown()
         super().closeEvent(event)
 
     def _close(self):
