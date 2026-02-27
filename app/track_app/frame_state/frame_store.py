@@ -1,5 +1,6 @@
 import re
 import threading
+import json
 from collections import OrderedDict
 from pathlib import Path
 
@@ -100,7 +101,11 @@ class FrameStore(QObject):
             self._preload_priority = target
 
     def _find_proxy_files(self, folder: Path, expected_count: int) -> list[Path]:
-        proxy_dir = folder.parent / "frames_mino"
+        proxy_dir = self._proxy_dir_from_metadata(folder)
+        if proxy_dir is None:
+            proxy_dir = folder.parent / "low_frames"
+        if proxy_dir is None or not proxy_dir.exists() or not proxy_dir.is_dir():
+            proxy_dir = folder.parent / "frames_mino"
         if not proxy_dir.exists() or not proxy_dir.is_dir():
             return []
 
@@ -112,6 +117,36 @@ class FrameStore(QObject):
         if len(proxy_files) != expected_count:
             return []
         return proxy_files
+
+    def _proxy_dir_from_metadata(self, folder: Path) -> Path | None:
+        for metadata_file in folder.parent.glob("*.json"):
+            try:
+                payload = json.loads(metadata_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            frames_value = payload.get("frames") or payload.get("frames_path")
+            low_frames_value = payload.get("low_frames")
+            if not isinstance(frames_value, str) or not isinstance(low_frames_value, str):
+                continue
+
+            resolved_frames = self._resolve_metadata_path(frames_value, metadata_file.parent)
+            if resolved_frames != folder.resolve():
+                continue
+
+            return self._resolve_metadata_path(low_frames_value, metadata_file.parent)
+
+        return None
+
+    @staticmethod
+    def _resolve_metadata_path(value: str, root: Path) -> Path:
+        candidate = Path(value).expanduser()
+        if candidate.is_absolute():
+            return candidate
+        return (root / candidate).resolve()
 
     def _preload_proxy_cache(self):
         if not self._proxy_files or self._proxy_cache_loaded:

@@ -34,14 +34,14 @@ class VideoManager:
             return None
 
         frames_dir = source.parent / "frames"
-        frames_mino_dir = source.parent / "frames_mino"
+        low_frames_dir = source.parent / "low_frames"
         if frames_dir.exists():
             return str(frames_dir)
 
         frames_dir.mkdir(parents=True, exist_ok=True)
-        frames_mino_dir.mkdir(parents=True, exist_ok=True)
+        low_frames_dir.mkdir(parents=True, exist_ok=True)
 
-        for output_dir in (frames_dir, frames_mino_dir):
+        for output_dir in (frames_dir, low_frames_dir):
             for item in output_dir.iterdir():
                 if item.is_file() and item.suffix.lower() in VALID_SUFFIXES:
                     item.unlink()
@@ -74,7 +74,7 @@ class VideoManager:
             scaled_w = max(1, int(round(w * scale)))
             scaled_h = max(1, int(round(h * scale)))
             resized = cv2.resize(frame, (scaled_w, scaled_h), interpolation=cv2.INTER_AREA)
-            cv2.imwrite(str(frames_mino_dir / out_name), resized)
+            cv2.imwrite(str(low_frames_dir / out_name), resized)
 
             frame_idx += 1
             if on_progress is not None and total_frames > 0:
@@ -84,7 +84,7 @@ class VideoManager:
 
         if canceled:
             shutil.rmtree(frames_dir, ignore_errors=True)
-            shutil.rmtree(frames_mino_dir, ignore_errors=True)
+            shutil.rmtree(low_frames_dir, ignore_errors=True)
             return None
 
         if frame_idx == 0:
@@ -114,7 +114,11 @@ class VideoManager:
 
         metadata_path = cls.metadata_path_for_video(video_path)
         frames_dir = Path(frames_path).resolve()
-        low_frames_dir = frames_dir.with_name("frames_mino")
+        low_frames_dir = frames_dir.with_name("low_frames")
+        if not low_frames_dir.is_dir():
+            legacy_low_frames_dir = frames_dir.with_name("frames_mino")
+            if legacy_low_frames_dir.is_dir():
+                low_frames_dir = legacy_low_frames_dir
         video_info = cls._read_video_info(source)
 
         payload = {
