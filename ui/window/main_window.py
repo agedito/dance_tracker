@@ -79,11 +79,7 @@ class MainWindow(QMainWindow):
         self._layout = MainWindowLayout(self, cfg.get_css())
         self._build_ui()
         self._app.sequences.refresh()
-        last_folder = self._app.sequences.last_opened_folder()
-        if last_folder:
-            self._app.sequences.load(last_folder)
-        else:
-            self.set_frame(0)
+        self.set_frame(0)
 
     # ── UI construction ──────────────────────────────────────────────
 

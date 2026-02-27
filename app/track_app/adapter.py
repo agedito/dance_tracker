@@ -140,7 +140,7 @@ class SequencesAdapter:
         self._media = media
         self._events = events
         self._max_recent_folders = max_recent_folders
-        self._active_folder: str | None = self.last_opened_folder()
+        self._active_folder: str | None = None
         self._events.on(Event.FramesLoaded, self._on_frames_loaded)
 
     def refresh(self) -> None:
