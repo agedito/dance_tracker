@@ -168,8 +168,30 @@ class SequencesTabWidget(QWidget):
 
     def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
         menu = QMenu(self)
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #1A1F23;
+                border: 1px solid #2B343B;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #3A3F45;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #4B525A;
+                margin: 6px 4px;
+            }
+            """
+        )
         open_folder_action = menu.addAction("Open Folder")
         remove_action = menu.addAction("Remove")
+        menu.addSeparator()
         delete_video_and_frames_action = menu.addAction("Delete Video and Frames")
 
         selected_action = menu.exec(origin.mapToGlobal(pos))
