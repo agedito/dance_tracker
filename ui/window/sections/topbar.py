@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QSize, Qt
@@ -19,6 +20,7 @@ class TopBar(QWidget):
         super().__init__()
         self._prefs = preferences
         self._on_folder_clicked = on_folder_clicked
+        self._active_folder: str | None = None
 
         self.setObjectName("TopBar")
         layout = QHBoxLayout(self)
@@ -65,6 +67,9 @@ class TopBar(QWidget):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setObjectName("RecentFolderIcon")
             btn.setToolTip(folder)
+            normalized = str(Path(folder).expanduser())
+            is_active = normalized == self._active_folder
+            btn.setProperty("isActive", is_active)
 
             thumbnail = self._prefs.thumbnail_for_folder(folder)
             if thumbnail:
@@ -79,6 +84,10 @@ class TopBar(QWidget):
                 lambda pos, p=folder, b=btn: self._show_context_menu(p, b.mapToGlobal(pos))
             )
             self._folders_layout.addWidget(btn)
+
+    def set_active_folder(self, folder_path: str | None):
+        self._active_folder = str(Path(folder_path).expanduser()) if folder_path else None
+        self.refresh_icons()
 
     def _show_context_menu(self, folder_path: str, global_pos):
         menu = QMenu(self)

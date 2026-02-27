@@ -100,6 +100,10 @@ QPushButton#RecentFolderIcon {
     font-size: 14px;
 }
 
+
+QPushButton#RecentFolderIcon[isActive="true"] {
+    border: 2px solid #35C76F;
+}
 QPushButton#TopCloseButton {
     min-width: 28px;
     max-width: 28px;

@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
             preferences=self._prefs,
             frame_store=self._frame_store,
             on_frames_loaded=self._on_frames_loaded,
-            on_icons_changed=lambda: self._topbar.refresh_icons(),
+            on_icons_changed=self._on_recent_sources_changed,
         )
 
         # ── Window setup ─────────────────────────────────────────────
@@ -83,10 +83,20 @@ class MainWindow(QMainWindow):
     def on_frames_loaded(self, path: str) -> None:
         self._folder_session.load_folder(path)
 
+    def _on_recent_sources_changed(self):
+        if hasattr(self, "_topbar"):
+            self._topbar.refresh_icons()
+        if hasattr(self, "_right_panel"):
+            self._right_panel.refresh_sequences()
+
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
 
-        self._topbar = TopBar(preferences=self._prefs, on_folder_clicked=self._folder_session.load_folder, on_close=self._close)
+        self._topbar = TopBar(
+            preferences=self._prefs,
+            on_folder_clicked=self._open_recent_folder,
+            on_close=self._close,
+        )
         self._layout.set_topbar(self._topbar)
 
         self._viewer_panel = ViewerPanel(
@@ -100,7 +110,10 @@ class MainWindow(QMainWindow):
         )
         self._viewer_panel.viewer.folderLoaded.connect(self._on_folder_dropped)
 
-        self._right_panel = RightPanel()
+        self._right_panel = RightPanel(
+            preferences=self._prefs,
+            on_media_selected=self._app.media.load,
+        )
 
         self._timeline = TimelinePanel(
             total_frames=self.state.total_frames,
@@ -272,6 +285,8 @@ class MainWindow(QMainWindow):
         self._loaded_count = min(total_frames, len(self._loaded_frames))
         self._active_preload_generation = self._frame_store.preload_generation
         self._preload_done = self._loaded_count >= total_frames
+        self._topbar.set_active_folder(self._folder_session.current_folder_path)
+        self._right_panel.refresh_sequences()
         self.set_frame(initial_frame)
 
     def _on_folder_dropped(self, folder_path: str, total_frames: int):
@@ -282,6 +297,12 @@ class MainWindow(QMainWindow):
                 str(Path(folder_path).expanduser())
             ),
         )
+
+    def _open_recent_folder(self, folder_path: str):
+        normalized = str(Path(folder_path).expanduser())
+        if normalized == self._folder_session.current_folder_path:
+            return
+        self._folder_session.load_folder(folder_path)
 
     # ── Lifecycle ────────────────────────────────────────────────────
 

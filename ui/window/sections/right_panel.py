@@ -1,16 +1,33 @@
 import math
+from pathlib import Path
+from typing import Callable
 
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.thumbnail import ThumbnailWidget
+from ui.window.sections.preferences_manager import PreferencesManager
 
 
 class RightPanel(QFrame):
     """Single responsibility: display right-side tools grouped in tabs."""
 
-    def __init__(self):
+    def __init__(self, preferences: PreferencesManager, on_media_selected: Callable[[str], None]):
         super().__init__()
+        self._prefs = preferences
+        self._on_media_selected = on_media_selected
         self.setObjectName("Panel")
 
         v = QVBoxLayout(self)
@@ -23,11 +40,15 @@ class RightPanel(QFrame):
         self.pose_3d_viewer = Pose3DViewerWidget()
         tabs.addTab(self.pose_3d_viewer, "Visor 3D")
         tabs.addTab(self._build_music_tab(), "Music")
+        tabs.addTab(self._build_sequences_tab(), "Sequences")
         v.addWidget(tabs, 1)
 
     def update_pose(self, frame: int):
         detections = self._mock_yolo_pose_detections(frame)
         self.pose_3d_viewer.set_detections(detections)
+
+    def refresh_sequences(self):
+        self._rebuild_sequences_grid()
 
     # ── Private helpers ──────────────────────────────────────────────
 
@@ -70,6 +91,71 @@ class RightPanel(QFrame):
         layout.addWidget(self._section_label("Music"))
         layout.addStretch(1)
         return tab
+
+    def _build_sequences_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+
+        load_btn = QPushButton("Cargar video")
+        load_btn.clicked.connect(self._pick_video)
+        layout.addWidget(load_btn)
+
+        self._seq_scroll = QScrollArea()
+        self._seq_scroll.setObjectName("ScrollArea")
+        self._seq_scroll.setWidgetResizable(True)
+        self._seq_container = QWidget()
+        self._seq_grid = QGridLayout(self._seq_container)
+        self._seq_grid.setSpacing(10)
+        self._seq_grid.setContentsMargins(0, 0, 0, 0)
+        self._seq_scroll.setWidget(self._seq_container)
+        layout.addWidget(self._seq_scroll, 1)
+
+        self._rebuild_sequences_grid()
+        return tab
+
+    def _pick_video(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecciona un video",
+            "",
+            "Videos (*.mp4 *.mov *.avi *.mkv *.webm *.m4v);;Todos (*.*)",
+        )
+        if file_path:
+            self._on_media_selected(file_path)
+
+    def _rebuild_sequences_grid(self):
+        while self._seq_grid.count():
+            item = self._seq_grid.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+        folders = list(reversed(self._prefs.recent_folders()))
+        for idx, folder in enumerate(folders):
+            button = self._sequence_button(folder)
+            row, col = divmod(idx, 2)
+            self._seq_grid.addWidget(button, row, col)
+
+        if not folders:
+            empty = QLabel("Aún no hay secuencias recientes.")
+            empty.setObjectName("Muted")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._seq_grid.addWidget(empty, 0, 0, 1, 2)
+
+    def _sequence_button(self, folder_path: str) -> QPushButton:
+        p = Path(folder_path).expanduser()
+        button = QPushButton(p.name)
+        button.setToolTip(folder_path)
+        button.setFixedSize(QSize(140, 100))
+        button.clicked.connect(lambda _=False, path=folder_path: self._on_media_selected(path))
+
+        thumbnail = self._prefs.thumbnail_for_folder(folder_path)
+        if thumbnail:
+            button.setIcon(QIcon(thumbnail))
+            button.setIconSize(QSize(128, 72))
+        return button
 
     @staticmethod
     def _thumb(label: str, seed: int) -> QFrame:
