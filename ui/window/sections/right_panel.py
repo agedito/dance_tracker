@@ -1,36 +1,19 @@
 import math
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QFrame,
-    QSplitter,
-    QWidget,
-    QTabWidget,
-    QVBoxLayout,
-)
+from PySide6.QtWidgets import QFrame, QSplitter, QWidget, QTabWidget, QVBoxLayout
 
 from app.interface.music import SongMetadata
-from app.interface.media import MediaPort
-from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
 from ui.widgets.log_widget import LogWidget
-from ui.widgets.right_panel_tabs import (
-    EmbedingsTabWidget,
-    LayerViewersTabWidget,
-    MusicTabWidget,
-    SequencesTabWidget,
-)
+from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
+from ui.widgets.right_panel_tabs import EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
 class RightPanel(QFrame):
     """Single responsibility: display right-side tools grouped in tabs."""
 
-    def __init__(
-            self,
-            preferences: PreferencesManager,
-            media_manager: MediaPort,
-            on_sequence_removed=None,
-    ):
+    def __init__(self, preferences: PreferencesManager, app, event_bus):
         super().__init__()
         self._preferences = preferences
         self.setObjectName("Panel")
@@ -43,11 +26,7 @@ class RightPanel(QFrame):
         tabs.setMovable(True)
         self.pose_3d_viewer = Pose3DViewerWidget()
         self.music_tab = MusicTabWidget()
-        self.sequences_tab = SequencesTabWidget(
-            preferences,
-            media_manager,
-            on_sequence_removed=on_sequence_removed,
-        )
+        self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
 
         self._tabs = tabs
         self._tab_widgets_by_id: dict[str, QWidget] = {
@@ -110,12 +89,6 @@ class RightPanel(QFrame):
     def update_pose(self, frame: int):
         detections = self._mock_yolo_pose_detections(frame)
         self.pose_3d_viewer.set_detections(detections)
-
-    def refresh_sequences(self):
-        self.sequences_tab.refresh()
-
-    def set_active_sequence(self, folder_path: str | None):
-        self.sequences_tab.set_active_folder(folder_path)
 
     def update_song_info(self, song: SongMetadata):
         self.music_tab.update_song_info(song)

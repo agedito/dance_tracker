@@ -1,52 +1,27 @@
 from pathlib import Path
-from typing import Callable
-import shutil
 
 from PySide6.QtCore import QPoint, QEvent, QSize, Qt, QUrl, QMimeData, Signal
-from PySide6.QtGui import (
-    QDesktopServices,
-    QDrag,
-    QDragEnterEvent,
-    QDropEvent,
-    QIcon,
-    QMouseEvent,
-)
-from PySide6.QtWidgets import (
-    QGridLayout,
-    QLabel,
-    QMenu,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtGui import QDesktopServices, QDrag, QDragEnterEvent, QDropEvent, QIcon, QMouseEvent
+from PySide6.QtWidgets import QGridLayout, QLabel, QMenu, QPushButton, QVBoxLayout, QWidget
 
-from app.interface.media import MediaPort
-from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
+from app.interface.event_bus import Event, EventBus
+from app.interface.sequences import SequencePort, SequenceState
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.right_panel_tabs.drag_scroll_area import DragScrollArea
-from ui.window.sections.preferences_manager import PreferencesManager
 
 
 class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
     _SEQUENCE_MIME_TYPE = "application/x-dance-tracker-sequence"
 
-    def __init__(
-            self,
-            preferences: PreferencesManager,
-            media_manager: MediaPort,
-            on_sequence_removed: Callable[[str], None] | None = None,
-    ):
+    def __init__(self, media_manager, sequences: SequencePort, event_bus: EventBus):
         super().__init__()
-        self._prefs = preferences
-        self._media_manager = media_manager
-        self._on_sequence_removed = on_sequence_removed
+        self._sequences = sequences
         self._drop_handler = DropHandler(media_manager, parent=self)
-        self._selected_path: str | None = None
-        self._active_folder: str | None = None
-        self._folders: list[str] = []
+        self._state = SequenceState(items=[], active_folder=None)
 
         self.setAcceptDrops(True)
+        event_bus.on(Event.SequencesChanged, self._on_sequences_changed)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -64,7 +39,7 @@ class SequencesTabWidget(QWidget):
         self._scroll.setWidget(container)
         layout.addWidget(self._scroll, 1)
 
-        self.refresh()
+        self._sequences.refresh()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         if event.mimeData().hasFormat(self._SEQUENCE_MIME_TYPE):
@@ -86,22 +61,14 @@ class SequencesTabWidget(QWidget):
         else:
             event.ignore()
 
-    def refresh(self):
-        self._folders = self._prefs.recent_folders()
-        if self._selected_path not in self._folders:
-            self._selected_path = None
-        if self._active_folder not in self._folders:
-            self._active_folder = self._prefs.last_opened_folder()
-        self._rebuild_grid()
-
-    def set_active_folder(self, folder_path: str | None):
-        self._active_folder = folder_path
-        self._rebuild_grid()
-
     def eventFilter(self, watched: QWidget, event: QEvent) -> bool:
         if watched is self._scroll.viewport() and event.type() == QEvent.Type.Resize:
             self._rebuild_grid()
         return super().eventFilter(watched, event)
+
+    def _on_sequences_changed(self, state: SequenceState) -> None:
+        self._state = state
+        self._rebuild_grid()
 
     def _rebuild_grid(self):
         while self._grid.count():
@@ -110,7 +77,7 @@ class SequencesTabWidget(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
-        if not self._folders:
+        if not self._state.items:
             empty = QLabel("There are no recent sequences yet.")
             empty.setObjectName("Muted")
             empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -121,50 +88,32 @@ class SequencesTabWidget(QWidget):
         cell_width = self._THUMBNAIL_SIZE.width() + self._grid.horizontalSpacing()
         columns = max(1, available_width // cell_width)
 
-        for idx, folder in enumerate(self._folders):
+        for idx, item in enumerate(self._state.items):
             row, col = divmod(idx, columns)
-            self._grid.addWidget(self._sequence_button(folder), row, col)
+            self._grid.addWidget(self._sequence_button(item.folder_path, item.thumbnail_path), row, col)
 
-    def _sequence_button(self, folder_path: str) -> QPushButton:
+    def _sequence_button(self, folder_path: str, thumbnail_path: str | None) -> QPushButton:
         button = _SequenceThumbnailButton(
             folder_path=folder_path,
             size=self._THUMBNAIL_SIZE,
             sequence_mime_type=self._SEQUENCE_MIME_TYPE,
         )
-        button.folderDropped.connect(self._move_folder_relative)
+        button.folderDropped.connect(self._sequences.move)
         button.setObjectName("SequenceThumbnail")
-        is_selected = folder_path == self._selected_path or folder_path == self._active_folder
-        button.setProperty("isSelected", is_selected)
+        button.setProperty("isSelected", folder_path == self._state.active_folder)
         button.style().unpolish(button)
         button.style().polish(button)
         button.setToolTip(folder_path)
-        button.clicked.connect(lambda _=False, selected_path=folder_path: self._select_and_load(selected_path))
+        button.clicked.connect(lambda _=False, selected_path=folder_path: self._sequences.load(selected_path))
         button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         button.customContextMenuRequested.connect(
             lambda pos, origin=button, selected_path=folder_path: self._show_sequence_menu(origin, selected_path, pos)
         )
 
-        thumbnail = self._prefs.thumbnail_for_folder(folder_path)
-        if thumbnail:
-            button.setIcon(QIcon(thumbnail))
+        if thumbnail_path:
+            button.setIcon(QIcon(thumbnail_path))
             button.setIconSize(QSize(146, 82))
         return button
-
-    def _move_folder_relative(self, dragged_folder: str, target_folder: str, drop_after: bool):
-        if dragged_folder == target_folder:
-            return
-        if dragged_folder not in self._folders or target_folder not in self._folders:
-            return
-
-        updated = [folder for folder in self._folders if folder != dragged_folder]
-        target_idx = updated.index(target_folder)
-        if drop_after:
-            target_idx += 1
-        updated.insert(target_idx, dragged_folder)
-
-        self._folders = updated
-        self._prefs.save_recent_folders_order(updated)
-        self._rebuild_grid()
 
     def _show_sequence_menu(self, origin: QWidget, folder_path: str, pos: QPoint):
         menu = QMenu(self)
@@ -199,65 +148,16 @@ class SequencesTabWidget(QWidget):
             self._open_folder(folder_path)
             return
         if selected_action is remove_action:
-            self._remove_sequence(folder_path)
+            self._sequences.remove(folder_path)
             return
         if selected_action is delete_video_and_frames_action:
-            self._delete_video_and_frames(folder_path)
+            self._sequences.delete_video_and_frames(folder_path)
 
-    def _open_folder(self, folder_path: str):
+    @staticmethod
+    def _open_folder(folder_path: str):
         folder = Path(folder_path).expanduser()
         target = folder if folder.exists() else folder.parent
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
-
-    def _delete_video_and_frames(self, folder_path: str):
-        folder = Path(folder_path).expanduser()
-        video_file = self._find_video_for_frames(folder)
-
-        if folder.is_dir():
-            shutil.rmtree(folder, ignore_errors=True)
-
-        if folder.name == "frames":
-            low_frames = folder.parent / "low_frames"
-            if low_frames.is_dir():
-                shutil.rmtree(low_frames, ignore_errors=True)
-
-            legacy_low_frames = folder.parent / "frames_mino"
-            if legacy_low_frames.is_dir():
-                shutil.rmtree(legacy_low_frames, ignore_errors=True)
-
-        if video_file and video_file.exists():
-            video_file.unlink(missing_ok=True)
-
-        self._remove_sequence(folder_path)
-
-    @staticmethod
-    def _find_video_for_frames(folder: Path) -> Path | None:
-        parent = folder.parent
-        if not parent.is_dir():
-            return None
-
-        videos = [
-            file
-            for file in sorted(parent.iterdir())
-            if file.is_file() and file.suffix.lower() in VIDEO_SUFFIXES
-        ]
-        return videos[0] if videos else None
-
-    def _remove_sequence(self, folder_path: str):
-        self._prefs.remove_recent_folder(folder_path)
-        if self._selected_path == folder_path:
-            self._selected_path = None
-        if self._active_folder == folder_path:
-            self._active_folder = None
-        if self._on_sequence_removed:
-            self._on_sequence_removed(folder_path)
-        self.refresh()
-
-    def _select_and_load(self, folder_path: str):
-        self._selected_path = folder_path
-        self._active_folder = folder_path
-        self._media_manager.load(folder_path)
-        self._rebuild_grid()
 
 
 class _SequenceThumbnailButton(QPushButton):

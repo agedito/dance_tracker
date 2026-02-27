@@ -16,7 +16,7 @@ class GraphicApp:
 
     def launch(self, cfg: Config, bus: EventBus):
         qt_app = QApplication(sys.argv)
-        wnd = MainWindow(cfg, self._old_app, self._app)
+        wnd = MainWindow(cfg, self._old_app, self._app, bus)
         bus.connect(wnd)
 
         sys.exit(qt_app.exec())

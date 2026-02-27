@@ -1,10 +1,12 @@
 from typing import Protocol
 
 from app.interface.media import MediaPort
+from app.interface.sequences import SequencePort
 
 
 class DanceTrackerPort(Protocol):
     media: MediaPort
+    sequences: SequencePort
 
 # class PlaybackPort(Protocol):
 #     def play(self) -> None: ...

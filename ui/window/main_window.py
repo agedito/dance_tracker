@@ -19,7 +19,9 @@ from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QMainWindow
 
 from app.interface.application import DanceTrackerPort
+from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
+from app.interface.sequences import SequenceState
 from app.track_app.frame_state.frame_store import FrameStore
 from app.track_app.main_app import DanceTrackerApp
 from ui.config import Config
@@ -35,11 +37,12 @@ from ui.window.sections.viewer_panel import ViewerPanel
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, cfg: Config, old_app: DanceTrackerApp, app: DanceTrackerPort):
+    def __init__(self, cfg: Config, old_app: DanceTrackerApp, app: DanceTrackerPort, events: EventBus):
         super().__init__()
         self.cfg = cfg
         self.state = old_app.states_manager
         self._app = app
+        self._events = events
 
         # ── Collaborators ────────────────────────────────────────────
         self._prefs = PreferencesManager(cfg.max_recent_folders)
@@ -68,7 +71,6 @@ class MainWindow(QMainWindow):
             preferences=self._prefs,
             frame_store=self._frame_store,
             on_frames_loaded=self._on_frames_loaded,
-            on_icons_changed=self._on_recent_sources_changed,
         )
 
         # ── Window setup ─────────────────────────────────────────────
@@ -77,7 +79,12 @@ class MainWindow(QMainWindow):
 
         self._layout = MainWindowLayout(self, cfg.get_css())
         self._build_ui()
-        self._folder_session.restore_last_session() or self.set_frame(0)
+        self._app.sequences.refresh()
+        last_folder = self._app.sequences.last_opened_folder()
+        if last_folder:
+            self._app.sequences.load(last_folder)
+        else:
+            self.set_frame(0)
 
     # ── UI construction ──────────────────────────────────────────────
 
@@ -87,14 +94,19 @@ class MainWindow(QMainWindow):
     def on_song_identified(self, song: SongMetadata) -> None:
         self._right_panel.update_song_info(song)
 
+
+    def on_sequences_changed(self, state: SequenceState) -> None:
+        self._topbar.set_active_folder(state.active_folder)
+        current = self._folder_session.current_folder_path
+        if not current:
+            return
+
+        has_current = any(item.folder_path == current for item in state.items)
+        if not has_current:
+            self._clear_loaded_sequence()
+
     def _log_message(self, message: str) -> None:
         self._right_panel.logger_widget.log(message)
-
-    def _on_recent_sources_changed(self):
-        if hasattr(self, "_topbar"):
-            self._topbar.refresh_icons()
-        if hasattr(self, "_right_panel"):
-            self._right_panel.refresh_sequences()
 
     def _build_ui(self):
         self.setCentralWidget(self._layout.root)
@@ -117,8 +129,8 @@ class MainWindow(QMainWindow):
 
         self._right_panel = RightPanel(
             preferences=self._prefs,
-            media_manager=self._app.media,
-            on_sequence_removed=self._on_sequence_removed,
+            app=self._app,
+            event_bus=self._events,
         )
 
         self._timeline = TimelinePanel(
@@ -315,9 +327,6 @@ class MainWindow(QMainWindow):
         self._loaded_count = min(total_frames, len(self._loaded_frames))
         self._active_preload_generation = self._frame_store.preload_generation
         self._preload_done = self._loaded_count >= total_frames
-        self._topbar.set_active_folder(self._folder_session.current_folder_path)
-        self._right_panel.refresh_sequences()
-        self._right_panel.set_active_sequence(self._folder_session.current_folder_path)
         source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"
         self._log_message(f"Loaded media: {source_name}.")
         self.set_frame(initial_frame)
@@ -331,17 +340,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
-    def _open_recent_folder(self, folder_path: str):
-        normalized = str(Path(folder_path).expanduser())
-        if normalized == self._folder_session.current_folder_path:
-            return
-        self._folder_session.load_folder(folder_path)
-
-    def _on_sequence_removed(self, folder_path: str):
-        normalized = str(Path(folder_path).expanduser())
-        if normalized != self._folder_session.current_folder_path:
-            return
-
+    def _clear_loaded_sequence(self):
         self._playback.pause()
         self._viewer_panel.viewer.set_proxy_frames_enabled(False)
         self._folder_session.current_folder_path = None
@@ -354,7 +353,6 @@ class MainWindow(QMainWindow):
         self._loaded_count = 0
         self._preload_done = False
         self._topbar.set_active_folder(None)
-        self._right_panel.set_active_sequence(None)
         self.set_frame(0)
 
     # ── Lifecycle ────────────────────────────────────────────────────
