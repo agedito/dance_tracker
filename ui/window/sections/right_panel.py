@@ -80,6 +80,7 @@ class RightPanel(QFrame):
         self.pose_3d_viewer = Pose3DViewerWidget()
         tabs.addTab(self.pose_3d_viewer, "Visor 3D")
         tabs.addTab(self._build_music_tab(), "Music")
+        tabs.addTab(self._build_embedings_tab(), "Embedings")
         tabs.addTab(self._build_sequences_tab(), "Sequences")
         v.addWidget(tabs, 1)
 
@@ -129,6 +130,19 @@ class RightPanel(QFrame):
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._section_label("Music"))
+        layout.addStretch(1)
+        return tab
+
+    def _build_embedings_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._section_label("Embedings"))
+
+        info = QLabel("Sección reservada para futuras visualizaciones de embeddings.")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
         layout.addStretch(1)
         return tab
 
