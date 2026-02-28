@@ -20,6 +20,7 @@ class TimelineTrack(QWidget):
     bookmarkMoved = Signal(int, int)
     bookmarkRemoved = Signal(int)
     bookmarkNameChanged = Signal(int, str)
+    bookmarkLockChanged = Signal(int, bool)
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -68,6 +69,12 @@ class TimelineTrack(QWidget):
                 return bookmark.name
         return ""
 
+    def _is_bookmark_locked(self, frame: int) -> bool:
+        for bookmark in self.bookmarks:
+            if bookmark.frame == frame:
+                return bookmark.locked
+        return False
+
     def _bookmark_label_rect(self, frame: int) -> QRectF:
         x = self._frame_x(frame)
         return QRectF(x - 90, 0, 180, 12)
@@ -93,12 +100,16 @@ class TimelineTrack(QWidget):
 
     def set_bookmarks(self, bookmarks: list[Bookmark]):
         by_frame = {
-            clamp(bookmark.frame, 0, self.total_frames - 1): bookmark.name.strip()
+            clamp(bookmark.frame, 0, self.total_frames - 1): Bookmark(
+                frame=clamp(bookmark.frame, 0, self.total_frames - 1),
+                name=bookmark.name.strip(),
+                locked=bookmark.locked,
+            )
             for bookmark in bookmarks
         }
         self.bookmarks = [
-            Bookmark(frame=frame, name=name)
-            for frame, name in sorted(by_frame.items())
+            by_frame[frame]
+            for frame in sorted(by_frame)
         ]
         if self._editing_bookmark_frame is not None:
             current = self._bookmark_name(self._editing_bookmark_frame)
@@ -140,6 +151,8 @@ class TimelineTrack(QWidget):
 
         bookmark = self._bookmark_near_pos(ev.position().x())
         if bookmark is not None:
+            if self._is_bookmark_locked(bookmark):
+                return
             self._dragging_bookmark = True
             self._drag_source_bookmark = bookmark
             self._drag_bookmark_frame = bookmark
@@ -180,7 +193,7 @@ class TimelineTrack(QWidget):
     def mouseDoubleClickEvent(self, ev):
         if ev.button() == Qt.MouseButton.LeftButton:
             bookmark = self._bookmark_at_position(ev.position().x(), ev.position().y())
-            if bookmark is not None:
+            if bookmark is not None and not self._is_bookmark_locked(bookmark):
                 self._start_bookmark_rename(bookmark)
                 ev.accept()
                 return
@@ -191,12 +204,23 @@ class TimelineTrack(QWidget):
         if bookmark is None:
             return
 
+        is_locked = self._is_bookmark_locked(bookmark)
         menu = QMenu(self)
         edit_name_action = menu.addAction("Edit bookmark name")
+        lock_action_label = "Unlock bookmark" if is_locked else "Lock bookmark"
+        lock_action = menu.addAction(lock_action_label)
         delete_action = menu.addAction("Delete bookmark")
+
+        edit_name_action.setEnabled(not is_locked)
+        delete_action.setEnabled(not is_locked)
+
         chosen_action = menu.exec(ev.globalPosition().toPoint())
         if chosen_action == edit_name_action:
             self._start_bookmark_rename(bookmark)
+        elif chosen_action == lock_action:
+            if self._editing_bookmark_frame == bookmark:
+                self._cancel_bookmark_rename()
+            self.bookmarkLockChanged.emit(bookmark, not is_locked)
         elif chosen_action == delete_action:
             if self._editing_bookmark_frame == bookmark:
                 self._cancel_bookmark_rename()
@@ -285,7 +309,11 @@ class TimelineTrack(QWidget):
                 if bookmark.frame != self._drag_source_bookmark
             ]
             bookmarks_to_draw.append(
-                Bookmark(frame=self._drag_bookmark_frame, name=self._bookmark_name(self._drag_source_bookmark or -1))
+                Bookmark(
+                    frame=self._drag_bookmark_frame,
+                    name=self._bookmark_name(self._drag_source_bookmark or -1),
+                    locked=self._is_bookmark_locked(self._drag_source_bookmark or -1),
+                )
             )
 
         painter.setPen(Qt.PenStyle.NoPen)

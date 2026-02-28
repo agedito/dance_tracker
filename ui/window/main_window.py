@@ -146,6 +146,7 @@ class MainWindow(QMainWindow):
             on_bookmark_moved=self._on_bookmark_moved,
             on_bookmark_removed=self._on_bookmark_removed,
             on_bookmark_name_changed=self._on_bookmark_name_changed,
+            on_bookmark_lock_changed=self._on_bookmark_lock_changed,
         )
 
         self._status = StatusPanel(
@@ -337,6 +338,14 @@ class MainWindow(QMainWindow):
             return
 
         self._app.sequence_data.set_bookmark_name(folder_path, frame, name)
+        self._refresh_timeline_bookmarks()
+
+    def _on_bookmark_lock_changed(self, frame: int, locked: bool):
+        folder_path = self._folder_session.current_folder_path
+        if not folder_path:
+            return
+
+        self._app.sequence_data.set_bookmark_locked(folder_path, frame, locked)
         self._refresh_timeline_bookmarks()
 
     def _go_to_previous_bookmark(self):

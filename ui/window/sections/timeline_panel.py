@@ -23,6 +23,7 @@ class TimelinePanel(QFrame):
             on_bookmark_moved: Callable[[int, int], None],
             on_bookmark_removed: Callable[[int], None],
             on_bookmark_name_changed: Callable[[int, str], None],
+            on_bookmark_lock_changed: Callable[[int, bool], None],
     ):
         super().__init__()
         self.setObjectName("Panel")
@@ -73,6 +74,7 @@ class TimelinePanel(QFrame):
             track.bookmarkMoved.connect(on_bookmark_moved)
             track.bookmarkRemoved.connect(on_bookmark_removed)
             track.bookmarkNameChanged.connect(on_bookmark_name_changed)
+            track.bookmarkLockChanged.connect(on_bookmark_lock_changed)
             self.track_widgets.append(track)
 
             rl.addWidget(name)

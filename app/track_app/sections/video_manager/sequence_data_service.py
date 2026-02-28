@@ -104,10 +104,15 @@ class SequenceDataService:
                 return bookmarks
 
             source_name = ""
+            source_locked = False
             for bookmark in bookmarks:
                 if bookmark.frame == source_frame:
                     source_name = bookmark.name
+                    source_locked = bookmark.locked
                     break
+
+            if source_locked:
+                return bookmarks
 
             updated = [bookmark for bookmark in bookmarks if bookmark.frame != source_frame]
             preferred_direction = 1 if source_frame > target_frame else -1
@@ -116,14 +121,24 @@ class SequenceDataService:
                 target_frame=target_frame,
                 preferred_direction=preferred_direction,
             )
-            return self._insert_bookmark(updated, adjusted_target, source_name, allow_nearby=False)
+            return self._insert_bookmark(
+                updated,
+                adjusted_target,
+                source_name,
+                locked=source_locked,
+                allow_nearby=False,
+            )
 
         return self._update_bookmarks(frames_folder_path, updater=_move)
 
     def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
         return self._update_bookmarks(
             frames_folder_path,
-            updater=lambda bookmarks: [bookmark for bookmark in bookmarks if bookmark.frame != frame],
+            updater=lambda bookmarks: [
+                bookmark
+                for bookmark in bookmarks
+                if bookmark.frame != frame or bookmark.locked
+            ],
         )
 
     def set_bookmark_name(self, frames_folder_path: str, frame: int, name: str) -> list[Bookmark]:
@@ -133,12 +148,29 @@ class SequenceDataService:
             updated: list[Bookmark] = []
             for bookmark in bookmarks:
                 if bookmark.frame == frame:
-                    updated.append(Bookmark(frame=bookmark.frame, name=normalized_name))
+                    if bookmark.locked:
+                        updated.append(bookmark)
+                    else:
+                        updated.append(
+                            Bookmark(frame=bookmark.frame, name=normalized_name, locked=bookmark.locked)
+                        )
                 else:
                     updated.append(bookmark)
             return updated
 
         return self._update_bookmarks(frames_folder_path, updater=_set_name)
+
+    def set_bookmark_locked(self, frames_folder_path: str, frame: int, locked: bool) -> list[Bookmark]:
+        def _set_locked(bookmarks: list[Bookmark]) -> list[Bookmark]:
+            updated: list[Bookmark] = []
+            for bookmark in bookmarks:
+                if bookmark.frame == frame:
+                    updated.append(Bookmark(frame=bookmark.frame, name=bookmark.name, locked=locked))
+                else:
+                    updated.append(bookmark)
+            return updated
+
+        return self._update_bookmarks(frames_folder_path, updater=_set_locked)
 
     def _find_matching_metadata(self, frames_folder: Path) -> dict | None:
         metadata_path = self._find_matching_metadata_path(frames_folder)
@@ -185,6 +217,7 @@ class SequenceDataService:
             {
                 "frame": bookmark.frame,
                 "name": bookmark.name,
+                "locked": bookmark.locked,
             }
             for bookmark in updated
         ]
@@ -202,21 +235,23 @@ class SequenceDataService:
         if not isinstance(raw_bookmarks, list):
             return []
 
-        values: dict[int, str] = {}
+        values: dict[int, Bookmark] = {}
         for raw_bookmark in raw_bookmarks:
             if isinstance(raw_bookmark, dict):
                 frame = SequenceDataService._to_int(raw_bookmark.get("frame"))
                 name = SequenceDataService._normalize_name(raw_bookmark.get("name"))
+                locked = bool(raw_bookmark.get("locked", False))
             else:
                 frame = SequenceDataService._to_int(raw_bookmark)
                 name = ""
+                locked = False
 
             if frame < 0:
                 continue
-            values[frame] = name
+            values[frame] = Bookmark(frame=frame, name=name, locked=locked)
 
         return [
-            Bookmark(frame=frame, name=values[frame])
+            values[frame]
             for frame in sorted(values)
         ]
 
@@ -225,17 +260,21 @@ class SequenceDataService:
         bookmarks: list[Bookmark],
         frame: int,
         name: str = "",
+        locked: bool = False,
         allow_nearby: bool = False,
     ) -> list[Bookmark]:
         normalized = max(0, int(frame))
         normalized_name = SequenceDataService._normalize_name(name)
-        by_frame = {bookmark.frame: bookmark.name for bookmark in bookmarks}
+        by_frame = {
+            bookmark.frame: Bookmark(frame=bookmark.frame, name=bookmark.name, locked=bookmark.locked)
+            for bookmark in bookmarks
+        }
 
         if not allow_nearby and SequenceDataService._is_too_close_to_existing_bookmark(bookmarks, normalized):
-            return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
+            return [by_frame[item] for item in sorted(by_frame)]
 
-        by_frame[normalized] = normalized_name
-        return [Bookmark(frame=item, name=by_frame[item]) for item in sorted(by_frame)]
+        by_frame[normalized] = Bookmark(frame=normalized, name=normalized_name, locked=locked)
+        return [by_frame[item] for item in sorted(by_frame)]
 
     @staticmethod
     def _resolve_move_target_frame(bookmarks: list[Bookmark], target_frame: int, preferred_direction: int) -> int:
