@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
@@ -17,6 +18,12 @@ class EmbedingsTabWidget(QWidget):
         self._app = app
         self._get_current_folder = get_current_folder
         self._log_message = log_message
+        self._pending_folder_path: str | None = None
+        self._pending_frame_index = 0
+        self._pending_total_frames = 0
+        self._detection_timer = QTimer(self)
+        self._detection_timer.setSingleShot(True)
+        self._detection_timer.timeout.connect(self._detect_next_frame)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -47,6 +54,11 @@ class EmbedingsTabWidget(QWidget):
         layout.addLayout(controls_layout)
         layout.addStretch(1)
 
+    def _set_detection_controls_enabled(self, enabled: bool) -> None:
+        self._detect_button.setEnabled(enabled)
+        self._detectors_combo.setEnabled(enabled)
+        self._detect_current_frame_checkbox.setEnabled(enabled)
+
     def _on_detector_changed(self, detector_name: str) -> None:
         if not detector_name:
             return
@@ -70,10 +82,42 @@ class EmbedingsTabWidget(QWidget):
             self._log_message(
                 f"Person detection started with detector: {detector_name}. Current frame mode at frame {frame_index}."
             )
-            total_frames = self._app.track_detector.detect_people_for_sequence(frames_folder_path, frame_index=frame_index)
-            self._log_message(f"Person detection finished. Processed {total_frames} frame.")
+            processed = self._app.track_detector.detect_people_for_sequence(frames_folder_path, frame_index=frame_index)
+            self._log_message(f"Person detection finished. Processed {processed} frame.")
             return
 
+        total_frames = self._app.frames.total_frames
+        if total_frames <= 0:
+            self._log_message("No frames available for detection.")
+            return
+
+        self._pending_folder_path = frames_folder_path
+        self._pending_frame_index = 0
+        self._pending_total_frames = total_frames
+        self._set_detection_controls_enabled(False)
         self._log_message(f"Person detection started with detector: {detector_name}.")
-        total_frames = self._app.track_detector.detect_people_for_sequence(frames_folder_path)
-        self._log_message(f"Person detection finished. Processed {total_frames} frames.")
+        self._detection_timer.start(0)
+
+    def _detect_next_frame(self) -> None:
+        if not self._pending_folder_path:
+            self._finish_detection_batch()
+            return
+
+        if self._pending_frame_index >= self._pending_total_frames:
+            self._finish_detection_batch()
+            return
+
+        self._app.track_detector.detect_people_for_sequence(
+            self._pending_folder_path,
+            frame_index=self._pending_frame_index,
+        )
+        self._pending_frame_index += 1
+        self._detection_timer.start(0)
+
+    def _finish_detection_batch(self) -> None:
+        processed = self._pending_frame_index
+        self._pending_folder_path = None
+        self._pending_total_frames = 0
+        self._pending_frame_index = 0
+        self._set_detection_controls_enabled(True)
+        self._log_message(f"Person detection finished. Processed {processed} frames.")

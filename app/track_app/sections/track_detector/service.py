@@ -89,9 +89,9 @@ class TrackDetectorService:
             if frame_index < 0 or frame_index >= len(frame_files):
                 return 0
 
-            persisted_detections = self._read_json(frames_folder_path)
-            detections = dict(persisted_detections)
-            detections.update(self._detections_by_frame)
+            detections = dict(self._detections_by_frame)
+            if not detections:
+                detections = self._read_json(frames_folder_path)
 
             previous_detections = detections.get(frame_index - 1)
             frame_detections = detector.detect_people_in_frame(
