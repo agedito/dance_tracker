@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
             (QKeySequence("Shift+D"), self._go_to_next_bookmark),
             (QKeySequence("Shift+Left"), self._go_to_previous_bookmark),
             (QKeySequence("Shift+Right"), self._go_to_next_bookmark),
+            (QKeySequence(Qt.Key.Key_Q), self._close),
         ]
         self._shortcuts = []
         for shortcut, cb in bindings:
