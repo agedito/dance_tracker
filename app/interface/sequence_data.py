@@ -22,6 +22,7 @@ class SequenceVideoData:
 class Bookmark:
     frame: int
     name: str = ""
+    locked: bool = False
 
 
 class SequenceDataPort(Protocol):
@@ -36,3 +37,5 @@ class SequenceDataPort(Protocol):
     def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]: ...
 
     def set_bookmark_name(self, frames_folder_path: str, frame: int, name: str) -> list[Bookmark]: ...
+
+    def set_bookmark_locked(self, frames_folder_path: str, frame: int, locked: bool) -> list[Bookmark]: ...
