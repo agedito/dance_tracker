@@ -347,9 +347,10 @@ class TimelineTrack(QWidget):
             )
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(247, 193, 45, 240))
 
         for bookmark in sorted(bookmarks_to_draw, key=lambda item: item.frame):
+            marker_color = QColor(245, 139, 60, 240) if bookmark.locked else QColor(247, 193, 45, 240)
+            painter.setBrush(marker_color)
             x = self._frame_x(bookmark.frame)
             marker = QPolygonF([
                 QPointF(x - 6, 12),
