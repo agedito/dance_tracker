@@ -206,25 +206,55 @@ class TimelineTrack(QWidget):
 
         is_locked = self._is_bookmark_locked(bookmark)
         menu = QMenu(self)
-        edit_name_action = menu.addAction("Edit bookmark name")
-        lock_action_label = "Unlock bookmark" if is_locked else "Lock bookmark"
-        lock_action = menu.addAction(lock_action_label)
-        delete_action = menu.addAction("Delete bookmark")
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #1A1F23;
+                border: 1px solid #2B343B;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 12px;
+                border-radius: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #3A3F45;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #4B525A;
+                margin: 6px 4px;
+            }
+            """
+        )
 
-        edit_name_action.setEnabled(not is_locked)
-        delete_action.setEnabled(not is_locked)
+        if is_locked:
+            unlock_action = menu.addAction("Unlock bookmark")
+            menu.setActiveAction(unlock_action)
+            chosen_action = menu.exec(ev.globalPosition().toPoint())
+            if chosen_action == unlock_action:
+                if self._editing_bookmark_frame == bookmark:
+                    self._cancel_bookmark_rename()
+                self.bookmarkLockChanged.emit(bookmark, False)
+            return
+
+        edit_name_action = menu.addAction("Edit bookmark name")
+        delete_action = menu.addAction("Delete bookmark")
+        menu.addSeparator()
+        lock_action = menu.addAction("Lock bookmark")
+        menu.setActiveAction(edit_name_action)
 
         chosen_action = menu.exec(ev.globalPosition().toPoint())
         if chosen_action == edit_name_action:
             self._start_bookmark_rename(bookmark)
-        elif chosen_action == lock_action:
-            if self._editing_bookmark_frame == bookmark:
-                self._cancel_bookmark_rename()
-            self.bookmarkLockChanged.emit(bookmark, not is_locked)
         elif chosen_action == delete_action:
             if self._editing_bookmark_frame == bookmark:
                 self._cancel_bookmark_rename()
             self.bookmarkRemoved.emit(bookmark)
+        elif chosen_action == lock_action:
+            if self._editing_bookmark_frame == bookmark:
+                self._cancel_bookmark_rename()
+            self.bookmarkLockChanged.emit(bookmark, True)
 
     def resizeEvent(self, ev):
         if self._editing_bookmark_frame is not None:
