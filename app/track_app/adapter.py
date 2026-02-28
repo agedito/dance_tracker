@@ -478,8 +478,8 @@ class TrackDetectorAdapter:
     def set_active_detector(self, detector_name: str) -> bool:
         return self._service.set_active_detector(detector_name)
 
-    def detect_people_for_sequence(self, frames_folder_path: str) -> int:
-        detected_frames = self._service.detect_people_for_sequence(frames_folder_path)
+    def detect_people_for_sequence(self, frames_folder_path: str, frame_index: int | None = None) -> int:
+        detected_frames = self._service.detect_people_for_sequence(frames_folder_path, frame_index=frame_index)
         self._events.emit(Event.DetectionsUpdated, frames_folder_path)
         return detected_frames
 
