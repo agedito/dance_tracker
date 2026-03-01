@@ -105,6 +105,10 @@ class PreferencesManager:
     def save_splitter_sizes(self, name: str, sizes: list[int]):
         self._prefs[f"{name}_sizes"] = sizes
 
+    def is_fullscreen(self) -> bool:
+        val = self._prefs.get("fullscreen")
+        return val if isinstance(val, bool) else True
+
     def save_fullscreen(self, is_fullscreen: bool):
         self._prefs["fullscreen"] = is_fullscreen
 

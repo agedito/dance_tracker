@@ -16,7 +16,10 @@ class LayoutPersistence:
 
     def restore(self) -> None:
         self._restore_screen()
-        self._window.showFullScreen()
+        if self._prefs.is_fullscreen():
+            self._window.showFullScreen()
+        else:
+            self._window.showNormal()
         for name in self._SPLITTER_NAMES:
             sizes = self._prefs.splitter_sizes(name)
             if sizes:
