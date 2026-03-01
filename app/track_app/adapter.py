@@ -1,20 +1,18 @@
-import json
-import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import MusicPort, SongMetadata, SongStatus
-from app.interface.sequence_data import SequenceDataPort
-from app.interface.track_detector import PersonDetection
 from app.interface.sequence_data import Bookmark, SequenceDataPort
+from app.interface.sequence_prefs import SequencePreferencesPort
 from app.interface.sequences import SequenceItem, SequenceState
+from app.interface.track_detector import PersonDetection
 from app.track_app.main_app import DanceTrackerApp
 from app.track_app.sections.video_manager.manager import VIDEO_SUFFIXES
 from app.track_app.sections.video_manager.sequence_data_service import SequenceDataService
-
-_PREFS_PATH = Path.home() / ".dance_tracker_prefs.json"
+from app.track_app.sections.video_manager.sequence_metadata_store import SequenceMetadataStore
+from app.track_app.sections.video_manager import sequence_file_store
 
 
 class MediaAdapter:
@@ -30,17 +28,13 @@ class MediaAdapter:
     ) -> None:
         print("Loading", path)
 
-        path = self._resolve_input_path(
-            path,
-            on_progress=on_progress,
-            should_cancel=should_cancel,
-        )
-
+        path = self._resolve_input_path(path)
         if not path:
             return
 
         if self._app.video_manager.is_video(path):
-            path = self._load_video(path, on_progress=on_progress, should_cancel=should_cancel)
+            self._identify_song(path)
+            path = self._extract_video(path, on_progress=on_progress, should_cancel=should_cancel)
 
         if not path:
             return
@@ -51,91 +45,57 @@ class MediaAdapter:
 
         self._events.emit(Event.FramesLoaded, path)
 
-    def _resolve_input_path(
-        self,
-        path: str,
-        on_progress: Callable[[int], None] | None = None,
-        should_cancel: Callable[[], bool] | None = None,
-    ) -> str | None:
-        if not self._app.video_manager.is_sequence_metadata(path):
+    def _resolve_input_path(self, path: str) -> str | None:
+        """Pure path resolution: returns the frames dir or video path to load, no side effects."""
+        if not SequenceMetadataStore.is_sequence_metadata(path):
             return path
 
-        metadata = self._app.video_manager.read_sequence_metadata(path)
+        metadata = SequenceMetadataStore.read(path)
         if not metadata:
             return None
 
         metadata_root = Path(path).expanduser().parent
 
-        frames_path = metadata.get("frames") or metadata.get("frames_path")
-        resolved_frames = self._resolve_metadata_path(frames_path, metadata_root)
+        frames_value = metadata.get("frames") or metadata.get("frames_path")
+        resolved_frames = sequence_file_store.resolve_path(frames_value, metadata_root)
         if resolved_frames and resolved_frames.is_dir():
             return str(resolved_frames)
 
-        video_path = self._video_path_from_metadata(metadata)
-        resolved_video = self._resolve_metadata_path(video_path, metadata_root)
+        video_value = sequence_file_store.video_path_from_metadata(metadata)
+        resolved_video = sequence_file_store.resolve_path(video_value, metadata_root)
         if resolved_video and self._app.video_manager.is_video(str(resolved_video)):
-            return self._load_video(str(resolved_video), on_progress=on_progress, should_cancel=should_cancel)
+            return str(resolved_video)
 
         return None
 
-    @staticmethod
-    def _resolve_metadata_path(value: object, root: Path) -> Path | None:
-        if not isinstance(value, str) or not value.strip():
-            return None
-
-        candidate = Path(value).expanduser()
-        if candidate.is_absolute():
-            return candidate
-        return (root / candidate).resolve()
-
-    @staticmethod
-    def _video_path_from_metadata(metadata: dict) -> str | None:
-        legacy_video_path = metadata.get("video_path")
-        if isinstance(legacy_video_path, str) and legacy_video_path.strip():
-            return legacy_video_path
-
-        video_data = metadata.get("video")
-        if not isinstance(video_data, dict):
-            return None
-
-        video_name = video_data.get("name") or video_data.get("nombre")
-        if not isinstance(video_name, str) or not video_name.strip():
-            return None
-
-        return video_name
-
-    def _load_video(
-        self,
-        path: str,
-        on_progress: Callable[[int], None] | None = None,
-        should_cancel: Callable[[], bool] | None = None,
-    ) -> str | None:
-        if not self._app.video_manager.is_video(path):
-            return path
-
-        song = SongMetadata(status=SongStatus.NOT_RUN)
+    def _identify_song(self, video_path: str) -> None:
         try:
-            song = self._app.music_identifier.identify_from_video(path)
+            song = self._app.music_identifier.identify_from_video(video_path)
         except Exception as err:
             song = SongMetadata(
                 status=SongStatus.ERROR,
                 provider="music_identifier",
                 message=f"Error identifying song: {err}",
             )
-
         self._events.emit(Event.SongIdentified, song)
 
-        frames_path = self._app.video_manager.extract_frames(
+    def _extract_video(
+        self,
+        path: str,
+        on_progress: Callable[[int], None] | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> str | None:
+        result = self._app.video_manager.extract_frames(
             path,
             on_progress=on_progress,
             should_cancel=should_cancel,
         )
-        print("Video extracted at", frames_path)
-
-        if not frames_path:
+        if not result:
             return None
 
-        self._app.video_manager.write_sequence_metadata(path, frames_path)
+        frames_path, video_info = result
+        print("Video extracted at", frames_path)
+        self._app.sequence_metadata.write(path, frames_path, video_info)
         return frames_path
 
 
@@ -172,19 +132,18 @@ class MusicAdapter:
         if not frames_folder.is_dir():
             return None
 
-        metadata_candidates = sorted(frames_folder.parent.glob("*.dance_tracker.json"))
-        for metadata_path in metadata_candidates:
-            metadata = self._app.video_manager.read_sequence_metadata(str(metadata_path))
+        for metadata_path in sorted(frames_folder.parent.glob("*.dance_tracker.json")):
+            metadata = SequenceMetadataStore.read(str(metadata_path))
             if not metadata:
                 continue
 
             frames_value = metadata.get("frames") or metadata.get("frames_path")
-            resolved_frames = MediaAdapter._resolve_metadata_path(frames_value, metadata_path.parent)
+            resolved_frames = sequence_file_store.resolve_path(frames_value, metadata_path.parent)
             if resolved_frames != frames_folder:
                 continue
 
-            video_value = MediaAdapter._video_path_from_metadata(metadata)
-            resolved_video = MediaAdapter._resolve_metadata_path(video_value, metadata_path.parent)
+            video_value = sequence_file_store.video_path_from_metadata(metadata)
+            resolved_video = sequence_file_store.resolve_path(video_value, metadata_path.parent)
             if resolved_video and self._app.video_manager.is_video(str(resolved_video)):
                 return str(resolved_video)
 
@@ -192,10 +151,16 @@ class MusicAdapter:
 
 
 class SequencesAdapter:
-    def __init__(self, media: MediaAdapter, events: EventBus, max_recent_folders: int):
+    """Manages the in-memory sequence list and delegates all persistence to SequencePreferencesPort.
+
+    Single source of truth for preferences is the injected port (PreferencesManager in
+    the UI layer).  SequencesAdapter never reads or writes the preferences file directly.
+    """
+
+    def __init__(self, media: MediaAdapter, events: EventBus, prefs: SequencePreferencesPort):
         self._media = media
         self._events = events
-        self._max_recent_folders = max_recent_folders
+        self._prefs = prefs
         self._active_folder: str | None = None
         self._events.on(Event.FramesLoaded, self._on_frames_loaded)
 
@@ -211,7 +176,7 @@ class SequencesAdapter:
         dragged = self._normalize(dragged_folder)
         target = self._normalize(target_folder)
 
-        folders = self._recent_folders()
+        folders = self._prefs.recent_folders()
         if dragged not in folders or target not in folders or dragged == target:
             return
 
@@ -221,35 +186,14 @@ class SequencesAdapter:
             target_idx += 1
         updated.insert(target_idx, dragged)
 
-        prefs = self._load_preferences()
-        prefs["recent_folders"] = updated[: self._max_recent_folders]
-        self._save_preferences(prefs)
+        self._prefs.save_recent_folders_order(updated)
         self._emit_state()
 
     def remove(self, folder_path: str) -> None:
         normalized = self._normalize(folder_path)
-        prefs = self._load_preferences()
-
-        folders = [folder for folder in self._recent_folders(prefs) if folder != normalized]
-        prefs["recent_folders"] = folders[: self._max_recent_folders]
-
-        if prefs.get("last_opened_folder") == normalized:
-            prefs["last_opened_folder"] = folders[0] if folders else None
-
-        frames = prefs.get("last_frame_by_folder")
-        if isinstance(frames, dict):
-            frames.pop(normalized, None)
-            prefs["last_frame_by_folder"] = frames
-
-        thumbnails = prefs.get("recent_folder_thumbnails")
-        if isinstance(thumbnails, dict):
-            thumbnails.pop(normalized, None)
-            prefs["recent_folder_thumbnails"] = thumbnails
-
+        self._prefs.remove_recent_folder(normalized)
         if self._active_folder == normalized:
             self._active_folder = None
-
-        self._save_preferences(prefs)
         self._emit_state()
 
     def delete_video_and_frames(self, folder_path: str) -> None:
@@ -274,63 +218,29 @@ class SequencesAdapter:
         self.remove(folder_path)
 
     def last_opened_folder(self) -> str | None:
-        value = self._load_preferences().get("last_opened_folder")
-        return value if isinstance(value, str) and value else None
+        return self._prefs.last_opened_folder()
+
+    def thumbnail_path_for_folder(self, folder_path: str) -> str | None:
+        return self._prefs.thumbnail_for_folder(self._normalize(folder_path))
 
     def _on_frames_loaded(self, path: str) -> None:
         normalized = self._normalize(path)
-        prefs = self._load_preferences()
-        folders = self._recent_folders(prefs)
-
-        if normalized not in folders:
-            folders.append(normalized)
-
-        prefs["recent_folders"] = folders[: self._max_recent_folders]
-        prefs["last_opened_folder"] = normalized
-
-        thumbnails = prefs.get("recent_folder_thumbnails")
-        if not isinstance(thumbnails, dict):
-            thumbnails = {}
-
-        thumbnail = self._thumbnail_from_frame(normalized)
-        if thumbnail is None:
-            thumbnails.pop(normalized, None)
-        else:
-            thumbnails[normalized] = thumbnail
-        prefs["recent_folder_thumbnails"] = thumbnails
-
+        self._prefs.register_recent_folder(normalized)
         self._active_folder = normalized
-        self._save_preferences(prefs)
         self._emit_state()
 
-    def thumbnail_path_for_folder(self, folder_path: str) -> str | None:
-        normalized = self._normalize(folder_path)
-        thumbnails = self._load_preferences().get("recent_folder_thumbnails", {})
-        if not isinstance(thumbnails, dict):
-            return None
-        value = thumbnails.get(normalized)
-        return value if isinstance(value, str) else None
-
     def _emit_state(self) -> None:
-        items = [
-            SequenceItem(folder_path=folder)
-            for folder in self._recent_folders()
-        ]
-        self._events.emit(Event.SequencesChanged, SequenceState(items=items, active_folder=self._active_folder))
-
-    def _recent_folders(self, prefs: dict | None = None) -> list[str]:
-        payload = prefs or self._load_preferences()
-        folders = payload.get("recent_folders", [])
-        if not isinstance(folders, list):
-            return []
-        return [self._normalize(folder) for folder in folders if isinstance(folder, str) and folder][: self._max_recent_folders]
+        items = [SequenceItem(folder_path=folder) for folder in self._prefs.recent_folders()]
+        self._events.emit(
+            Event.SequencesChanged,
+            SequenceState(items=items, active_folder=self._active_folder),
+        )
 
     @staticmethod
     def _find_video_for_frames(folder: Path) -> Path | None:
         parent = folder.parent
         if not parent.is_dir():
             return None
-
         videos = [
             file
             for file in sorted(parent.iterdir())
@@ -339,46 +249,8 @@ class SequencesAdapter:
         return videos[0] if videos else None
 
     @staticmethod
-    def _thumbnail_from_frame(folder_path: str) -> str | None:
-        folder = Path(folder_path)
-        if not folder.exists() or not folder.is_dir():
-            return None
-
-        valid_suffixes = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
-        frame_files = [
-            file
-            for file in sorted(folder.iterdir(), key=SequencesAdapter._natural_sort_key)
-            if file.is_file() and file.suffix.lower() in valid_suffixes
-        ]
-        if not frame_files:
-            return None
-
-        target_idx = 300 if len(frame_files) > 300 else len(frame_files) // 2
-        return str(frame_files[target_idx])
-
-    @staticmethod
-    def _natural_sort_key(path: Path):
-        chunks = re.split(r"(\d+)", path.name.lower())
-        return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
-
-    @staticmethod
     def _normalize(path: str) -> str:
         return str(Path(path).expanduser())
-
-    @staticmethod
-    def _load_preferences() -> dict:
-        if not _PREFS_PATH.exists():
-            return {}
-        try:
-            payload = json.loads(_PREFS_PATH.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
-        return payload if isinstance(payload, dict) else {}
-
-    @staticmethod
-    def _save_preferences(payload: dict) -> None:
-        _PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _PREFS_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 class FramesAdapter:
@@ -521,10 +393,10 @@ class TrackDetectorAdapter:
 
 
 class AppAdapter:
-    def __init__(self, app: DanceTrackerApp, events: EventBus):
+    def __init__(self, app: DanceTrackerApp, events: EventBus, prefs: SequencePreferencesPort):
         self.media = MediaAdapter(app, events)
         self.music: MusicPort = MusicAdapter(app, events)
-        self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
+        self.sequences = SequencesAdapter(self.media, events, prefs)
         self.frames = FramesAdapter(app)
         self.sequence_data = SequenceDataAdapter(events)
         self.track_detector = TrackDetectorAdapter(app, events)

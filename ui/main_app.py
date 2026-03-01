@@ -7,15 +7,16 @@ from app.interface.application import DanceTrackerPort
 from app.interface.event_bus import EventBus
 from ui.config import Config
 from ui.window.main_window import MainWindow
+from ui.window.sections.preferences_manager import PreferencesManager
 
 
 class GraphicApp:
     def __init__(self, app: DanceTrackerPort):
         self._app = app
 
-    def launch(self, cfg: Config, bus: EventBus):
+    def launch(self, cfg: Config, bus: EventBus, prefs: PreferencesManager):
         qt_app = QApplication(sys.argv)
-        wnd = MainWindow(cfg, self._app, bus)
+        wnd = MainWindow(cfg, self._app, bus, prefs)
         bus.connect(wnd)
 
         self._app.sequences.refresh()

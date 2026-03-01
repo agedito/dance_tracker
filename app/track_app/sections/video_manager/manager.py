@@ -1,7 +1,6 @@
+import shutil
 from collections.abc import Callable
 from pathlib import Path
-import shutil
-import json
 
 import cv2
 
@@ -10,33 +9,39 @@ VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
 
 class VideoManager:
-    _SEQUENCE_METADATA_SUFFIX = ".dance_tracker.json"
+    """Single responsibility: validate video files and extract frames to disk.
+
+    Metadata I/O (.dance_tracker.json) is handled by SequenceMetadataStore.
+    """
 
     @staticmethod
     def is_video(video_path: str) -> bool:
         source = Path(video_path)
-        if not source.exists() or not source.is_file():
-            return False
-
-        if source.suffix.lower() not in VIDEO_SUFFIXES:
-            return False
-
-        return True
+        return source.exists() and source.is_file() and source.suffix.lower() in VIDEO_SUFFIXES
 
     def extract_frames(
         self,
         video_path: str,
         on_progress: Callable[[int], None] | None = None,
         should_cancel: Callable[[], bool] | None = None,
-    ) -> str | None:
+    ) -> tuple[str, dict] | None:
+        """Extract full-size and 320px proxy frames from a video file.
+
+        Returns (frames_dir_path, video_info) on success, None on failure or
+        cancellation.  video_info contains: fps, width, height, frames_count,
+        duration_seconds, length_bytes — collected during the extraction pass
+        so the caller never needs to re-open the video file.
+        """
         source = Path(video_path)
         if not self.is_video(video_path):
             return None
 
         frames_dir = source.parent / "frames"
         low_frames_dir = source.parent / "low_frames"
+
         if frames_dir.exists():
-            return str(frames_dir)
+            # Frames already on disk — read metadata without re-extracting.
+            return str(frames_dir), self._video_info_from_file(source)
 
         frames_dir.mkdir(parents=True, exist_ok=True)
         low_frames_dir.mkdir(parents=True, exist_ok=True)
@@ -51,6 +56,10 @@ class VideoManager:
             return None
 
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = float(capture.get(cv2.CAP_PROP_FPS))
+        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
         if on_progress is not None:
             on_progress(0)
 
@@ -94,104 +103,36 @@ class VideoManager:
             on_progress(100)
 
         print("Finished")
-        return str(frames_dir)
 
-    @classmethod
-    def is_sequence_metadata(cls, file_path: str) -> bool:
-        source = Path(file_path)
-        return source.is_file() and source.suffix.lower() == ".json"
-
-    @classmethod
-    def metadata_path_for_video(cls, video_path: str) -> Path:
-        source = Path(video_path)
-        return source.with_name(f"{source.stem}{cls._SEQUENCE_METADATA_SUFFIX}")
-
-    @classmethod
-    def write_sequence_metadata(cls, video_path: str, frames_path: str) -> str | None:
-        source = Path(video_path)
-        if not source.is_file():
-            return None
-
-        metadata_path = cls.metadata_path_for_video(video_path)
-        frames_dir = Path(frames_path).resolve()
-        low_frames_dir = frames_dir.with_name("low_frames")
-        if not low_frames_dir.is_dir():
-            legacy_low_frames_dir = frames_dir.with_name("frames_mino")
-            if legacy_low_frames_dir.is_dir():
-                low_frames_dir = legacy_low_frames_dir
-        video_info = cls._read_video_info(source)
-
-        payload = {
-            "sequence": {
-                "name": source.stem,
-            },
-            "video": {
-                "name": source.name,
-                "data": {
-                    "duration_seconds": video_info["duration_seconds"],
-                    "resolution": {
-                        "width": video_info["width"],
-                        "height": video_info["height"],
-                    },
-                    "frames_count": video_info["frames_count"],
-                    "fps": video_info["fps"],
-                    "length_bytes": video_info["length_bytes"],
-                },
-            },
-            "frames": cls._relative_to_parent_or_absolute(frames_dir, source.parent),
-            "low_frames": cls._relative_to_parent_or_absolute(low_frames_dir, source.parent),
+        video_info = {
+            "fps": fps,
+            "width": width,
+            "height": height,
+            "frames_count": frame_idx,
+            "duration_seconds": round(frame_idx / fps, 3) if fps > 0 else 0.0,
+            "length_bytes": source.stat().st_size if source.is_file() else 0,
         }
-        metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return str(metadata_path)
+        return str(frames_dir), video_info
 
     @staticmethod
-    def _relative_to_parent_or_absolute(path: Path, parent: Path) -> str:
-        try:
-            return str(path.relative_to(parent.resolve()))
-        except ValueError:
-            return str(path)
-
-    @staticmethod
-    def _read_video_info(video_path: Path) -> dict[str, float | int]:
+    def _video_info_from_file(video_path: Path) -> dict:
+        """Read video metadata without extracting frames (frames-already-exist path)."""
         capture = cv2.VideoCapture(str(video_path))
         if not capture.isOpened():
             return {
-                "duration_seconds": 0.0,
-                "width": 0,
-                "height": 0,
-                "frames_count": 0,
-                "fps": 0.0,
-                "length_bytes": 0,
+                "fps": 0.0, "width": 0, "height": 0,
+                "frames_count": 0, "duration_seconds": 0.0, "length_bytes": 0,
             }
-
         frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = float(capture.get(cv2.CAP_PROP_FPS))
         width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
         capture.release()
-
-        duration_seconds = round(frame_count / fps, 3) if fps > 0 else 0.0
         return {
-            "duration_seconds": duration_seconds,
+            "fps": fps,
             "width": width,
             "height": height,
             "frames_count": frame_count,
-            "fps": fps,
+            "duration_seconds": round(frame_count / fps, 3) if fps > 0 else 0.0,
             "length_bytes": video_path.stat().st_size if video_path.is_file() else 0,
         }
-
-    @classmethod
-    def read_sequence_metadata(cls, metadata_path: str) -> dict | None:
-        source = Path(metadata_path)
-        if not source.is_file() or source.suffix.lower() != ".json":
-            return None
-
-        try:
-            data = json.loads(source.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-
-        if not isinstance(data, dict):
-            return None
-
-        return data

@@ -44,14 +44,14 @@ from ui.window.sections.viewer_panel import ViewerPanel
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, cfg: Config, app: DanceTrackerPort, events: EventBus):
+    def __init__(self, cfg: Config, app: DanceTrackerPort, events: EventBus, prefs: PreferencesManager):
         super().__init__()
         self.cfg = cfg
         self._app = app
         self._frames = app.frames
         self._events = events
 
-        self._prefs = PreferencesManager(cfg.max_recent_folders)
+        self._prefs = prefs
         self._frame_store = FrameStore(cache_radius=self._frames.frame_cache_radius)
         self._playback = PlaybackController(
             fps=self._frames.fps,
