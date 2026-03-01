@@ -1,9 +1,10 @@
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QLineEdit, QMenu, QWidget
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from app.interface.sequence_data import Bookmark
 from app.track_app.frame_state.layers import Segment
+from ui.widgets.generic_widgets.context_menu import ContextMenu
 from utils.numbers import clamp
 
 
@@ -191,7 +192,7 @@ class TimelineTrack(QWidget):
         if bookmark is None:
             return
 
-        menu = QMenu(self)
+        menu = ContextMenu(self)
         edit_name_action = menu.addAction("Edit bookmark name")
         delete_action = menu.addAction("Delete bookmark")
         chosen_action = menu.exec(ev.globalPosition().toPoint())
