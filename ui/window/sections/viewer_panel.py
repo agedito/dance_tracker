@@ -3,7 +3,7 @@ from typing import Callable
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
-from app.track_app.frame_state.frame_store import FrameStore
+from ui.widgets.frame_store import FrameStore
 from ui.widgets.viewer import ViewerWidget
 
 

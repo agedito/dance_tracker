@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QHBoxLayout, QSizePolicy, QToolButton, QWidget
 from shiboken6 import isValid
 
 from app.interface.application import DanceTrackerPort
-from app.track_app.frame_state.frame_store import FrameStore
+from ui.widgets.frame_store import FrameStore
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.radial_menu_widget import RadialMenuWidget
 from ui.window.frames_mock import draw_viewer_frame

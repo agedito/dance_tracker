@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Callable
 
-from app.track_app.frame_state.frame_store import FrameStore
+from ui.widgets.frame_store import FrameStore
 from ui.window.sections.preferences_manager import PreferencesManager
 
 

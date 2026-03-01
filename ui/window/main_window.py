@@ -22,7 +22,7 @@ from app.interface.application import DanceTrackerPort
 from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from app.interface.sequences import SequenceState
-from app.track_app.frame_state.frame_store import FrameStore
+from ui.widgets.frame_store import FrameStore
 from ui.config import Config
 from ui.window.layout import MainWindowLayout
 from ui.window.sections.folder_session_manager import FolderSessionManager
