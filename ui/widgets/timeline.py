@@ -1,9 +1,10 @@
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QLineEdit, QMenu, QWidget
+from PySide6.QtWidgets import QLineEdit, QWidget
 
 from app.interface.sequence_data import Bookmark
 from app.track_app.frame_state.layers import Segment
+from ui.widgets.generic_widgets.context_menu import ContextMenuWidget
 from utils.numbers import clamp
 
 
@@ -205,28 +206,7 @@ class TimelineTrack(QWidget):
             return
 
         is_locked = self._is_bookmark_locked(bookmark)
-        menu = QMenu(self)
-        menu.setStyleSheet(
-            """
-            QMenu {
-                background-color: #1A1F23;
-                border: 1px solid #2B343B;
-                padding: 4px;
-            }
-            QMenu::item {
-                padding: 6px 12px;
-                border-radius: 4px;
-            }
-            QMenu::item:selected {
-                background-color: #3A3F45;
-            }
-            QMenu::separator {
-                height: 1px;
-                background: #4B525A;
-                margin: 6px 4px;
-            }
-            """
-        )
+        menu = ContextMenuWidget(self)
 
         if is_locked:
             unlock_action = menu.addAction("Unlock bookmark")
