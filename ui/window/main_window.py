@@ -107,6 +107,11 @@ class MainWindow(QMainWindow):
         source_name = Path(frames_folder_path).name or "sequence"
         self._log_message(f"Detections updated for: {source_name}.")
 
+    def on_bookmarks_changed(self, frames_folder_path: str) -> None:
+        current = self._folder_session.current_folder_path
+        if current and Path(current).expanduser() == Path(frames_folder_path).expanduser():
+            self._refresh_timeline_bookmarks()
+
     def _log_message(self, message: str) -> None:
         self._right_panel.logger_widget.log(message)
 
@@ -312,43 +317,33 @@ class MainWindow(QMainWindow):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
         safe_frame = max(0, min(frame, self._frames.total_frames - 1))
         self._app.sequence_data.add_bookmark(folder_path, safe_frame)
-        self._refresh_timeline_bookmarks()
 
     def _on_bookmark_moved(self, source_frame: int, target_frame: int):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
         safe_target = max(0, min(target_frame, self._frames.total_frames - 1))
         self._app.sequence_data.move_bookmark(folder_path, source_frame, safe_target)
-        self._refresh_timeline_bookmarks()
 
     def _on_bookmark_removed(self, frame: int):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
         self._app.sequence_data.remove_bookmark(folder_path, frame)
-        self._refresh_timeline_bookmarks()
 
     def _on_bookmark_name_changed(self, frame: int, name: str):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
         self._app.sequence_data.set_bookmark_name(folder_path, frame, name)
-        self._refresh_timeline_bookmarks()
 
     def _on_bookmark_lock_changed(self, frame: int, locked: bool):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
         self._app.sequence_data.set_bookmark_locked(folder_path, frame, locked)
-        self._refresh_timeline_bookmarks()
 
     def _go_to_previous_bookmark(self):
         folder_path = self._folder_session.current_folder_path

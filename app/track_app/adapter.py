@@ -445,8 +445,9 @@ class FramesAdapter:
 
 
 class SequenceDataAdapter:
-    def __init__(self):
+    def __init__(self, events: EventBus):
         self._service: SequenceDataPort = SequenceDataService()
+        self._events = events
 
     def read_video_data(self, frames_folder_path: str):
         return self._service.read_video_data(frames_folder_path)
@@ -455,19 +456,29 @@ class SequenceDataAdapter:
         return self._service.read_bookmarks(frames_folder_path)
 
     def add_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
-        return self._service.add_bookmark(frames_folder_path, frame)
+        result = self._service.add_bookmark(frames_folder_path, frame)
+        self._events.emit(Event.BookmarksChanged, frames_folder_path)
+        return result
 
     def move_bookmark(self, frames_folder_path: str, source_frame: int, target_frame: int) -> list[Bookmark]:
-        return self._service.move_bookmark(frames_folder_path, source_frame, target_frame)
+        result = self._service.move_bookmark(frames_folder_path, source_frame, target_frame)
+        self._events.emit(Event.BookmarksChanged, frames_folder_path)
+        return result
 
     def remove_bookmark(self, frames_folder_path: str, frame: int) -> list[Bookmark]:
-        return self._service.remove_bookmark(frames_folder_path, frame)
+        result = self._service.remove_bookmark(frames_folder_path, frame)
+        self._events.emit(Event.BookmarksChanged, frames_folder_path)
+        return result
 
     def set_bookmark_name(self, frames_folder_path: str, frame: int, name: str) -> list[Bookmark]:
-        return self._service.set_bookmark_name(frames_folder_path, frame, name)
+        result = self._service.set_bookmark_name(frames_folder_path, frame, name)
+        self._events.emit(Event.BookmarksChanged, frames_folder_path)
+        return result
 
     def set_bookmark_locked(self, frames_folder_path: str, frame: int, locked: bool) -> list[Bookmark]:
-        return self._service.set_bookmark_locked(frames_folder_path, frame, locked)
+        result = self._service.set_bookmark_locked(frames_folder_path, frame, locked)
+        self._events.emit(Event.BookmarksChanged, frames_folder_path)
+        return result
 
     def get_sequence_name(self, frames_folder_path: str) -> str | None:
         return self._service.get_sequence_name(frames_folder_path)
@@ -515,5 +526,5 @@ class AppAdapter:
         self.music: MusicPort = MusicAdapter(app, events)
         self.sequences = SequencesAdapter(self.media, events, max_recent_folders=app.cfg.max_recent_folders)
         self.frames = FramesAdapter(app)
-        self.sequence_data = SequenceDataAdapter()
+        self.sequence_data = SequenceDataAdapter(events)
         self.track_detector = TrackDetectorAdapter(app, events)
