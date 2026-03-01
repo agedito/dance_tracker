@@ -466,6 +466,12 @@ class SequenceDataAdapter:
     def set_bookmark_locked(self, frames_folder_path: str, frame: int, locked: bool) -> list[Bookmark]:
         return self._service.set_bookmark_locked(frames_folder_path, frame, locked)
 
+    def get_sequence_name(self, frames_folder_path: str) -> str | None:
+        return self._service.get_sequence_name(frames_folder_path)
+
+    def set_sequence_name(self, frames_folder_path: str, name: str) -> None:
+        self._service.set_sequence_name(frames_folder_path, name)
+
 
 class TrackDetectorAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):

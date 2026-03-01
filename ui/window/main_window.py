@@ -115,6 +115,7 @@ class MainWindow(QMainWindow):
 
         self._topbar = TopBar(
             on_close=self._close,
+            sequence_data=self._app.sequence_data,
         )
         self._layout.set_topbar(self._topbar)
 

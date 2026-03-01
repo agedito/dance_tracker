@@ -172,6 +172,37 @@ class SequenceDataService:
 
         return self._update_bookmarks(frames_folder_path, updater=_set_locked)
 
+    def get_sequence_name(self, frames_folder_path: str) -> str | None:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        metadata_path = self._find_matching_metadata_path(frames_folder)
+        if metadata_path is None:
+            return None
+        payload = self._read_json(metadata_path)
+        if payload is None:
+            return None
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            return None
+        value = sequence.get("name")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        return None
+
+    def set_sequence_name(self, frames_folder_path: str, name: str) -> None:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        metadata_path = self._find_matching_metadata_path(frames_folder)
+        if metadata_path is None:
+            return
+        payload = self._read_json(metadata_path)
+        if payload is None:
+            return
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            sequence = {}
+            payload["sequence"] = sequence
+        sequence["name"] = name.strip()
+        metadata_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
     def _find_matching_metadata(self, frames_folder: Path) -> dict | None:
         metadata_path = self._find_matching_metadata_path(frames_folder)
         if metadata_path is None:
