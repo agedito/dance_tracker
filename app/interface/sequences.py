@@ -5,7 +5,6 @@ from typing import Protocol
 @dataclass(frozen=True)
 class SequenceItem:
     folder_path: str
-    thumbnail_path: str | None = None
 
 
 @dataclass(frozen=True)
@@ -26,3 +25,5 @@ class SequencePort(Protocol):
     def delete_video_and_frames(self, folder_path: str) -> None: ...
 
     def last_opened_folder(self) -> str | None: ...
+
+    def thumbnail_path_for_folder(self, folder_path: str) -> str | None: ...

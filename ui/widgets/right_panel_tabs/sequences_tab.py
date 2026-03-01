@@ -92,7 +92,8 @@ class SequencesTabWidget(QWidget):
 
         for idx, item in enumerate(self._state.items):
             row, col = divmod(idx, columns)
-            self._grid.addWidget(self._sequence_button(item.folder_path, item.thumbnail_path), row, col)
+            thumbnail = self._sequences.thumbnail_path_for_folder(item.folder_path)
+            self._grid.addWidget(self._sequence_button(item.folder_path, thumbnail), row, col)
 
     def _sequence_button(self, folder_path: str, thumbnail_path: str | None) -> QPushButton:
         button = _SequenceThumbnailButton(

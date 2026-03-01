@@ -303,15 +303,18 @@ class SequencesAdapter:
         self._save_preferences(prefs)
         self._emit_state()
 
-    def _emit_state(self) -> None:
-        prefs = self._load_preferences()
-        thumbnails = prefs.get("recent_folder_thumbnails", {})
+    def thumbnail_path_for_folder(self, folder_path: str) -> str | None:
+        normalized = self._normalize(folder_path)
+        thumbnails = self._load_preferences().get("recent_folder_thumbnails", {})
         if not isinstance(thumbnails, dict):
-            thumbnails = {}
+            return None
+        value = thumbnails.get(normalized)
+        return value if isinstance(value, str) else None
 
+    def _emit_state(self) -> None:
         items = [
-            SequenceItem(folder_path=folder, thumbnail_path=thumbnails.get(folder))
-            for folder in self._recent_folders(prefs)
+            SequenceItem(folder_path=folder)
+            for folder in self._recent_folders()
         ]
         self._events.emit(Event.SequencesChanged, SequenceState(items=items, active_folder=self._active_folder))
 
