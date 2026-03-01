@@ -1,8 +1,7 @@
-from app.interface.music import (
+from app.interface.music import SongMetadata, SongStatus
+from app.track_app.services.music_identifier.ports import (
     AudioSampleExtractorPort,
     AudioSongRecognizerPort,
-    SongMetadata,
-    SongStatus,
 )
 
 

@@ -1,4 +1,4 @@
-from app.interface.music import MusicIdentifierPort
+from app.track_app.services.music_identifier.ports import MusicIdentifierPort
 from app.interface.track_detector import TrackDetectorPort
 from app.track_app.config import Config
 from app.track_app.frame_state.layers import default_layers
