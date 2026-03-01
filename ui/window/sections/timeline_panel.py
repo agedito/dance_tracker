@@ -1,8 +1,9 @@
 from typing import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QScrollArea,
-    QVBoxLayout, QWidget,
+    QSlider, QVBoxLayout, QWidget,
 )
 
 from app.interface.sequence_data import Bookmark
@@ -30,6 +31,9 @@ class TimelinePanel(QFrame):
         self.time_info = QLabel("")
         self.time_info.setObjectName("Muted")
         self.track_widgets: list[TimelineTrack] = []
+        self.total_frames = max(1, total_frames)
+        self._zoom_factor = 1.0
+        self._view_start_frame = 0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -41,6 +45,16 @@ class TimelinePanel(QFrame):
         hl = QHBoxLayout(header)
         hl.setContentsMargins(10, 8, 10, 8)
         hl.addWidget(QLabel("MASTER TIMELINE"))
+        self.zoom_label = QLabel("Zoom: 1.0x")
+        self.zoom_label.setObjectName("Muted")
+        self.zoom_slider = QSlider()
+        self.zoom_slider.setOrientation(Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(10, 80)
+        self.zoom_slider.setValue(10)
+        self.zoom_slider.setFixedWidth(140)
+        self.zoom_slider.valueChanged.connect(self._on_zoom_slider_changed)
+        hl.addWidget(self.zoom_label)
+        hl.addWidget(self.zoom_slider)
         hl.addStretch(1)
         hl.addWidget(self.time_info)
         root.addWidget(header)
@@ -73,6 +87,7 @@ class TimelinePanel(QFrame):
             track.bookmarkMoved.connect(on_bookmark_moved)
             track.bookmarkRemoved.connect(on_bookmark_removed)
             track.bookmarkNameChanged.connect(on_bookmark_name_changed)
+            track.zoomRequested.connect(self._on_zoom_requested)
             self.track_widgets.append(track)
 
             rl.addWidget(name)
@@ -80,16 +95,24 @@ class TimelinePanel(QFrame):
             lay.addWidget(row)
 
         lay.addStretch(1)
+        self.pan_slider = QSlider(Qt.Orientation.Horizontal)
+        self.pan_slider.setRange(0, 0)
+        self.pan_slider.valueChanged.connect(self._on_pan_slider_changed)
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
+        root.addWidget(self.pan_slider)
+
+        self._refresh_view()
 
     def set_frame(self, frame: int):
         for track in self.track_widgets:
             track.set_frame(frame)
 
     def set_total_frames(self, total: int):
+        self.total_frames = max(1, total)
         for track in self.track_widgets:
             track.set_total_frames(total)
+        self._refresh_view()
 
     def set_bookmarks(self, bookmarks: list[Bookmark]):
         for track in self.track_widgets:
@@ -123,3 +146,39 @@ class TimelinePanel(QFrame):
         self.time_info.setText(
             f"Total frames: {total_frames} · Error frames: {error_count}{loaded_text}"
         )
+
+    def _visible_frame_count(self) -> int:
+        return max(1, int(round(self.total_frames / self._zoom_factor)))
+
+    def _max_view_start(self) -> int:
+        return max(0, self.total_frames - self._visible_frame_count())
+
+    def _refresh_view(self):
+        self._view_start_frame = max(0, min(self._view_start_frame, self._max_view_start()))
+        self.zoom_label.setText(f"Zoom: {self._zoom_factor:.1f}x")
+        self.pan_slider.blockSignals(True)
+        self.pan_slider.setRange(0, self._max_view_start())
+        self.pan_slider.setValue(self._view_start_frame)
+        self.pan_slider.setEnabled(self._max_view_start() > 0)
+        self.pan_slider.blockSignals(False)
+        for track in self.track_widgets:
+            track.set_view(self._zoom_factor, self._view_start_frame)
+
+    def _on_zoom_slider_changed(self, value: int):
+        old_visible = self._visible_frame_count()
+        old_center = self._view_start_frame + (old_visible // 2)
+        self._zoom_factor = max(1.0, value / 10.0)
+        new_visible = self._visible_frame_count()
+        self._view_start_frame = old_center - (new_visible // 2)
+        self._refresh_view()
+
+    def _on_zoom_requested(self, step: float):
+        next_zoom = max(1.0, min(8.0, self._zoom_factor * step))
+        self.zoom_slider.blockSignals(True)
+        self.zoom_slider.setValue(int(round(next_zoom * 10)))
+        self.zoom_slider.blockSignals(False)
+        self._on_zoom_slider_changed(self.zoom_slider.value())
+
+    def _on_pan_slider_changed(self, value: int):
+        self._view_start_frame = value
+        self._refresh_view()

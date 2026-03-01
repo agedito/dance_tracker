@@ -20,6 +20,7 @@ class TimelineTrack(QWidget):
     bookmarkMoved = Signal(int, int)
     bookmarkRemoved = Signal(int)
     bookmarkNameChanged = Signal(int, str)
+    zoomRequested = Signal(float)
 
     def __init__(self, total_frames: int, segments: list[Segment], parent=None):
         super().__init__(parent)
@@ -38,13 +39,47 @@ class TimelineTrack(QWidget):
         self._bookmark_editor.setPlaceholderText("Bookmark name")
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
+        self._zoom_factor = 1.0
+        self._view_start_frame = 0
+
+    @property
+    def zoom_factor(self) -> float:
+        return self._zoom_factor
+
+    @property
+    def view_start_frame(self) -> int:
+        return self._view_start_frame
+
+    def _visible_frame_count(self) -> int:
+        return max(1, int(round(self.total_frames / self._zoom_factor)))
+
+    def _max_view_start(self) -> int:
+        return max(0, self.total_frames - self._visible_frame_count())
+
+    def _clamp_view_start(self, view_start_frame: int) -> int:
+        return clamp(view_start_frame, 0, self._max_view_start())
 
     def _frame_from_pos(self, x: float) -> int:
         norm_x = clamp(int(x), 0, self.width())
-        return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
+        visible_count = self._visible_frame_count()
+        if visible_count <= 1:
+            return self._view_start_frame
+        ratio = norm_x / max(1, self.width())
+        return clamp(
+            int(round(self._view_start_frame + ratio * (visible_count - 1))),
+            0,
+            self.total_frames - 1,
+        )
 
     def _frame_x(self, frame: int) -> int:
-        return int((clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)) * self.width())
+        visible_count = self._visible_frame_count()
+        visible_start = self._view_start_frame
+        visible_end = visible_start + visible_count - 1
+        clamped_frame = clamp(frame, visible_start, visible_end)
+        relative_frame = clamped_frame - visible_start
+        if visible_count <= 1:
+            return 0
+        return int((relative_frame / max(1, visible_count - 1)) * self.width())
 
     def _bookmark_near_pos(self, x: float, threshold_px: int = 8) -> int | None:
         if not self.bookmarks:
@@ -81,10 +116,18 @@ class TimelineTrack(QWidget):
     def set_total_frames(self, total_frames: int):
         self.total_frames = max(1, total_frames)
         self.frame = clamp(self.frame, 0, self.total_frames - 1)
+        self._view_start_frame = self._clamp_view_start(self._view_start_frame)
         self.bookmarks = [bookmark for bookmark in self.bookmarks if bookmark.frame < self.total_frames]
         if self._editing_bookmark_frame is not None and self._editing_bookmark_frame >= self.total_frames:
             self._cancel_bookmark_rename()
         self.loaded_flags = [False] * self.total_frames
+        self.update()
+
+    def set_view(self, zoom_factor: float, view_start_frame: int):
+        self._zoom_factor = max(1.0, zoom_factor)
+        self._view_start_frame = self._clamp_view_start(view_start_frame)
+        if self._editing_bookmark_frame is not None:
+            self._position_bookmark_editor(self._editing_bookmark_frame)
         self.update()
 
     def set_frame(self, f: int):
@@ -186,6 +229,16 @@ class TimelineTrack(QWidget):
                 return
         super().mouseDoubleClickEvent(ev)
 
+    def wheelEvent(self, ev):
+        if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            delta = ev.angleDelta().y()
+            if delta != 0:
+                step = 1.1 if delta > 0 else 1 / 1.1
+                self.zoomRequested.emit(step)
+                ev.accept()
+                return
+        super().wheelEvent(ev)
+
     def _show_bookmark_context_menu(self, ev) -> None:
         bookmark = self._bookmark_near_pos(ev.position().x())
         if bookmark is None:
@@ -243,8 +296,15 @@ class TimelineTrack(QWidget):
         p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 9, 9)
 
         for s in self.segments:
-            left = int((s.a / self.total_frames) * w)
-            right = int((s.b / self.total_frames) * w)
+            visible_count = self._visible_frame_count()
+            visible_start = self._view_start_frame
+            visible_end = visible_start + visible_count
+            if s.b < visible_start or s.a > visible_end:
+                continue
+            local_start = max(s.a, visible_start) - visible_start
+            local_end = min(s.b, visible_end) - visible_start
+            left = int((local_start / max(1, visible_count)) * w)
+            right = int((local_end / max(1, visible_count)) * w)
             seg_w = max(1, right - left)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(status_color(s.t))
@@ -253,7 +313,7 @@ class TimelineTrack(QWidget):
         self._draw_loaded_indicator(p, w, h)
         self._draw_bookmarks(p)
 
-        xph = int((self.frame / max(1, self.total_frames - 1)) * w)
+        xph = self._frame_x(self.frame)
         p.setPen(QPen(QColor(255, 80, 80, 240), 2))
         p.drawLine(xph, -4, xph, h + 4)
         p.end()
@@ -264,13 +324,15 @@ class TimelineTrack(QWidget):
         painter.setPen(Qt.PenStyle.NoPen)
 
         if w <= 1:
-            color = QColor(42, 160, 88, 240) if self.loaded_flags and self.loaded_flags[0] else QColor(95, 98, 102, 200)
+            frame = self._view_start_frame
+            color = QColor(42, 160, 88, 240) if self.loaded_flags and self.loaded_flags[frame] else QColor(95, 98, 102, 200)
             painter.setBrush(color)
             painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
             return
 
+        visible_count = self._visible_frame_count()
         for x in range(1, w - 1):
-            frame = int((x / max(1, w - 1)) * (self.total_frames - 1))
+            frame = self._view_start_frame + int((x / max(1, w - 1)) * max(0, visible_count - 1))
             loaded = self.loaded_flags[frame] if frame < len(self.loaded_flags) else False
             color = QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200)
             painter.setBrush(color)
