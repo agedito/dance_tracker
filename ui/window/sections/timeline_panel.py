@@ -1,5 +1,7 @@
 from typing import Callable
 
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea,
     QVBoxLayout, QWidget,
@@ -7,6 +9,47 @@ from PySide6.QtWidgets import (
 
 from app.interface.sequence_data import Bookmark
 from ui.widgets.timeline import TimelineTrack
+
+
+class ViewportOverviewBar(QWidget):
+    """Compact visual indicator of zoom (window width) and pan (window position)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._view_start = 0.0
+        self._view_span = 1.0
+        self.setFixedSize(140, 14)
+
+    def set_viewport(self, start: float, span: float):
+        clamped_span = max(0.01, min(1.0, span))
+        clamped_start = max(0.0, min(1.0 - clamped_span, start))
+        if abs(clamped_start - self._view_start) < 1e-9 and abs(clamped_span - self._view_span) < 1e-9:
+            return
+        self._view_start = clamped_start
+        self._view_span = clamped_span
+        self.update()
+
+    def paintEvent(self, ev):
+        _ = ev
+        w = self.width()
+        h = self.height()
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+
+        border = QRectF(0.5, 0.5, w - 1, h - 1)
+        p.setPen(QPen(QColor(68, 78, 86, 220), 1))
+        p.setBrush(QColor(24, 30, 35, 220))
+        p.drawRoundedRect(border, 4, 4)
+
+        viewport_x = int(round(self._view_start * max(1, w - 2)))
+        viewport_w = int(round(self._view_span * max(1, w - 2)))
+        viewport_w = max(2, min(w - 2, viewport_w))
+        viewport_x = max(1, min(w - viewport_w - 1, viewport_x + 1))
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(69, 133, 255, 210))
+        p.drawRoundedRect(QRectF(viewport_x, 1, viewport_w, h - 2), 3, 3)
+        p.end()
 
 
 class TimelinePanel(QFrame):
@@ -35,7 +78,8 @@ class TimelinePanel(QFrame):
         self.zoom_bar.setValue(0)
         self.zoom_bar.setFixedWidth(140)
         self.zoom_bar.setTextVisible(True)
-        self.zoom_bar.setFormat("Zoom %p%")
+        self.zoom_bar.setFormat("Zoom 0% · Pan 0%")
+        self.viewport_bar = ViewportOverviewBar()
         self.track_widgets: list[TimelineTrack] = []
         self._shared_view_start = 0.0
         self._shared_view_span = 1.0
@@ -52,6 +96,7 @@ class TimelinePanel(QFrame):
         hl.setContentsMargins(10, 8, 10, 8)
         hl.addWidget(QLabel("MASTER TIMELINE"))
         hl.addWidget(self.zoom_bar)
+        hl.addWidget(self.viewport_bar)
         hl.addStretch(1)
         hl.addWidget(self.time_info)
         root.addWidget(header)
@@ -95,6 +140,7 @@ class TimelinePanel(QFrame):
         lay.addStretch(1)
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
+        self._update_viewport_indicators(self._shared_view_start, self._shared_view_span)
 
     def set_frame(self, frame: int):
         for track in self.track_widgets:
@@ -150,12 +196,19 @@ class TimelinePanel(QFrame):
         finally:
             self._syncing_viewport = False
 
-        self._update_zoom_bar_from_span(span)
+        self._update_viewport_indicators(self._shared_view_start, self._shared_view_span)
 
-    def _update_zoom_bar_from_span(self, span: float):
+    def _update_viewport_indicators(self, start: float, span: float):
+        self._update_zoom_bar(start, span)
+        self.viewport_bar.set_viewport(start, span)
+
+    def _update_zoom_bar(self, start: float, span: float):
         if not self.track_widgets:
             self.zoom_bar.setValue(0)
+            self.zoom_bar.setFormat("Zoom 0% · Pan 0%")
             return
         normalized = (1.0 - span) / 0.99
         zoom_value = int(round(max(0.0, min(1.0, normalized)) * 100.0))
+        pan_value = int(round(max(0.0, min(1.0, start)) * 100.0))
         self.zoom_bar.setValue(zoom_value)
+        self.zoom_bar.setFormat(f"Zoom {zoom_value}% · Pan {pan_value}%")
