@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from app.interface.layers import Layer
 from app.interface.media import MediaPort
 from app.interface.music import MusicPort
 from app.interface.sequence_data import SequenceDataPort
@@ -10,7 +11,7 @@ from app.interface.track_detector import TrackDetectorPort
 class FramesPort(Protocol):
     fps: int
     total_frames: int
-    layers: list
+    layers: list[Layer]
     error_frames: list[int]
     cur_frame: int
     playing: bool

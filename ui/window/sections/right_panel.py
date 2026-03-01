@@ -3,6 +3,8 @@ import math
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QSplitter, QWidget, QTabWidget, QVBoxLayout
 
+from app.interface.application import DanceTrackerPort
+from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
@@ -13,7 +15,7 @@ from ui.window.sections.preferences_manager import PreferencesManager
 class RightPanel(QFrame):
     """Single responsibility: display right-side tools grouped in tabs."""
 
-    def __init__(self, preferences: PreferencesManager, app, event_bus):
+    def __init__(self, preferences: PreferencesManager, app: DanceTrackerPort, event_bus: EventBus):
         super().__init__()
         self._preferences = preferences
         self._current_folder_path: str | None = None

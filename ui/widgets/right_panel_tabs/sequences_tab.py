@@ -5,6 +5,7 @@ from PySide6.QtGui import QDesktopServices, QDrag, QDragEnterEvent, QDropEvent, 
 from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.event_bus import Event, EventBus
+from app.interface.media import MediaPort
 from app.interface.sequences import SequencePort, SequenceState
 from ui.widgets.drop_handler import DropHandler
 from ui.widgets.generic_widgets.context_menu import ContextMenuWidget
@@ -15,7 +16,7 @@ class SequencesTabWidget(QWidget):
     _THUMBNAIL_SIZE = QSize(160, 110)
     _SEQUENCE_MIME_TYPE = "application/x-dance-tracker-sequence"
 
-    def __init__(self, media_manager, sequences: SequencePort, event_bus: EventBus):
+    def __init__(self, media_manager: MediaPort, sequences: SequencePort, event_bus: EventBus):
         super().__init__()
         self._sequences = sequences
         self._drop_handler = DropHandler(media_manager, parent=self)

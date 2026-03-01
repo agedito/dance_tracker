@@ -1,18 +1,8 @@
-from dataclasses import dataclass
 from typing import List
 
+from app.interface.layers import Layer, Segment
 
-@dataclass(frozen=True)
-class Segment:
-    a: int
-    b: int
-    t: str  # "ok" | "warn" | "err"
-
-
-@dataclass(frozen=True)
-class Layer:
-    name: str
-    segments: List[Segment]
+__all__ = ["Layer", "Segment", "default_layers"]
 
 
 def default_layers() -> List[Layer]:

@@ -472,6 +472,12 @@ class SequenceDataAdapter:
     def set_sequence_name(self, frames_folder_path: str, name: str) -> None:
         self._service.set_sequence_name(frames_folder_path, name)
 
+    def previous_bookmark_frame(self, frames_folder_path: str, current_frame: int) -> int | None:
+        return self._service.previous_bookmark_frame(frames_folder_path, current_frame)
+
+    def next_bookmark_frame(self, frames_folder_path: str, current_frame: int) -> int | None:
+        return self._service.next_bookmark_frame(frames_folder_path, current_frame)
+
 
 class TrackDetectorAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus):

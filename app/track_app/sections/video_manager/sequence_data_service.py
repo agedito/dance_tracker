@@ -188,6 +188,16 @@ class SequenceDataService:
             return value.strip()
         return None
 
+    def previous_bookmark_frame(self, frames_folder_path: str, current_frame: int) -> int | None:
+        bookmarks = self.read_bookmarks(frames_folder_path)
+        candidates = sorted(b.frame for b in bookmarks if b.frame < current_frame)
+        return candidates[-1] if candidates else None
+
+    def next_bookmark_frame(self, frames_folder_path: str, current_frame: int) -> int | None:
+        bookmarks = self.read_bookmarks(frames_folder_path)
+        candidates = sorted(b.frame for b in bookmarks if b.frame > current_frame)
+        return candidates[0] if candidates else None
+
     def set_sequence_name(self, frames_folder_path: str, name: str) -> None:
         frames_folder = Path(frames_folder_path).expanduser().resolve()
         metadata_path = self._find_matching_metadata_path(frames_folder)

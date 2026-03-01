@@ -3,7 +3,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QLineEdit, QWidget
 
 from app.interface.sequence_data import Bookmark
-from app.track_app.frame_state.layers import Segment
+from app.interface.layers import Segment
 from ui.widgets.generic_widgets.context_menu import ContextMenuWidget
 from utils.numbers import clamp
 

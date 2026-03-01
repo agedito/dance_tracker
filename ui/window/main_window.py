@@ -354,21 +354,17 @@ class MainWindow(QMainWindow):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
-        bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        previous = sorted(bookmark.frame for bookmark in bookmarks if bookmark.frame < self._frames.cur_frame)
-        if previous:
-            self.set_frame(previous[-1])
+        frame = self._app.sequence_data.previous_bookmark_frame(folder_path, self._frames.cur_frame)
+        if frame is not None:
+            self.set_frame(frame)
 
     def _go_to_next_bookmark(self):
         folder_path = self._folder_session.current_folder_path
         if not folder_path:
             return
-
-        bookmarks = self._app.sequence_data.read_bookmarks(folder_path)
-        following = sorted(bookmark.frame for bookmark in bookmarks if bookmark.frame > self._frames.cur_frame)
-        if following:
-            self.set_frame(following[0])
+        frame = self._app.sequence_data.next_bookmark_frame(folder_path, self._frames.cur_frame)
+        if frame is not None:
+            self.set_frame(frame)
 
     def _on_frame_preloaded(self, frame: int, loaded: bool, generation: int):
         if generation != self._active_preload_generation:
