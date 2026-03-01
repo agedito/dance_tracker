@@ -104,23 +104,19 @@ class ViewerWidget(QWidget):
             return QRectF(self.rect().adjusted(16, 16, -16, -16))
 
         display_size = self._frame_store.get_display_size(self._frame)
-        if display_size is None:
-            display_size = (pixmap.width(), pixmap.height())
+        source_width = display_size[0] if display_size is not None else pixmap.width()
+        source_height = display_size[1] if display_size is not None else pixmap.height()
+        if source_width <= 0 or source_height <= 0:
+            return QRectF(self.rect().adjusted(16, 16, -16, -16))
 
-        pixmap = pixmap.scaled(
-            display_size[0],
-            display_size[1],
-            Qt.AspectRatioMode.IgnoreAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        scaled = pixmap.scaled(
-            self.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        x = (self.width() - scaled.width()) // 2
-        y = (self.height() - scaled.height()) // 2
-        return QRectF(x, y, scaled.width(), scaled.height())
+        widget_width = max(1, self.width())
+        widget_height = max(1, self.height())
+        scale = min(widget_width / source_width, widget_height / source_height)
+        target_width = int(source_width * scale)
+        target_height = int(source_height * scale)
+        x = (widget_width - target_width) // 2
+        y = (widget_height - target_height) // 2
+        return QRectF(x, y, target_width, target_height)
 
     # ── Events ───────────────────────────────────────────────────────
 
@@ -181,24 +177,8 @@ class ViewerWidget(QWidget):
     def _paint_frame(self, pixmap, video_rect: QRectF):
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.GlobalColor.black)
-
-        display_size = self._frame_store.get_display_size(self._frame)
-        if display_size is not None:
-            pixmap = pixmap.scaled(
-                display_size[0],
-                display_size[1],
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-
-        scaled = pixmap.scaled(
-            self.size(),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        x = (self.width() - scaled.width()) // 2
-        y = (self.height() - scaled.height()) // 2
-        painter.drawPixmap(x, y, scaled)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+        painter.drawPixmap(video_rect, pixmap, QRectF(pixmap.rect()))
         self._draw_border(painter, video_rect)
         self._draw_detections(painter, video_rect)
         painter.end()
