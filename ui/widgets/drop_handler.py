@@ -5,7 +5,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QWidget
 
 from app.interface.media import MediaPort
-from ui.widgets.dialogs import BaseProgressDialog
+from ui.widgets.generic_widgets.base_dialog import BaseProgressDialog
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 SEQUENCE_SUFFIXES = {".json"}
