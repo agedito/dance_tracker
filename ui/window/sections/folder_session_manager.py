@@ -20,7 +20,6 @@ class FolderSessionManager:
         self.current_folder_path: str | None = None
 
     def load_folder(self, folder_path: str, target_frame: int | None = None):
-        self.remember_current_frame(0)
         frame_count = self._frame_store.load_folder(folder_path)
         if frame_count <= 0:
             return
