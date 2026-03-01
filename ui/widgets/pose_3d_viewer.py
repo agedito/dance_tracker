@@ -22,6 +22,48 @@ class Vec3:
         return Vec3(self.x * scalar, self.y * scalar, self.z * scalar)
 
 
+class _OrbitCamera:
+    """Orbit camera: owns yaw/pitch/distance state and 3D→2D projection."""
+
+    def __init__(self):
+        self.yaw = 0.9
+        self.pitch = -0.45
+        self.distance = 7.5
+
+    def update_from_drag(self, delta: QPointF) -> None:
+        self.yaw += delta.x() * 0.01
+        self.pitch += delta.y() * 0.008
+        self.pitch = max(-1.3, min(0.2, self.pitch))
+
+    def update_from_wheel(self, delta: float) -> None:
+        self.distance *= 0.9 if delta > 0 else 1.1
+        self.distance = max(3.0, min(14.0, self.distance))
+
+    def camera_transform(self, point: Vec3) -> Vec3:
+        cy, sy = math.cos(self.yaw), math.sin(self.yaw)
+        cp, sp = math.cos(self.pitch), math.sin(self.pitch)
+
+        cam = Vec3(0.0, 1.2, self.distance)
+        x1 = point.x * cy - point.z * sy
+        z1 = point.x * sy + point.z * cy
+        y1 = point.y
+
+        y2 = y1 * cp - z1 * sp
+        z2 = y1 * sp + z1 * cp
+
+        return Vec3(x1 - cam.x, y2 - cam.y, z2 - cam.z)
+
+    def project(self, point: Vec3, width: int, height: int) -> tuple[QPointF | None, float]:
+        cam_p = self.camera_transform(point)
+        depth = -cam_p.z
+        if depth <= 0.05:
+            return None, depth
+        focal = min(width, height) * 0.75
+        sx = (cam_p.x * focal / depth) + width / 2
+        sy = (-cam_p.y * focal / depth) + height / 2
+        return QPointF(sx, sy), depth
+
+
 class Pose3DViewerWidget(QWidget):
     """Simple 3D pose viewer with orbit camera and box-based characters."""
 
@@ -47,15 +89,52 @@ class Pose3DViewerWidget(QWidget):
         self.setMouseTracking(True)
 
         self._detections: list[dict] = []
-        self._yaw = 0.9
-        self._pitch = -0.45
-        self._distance = 7.5
+        self._camera = _OrbitCamera()
         self._dragging = False
         self._last_mouse = QPointF()
 
     def set_detections(self, detections: list[dict]):
         self._detections = detections
         self.update()
+
+    def set_frame_for_demo(self, frame: int) -> None:
+        self.set_detections(self._mock_detections(frame))
+
+    @staticmethod
+    def _mock_detections(frame: int) -> list[dict]:
+        t = frame * 0.08
+
+        def person(cx: float, arm_offset: float, confidence: float = 0.95):
+            kp = [
+                [cx, 0.25, confidence],
+                [cx - 0.03, 0.24, confidence],
+                [cx + 0.03, 0.24, confidence],
+                [cx - 0.06, 0.27, confidence],
+                [cx + 0.06, 0.27, confidence],
+                [cx - 0.10, 0.36, confidence],
+                [cx + 0.10, 0.36, confidence],
+                [cx - 0.16 - arm_offset, 0.46, confidence],
+                [cx + 0.16 + arm_offset, 0.46, confidence],
+                [cx - 0.20 - arm_offset, 0.56, confidence],
+                [cx + 0.20 + arm_offset, 0.56, confidence],
+                [cx - 0.08, 0.60, confidence],
+                [cx + 0.08, 0.60, confidence],
+                [cx - 0.09, 0.77, confidence],
+                [cx + 0.09, 0.77, confidence],
+                [cx - 0.09, 0.95, confidence],
+                [cx + 0.09, 0.95, confidence],
+            ]
+            return {"keypoints": kp}
+
+        characters = frame % 3
+        if characters == 0:
+            return []
+        if characters == 1:
+            return [person(0.5, 0.04 * math.sin(t))]
+        return [
+            person(0.36, 0.04 * math.sin(t)),
+            person(0.64, 0.04 * math.cos(t + 0.5)),
+        ]
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -69,14 +148,9 @@ class Pose3DViewerWidget(QWidget):
         if not self._dragging:
             super().mouseMoveEvent(event)
             return
-
         pos = QPointF(event.position())
-        delta = pos - self._last_mouse
+        self._camera.update_from_drag(pos - self._last_mouse)
         self._last_mouse = pos
-
-        self._yaw += delta.x() * 0.01
-        self._pitch += delta.y() * 0.008
-        self._pitch = max(-1.3, min(0.2, self._pitch))
         self.update()
         event.accept()
 
@@ -86,9 +160,7 @@ class Pose3DViewerWidget(QWidget):
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
-        delta = event.angleDelta().y()
-        self._distance *= 0.9 if delta > 0 else 1.1
-        self._distance = max(3.0, min(14.0, self._distance))
+        self._camera.update_from_wheel(event.angleDelta().y())
         self.update()
         event.accept()
 
@@ -104,38 +176,11 @@ class Pose3DViewerWidget(QWidget):
             self._draw_detection_character(painter, det, color)
 
         painter.setPen(QColor(190, 205, 220))
-        painter.drawText(
-            12,
-            20,
-            "Visor 3D · Drag to rotate, use mouse wheel to zoom",
-        )
+        painter.drawText(12, 20, "Visor 3D · Drag to rotate, use mouse wheel to zoom")
         painter.end()
 
-    def _camera_transform(self, point: Vec3) -> Vec3:
-        cy, sy = math.cos(self._yaw), math.sin(self._yaw)
-        cp, sp = math.cos(self._pitch), math.sin(self._pitch)
-
-        # Orbit camera looking at world origin.
-        cam = Vec3(0.0, 1.2, self._distance)
-        x1 = point.x * cy - point.z * sy
-        z1 = point.x * sy + point.z * cy
-        y1 = point.y
-
-        y2 = y1 * cp - z1 * sp
-        z2 = y1 * sp + z1 * cp
-
-        return Vec3(x1 - cam.x, y2 - cam.y, z2 - cam.z)
-
     def _project(self, point: Vec3) -> tuple[QPointF | None, float]:
-        cam_p = self._camera_transform(point)
-        depth = -cam_p.z
-        if depth <= 0.05:
-            return None, depth
-
-        focal = min(self.width(), self.height()) * 0.75
-        sx = (cam_p.x * focal / depth) + self.width() / 2
-        sy = (-cam_p.y * focal / depth) + self.height() / 2
-        return QPointF(sx, sy), depth
+        return self._camera.project(point, self.width(), self.height())
 
     def _draw_grid(self, painter: QPainter):
         painter.setPen(QPen(QColor(95, 105, 115), 1))
@@ -182,7 +227,11 @@ class Pose3DViewerWidget(QWidget):
         if nose:
             self._draw_box(painter, nose + Vec3(-0.08, -0.05, -0.08), nose + Vec3(0.08, 0.11, 0.08), color)
         elif l_shoulder and r_shoulder:
-            center = Vec3((l_shoulder.x + r_shoulder.x) * 0.5, l_shoulder.y + 0.22, (l_shoulder.z + r_shoulder.z) * 0.5)
+            center = Vec3(
+                (l_shoulder.x + r_shoulder.x) * 0.5,
+                l_shoulder.y + 0.22,
+                (l_shoulder.z + r_shoulder.z) * 0.5,
+            )
             self._draw_box(painter, center + Vec3(-0.1, -0.1, -0.1), center + Vec3(0.1, 0.1, 0.1), color)
 
     def _draw_limb_box(self, painter: QPainter, a: Vec3, b: Vec3, color: QColor):

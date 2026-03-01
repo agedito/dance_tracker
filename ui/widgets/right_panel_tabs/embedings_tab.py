@@ -7,6 +7,47 @@ from app.interface.application import DanceTrackerPort
 from ui.widgets.right_panel_tabs.common import section_label
 
 
+class _DetectionBatchRunner:
+    """Timer-based frame-by-frame detection processor."""
+
+    def __init__(self, track_detector, on_finished: Callable[[int], None], parent_obj: QWidget):
+        self._track_detector = track_detector
+        self._on_finished = on_finished
+        self._pending_folder: str | None = None
+        self._pending_idx = 0
+        self._pending_total = 0
+
+        self._timer = QTimer(parent_obj)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self._step)
+
+    @property
+    def running(self) -> bool:
+        return self._pending_folder is not None
+
+    def start(self, folder_path: str, total_frames: int) -> None:
+        self._pending_folder = folder_path
+        self._pending_idx = 0
+        self._pending_total = total_frames
+        self._timer.start(0)
+
+    def _step(self) -> None:
+        if not self._pending_folder or self._pending_idx >= self._pending_total:
+            processed = self._pending_idx
+            self._pending_folder = None
+            self._pending_idx = 0
+            self._pending_total = 0
+            self._on_finished(processed)
+            return
+
+        self._track_detector.detect_people_for_sequence(
+            self._pending_folder,
+            frame_index=self._pending_idx,
+        )
+        self._pending_idx += 1
+        self._timer.start(0)
+
+
 class EmbedingsTabWidget(QWidget):
     def __init__(
         self,
@@ -18,12 +59,11 @@ class EmbedingsTabWidget(QWidget):
         self._app = app
         self._get_current_folder = get_current_folder
         self._log_message = log_message
-        self._pending_folder_path: str | None = None
-        self._pending_frame_index = 0
-        self._pending_total_frames = 0
-        self._detection_timer = QTimer(self)
-        self._detection_timer.setSingleShot(True)
-        self._detection_timer.timeout.connect(self._detect_next_frame)
+        self._runner = _DetectionBatchRunner(
+            app.track_detector,
+            on_finished=self._on_batch_finished,
+            parent_obj=self,
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -62,11 +102,9 @@ class EmbedingsTabWidget(QWidget):
     def _on_detector_changed(self, detector_name: str) -> None:
         if not detector_name:
             return
-
         if self._app.track_detector.set_active_detector(detector_name):
             self._log_message(f"Detector selected: {detector_name}.")
             return
-
         self._log_message(f"Unable to select detector: {detector_name}.")
 
     def _on_detect_people_clicked(self) -> None:
@@ -91,33 +129,10 @@ class EmbedingsTabWidget(QWidget):
             self._log_message("No frames available for detection.")
             return
 
-        self._pending_folder_path = frames_folder_path
-        self._pending_frame_index = 0
-        self._pending_total_frames = total_frames
         self._set_detection_controls_enabled(False)
         self._log_message(f"Person detection started with detector: {detector_name}.")
-        self._detection_timer.start(0)
+        self._runner.start(frames_folder_path, total_frames)
 
-    def _detect_next_frame(self) -> None:
-        if not self._pending_folder_path:
-            self._finish_detection_batch()
-            return
-
-        if self._pending_frame_index >= self._pending_total_frames:
-            self._finish_detection_batch()
-            return
-
-        self._app.track_detector.detect_people_for_sequence(
-            self._pending_folder_path,
-            frame_index=self._pending_frame_index,
-        )
-        self._pending_frame_index += 1
-        self._detection_timer.start(0)
-
-    def _finish_detection_batch(self) -> None:
-        processed = self._pending_frame_index
-        self._pending_folder_path = None
-        self._pending_total_frames = 0
-        self._pending_frame_index = 0
+    def _on_batch_finished(self, processed: int) -> None:
         self._set_detection_controls_enabled(True)
         self._log_message(f"Person detection finished. Processed {processed} frames.")

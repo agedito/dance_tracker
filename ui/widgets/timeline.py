@@ -1,16 +1,61 @@
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QLineEdit, QWidget
 
-from app.interface.sequence_data import Bookmark
 from app.interface.layers import Segment
+from app.interface.sequence_data import Bookmark
 from ui.widgets.generic_widgets.context_menu import ContextMenuWidget
+from ui.widgets.timeline_painter import TimelineTrackPainter
+from ui.widgets.timeline_viewport import TimelineViewport
 from utils.numbers import clamp
 
 
-def status_color(t: str) -> QColor:
-    _ = t
-    return QColor(0, 0, 0, 220)
+class _BookmarkEditor:
+    """Inline QLineEdit for renaming bookmarks, embedded inside a parent QWidget."""
+
+    def __init__(self, parent: QWidget, on_editing_finished) -> None:
+        self._editor = QLineEdit(parent)
+        self._editor.hide()
+        self._editor.setPlaceholderText("Bookmark name")
+        self._editor.editingFinished.connect(on_editing_finished)
+        self._editing_frame: int | None = None
+
+    @property
+    def editing_frame(self) -> int | None:
+        return self._editing_frame
+
+    def start(self, frame: int, name: str, label_rect: QRectF) -> None:
+        self._editing_frame = frame
+        self._editor.setText(name)
+        self._editor.setGeometry(label_rect.adjusted(0, 0, 0, 10).toRect())
+        self._editor.show()
+        self._editor.setFocus()
+        self._editor.selectAll()
+
+    def finish(self) -> tuple[int, str] | None:
+        if self._editing_frame is None:
+            return None
+        frame = self._editing_frame
+        self._editing_frame = None
+        self._editor.hide()
+        return frame, self._editor.text()
+
+    def cancel(self) -> None:
+        self._editing_frame = None
+        self._editor.hide()
+
+    def reposition(self, label_rect: QRectF) -> None:
+        self._editor.setGeometry(label_rect.adjusted(0, 0, 0, 10).toRect())
+
+    def update_for_bookmarks(self, bookmarks: list[Bookmark], name: str, label_rect: QRectF) -> None:
+        if self._editing_frame is None:
+            return
+        if not any(b.frame == self._editing_frame for b in bookmarks):
+            self.cancel()
+            return
+        self._editor.setText(name)
+        self._editor.selectAll()
+        self.reposition(label_rect)
 
 
 class TimelineTrack(QWidget):
@@ -34,98 +79,99 @@ class TimelineTrack(QWidget):
         self._dragging_bookmark = False
         self._drag_source_bookmark: int | None = None
         self._drag_bookmark_frame: int | None = None
-        self._editing_bookmark_frame: int | None = None
-        self._bookmark_editor = QLineEdit(self)
-        self._bookmark_editor.hide()
-        self._bookmark_editor.editingFinished.connect(self._finish_bookmark_rename)
-        self._bookmark_editor.setPlaceholderText("Bookmark name")
-        self._view_start = 0.0
-        self._view_span = 1.0
-        self._panning = False
-        self._pan_anchor_x = 0.0
-        self._pan_anchor_start = 0.0
+        self._viewport = TimelineViewport()
+        self._editor = _BookmarkEditor(self, self._finish_bookmark_rename)
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
-    def _visible_end(self) -> float:
-        return self._view_start + self._view_span
+    # ── Viewport ─────────────────────────────────────────────────────
 
-    def _normalize_view(self):
-        self._view_span = clamp(self._view_span, 0.01, 1.0)
-        self._view_start = clamp(self._view_start, 0.0, 1.0 - self._view_span)
+    def _emit_if_changed(self, changed: bool) -> None:
+        if changed:
+            self.viewportChanged.emit(self._viewport.view_start, self._viewport.view_span)
 
-    def _set_viewport(self, start: float, span: float, emit_signal: bool = True):
-        old_start = self._view_start
-        old_span = self._view_span
-        self._view_start = start
-        self._view_span = span
-        self._normalize_view()
-        if emit_signal and (
-            abs(self._view_start - old_start) > 1e-9
-            or abs(self._view_span - old_span) > 1e-9
-        ):
-            self.viewportChanged.emit(self._view_start, self._view_span)
-
-    def set_shared_viewport(self, start: float, span: float):
-        self._set_viewport(start, span, emit_signal=False)
+    def set_shared_viewport(self, start: float, span: float) -> None:
+        self._viewport.set(start, span)
         self.update()
 
-    def _zoom_at_position(self, x: float, zoom_in: bool):
-        anchor = clamp(x / max(1, self.width()), 0.0, 1.0)
-        anchor_frame = self._view_start + anchor * self._view_span
-        factor = 0.84 if zoom_in else 1.19
-        new_span = self._view_span * factor
-        self._set_viewport(self._view_start, new_span, emit_signal=False)
-        self._set_viewport(anchor_frame - anchor * self._view_span, self._view_span)
+    # ── Public setters ───────────────────────────────────────────────
 
-    def _pan_by_pixels(self, dx: float):
-        if self.width() <= 1:
-            return
-        delta = (dx / self.width()) * self._view_span
-        self._set_viewport(self._pan_anchor_start - delta, self._view_span)
+    def set_total_frames(self, total_frames: int) -> None:
+        self.total_frames = max(1, total_frames)
+        self.frame = clamp(self.frame, 0, self.total_frames - 1)
+        self.bookmarks = [b for b in self.bookmarks if b.frame < self.total_frames]
+        if self._editor.editing_frame is not None and self._editor.editing_frame >= self.total_frames:
+            self._editor.cancel()
+        self.loaded_flags = [False] * self.total_frames
+        self._emit_if_changed(self._viewport.set(self._viewport.view_start, self._viewport.view_span))
+        self.update()
 
-    def _frame_from_pos(self, x: float) -> int:
-        norm_x = clamp(x, 0.0, float(self.width()))
-        view_pos = self._view_start + (norm_x / max(1, self.width())) * self._view_span
-        return int(round(clamp(view_pos, 0.0, 1.0) * (self.total_frames - 1)))
+    def set_frame(self, f: int) -> None:
+        self.frame = clamp(f, 0, self.total_frames - 1)
+        if self.total_frames > 1:
+            norm_frame = self.frame / (self.total_frames - 1)
+            if norm_frame < self._viewport.view_start:
+                self._emit_if_changed(self._viewport.set(norm_frame, self._viewport.view_span))
+            elif norm_frame > self._viewport.visible_end:
+                self._emit_if_changed(
+                    self._viewport.set(norm_frame - self._viewport.view_span, self._viewport.view_span)
+                )
+        self.update()
 
-    def _frame_x(self, frame: int) -> int:
-        norm_frame = clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)
-        if norm_frame < self._view_start or norm_frame > self._visible_end():
-            return -1000
-        relative = (norm_frame - self._view_start) / max(0.0001, self._view_span)
-        return int(relative * self.width())
+    def set_bookmarks(self, bookmarks: list[Bookmark]) -> None:
+        by_frame = {
+            clamp(b.frame, 0, self.total_frames - 1): Bookmark(
+                frame=clamp(b.frame, 0, self.total_frames - 1),
+                name=b.name.strip(),
+                locked=b.locked,
+            )
+            for b in bookmarks
+        }
+        self.bookmarks = [by_frame[frame] for frame in sorted(by_frame)]
+        editing = self._editor.editing_frame
+        if editing is not None:
+            self._editor.update_for_bookmarks(
+                self.bookmarks,
+                self._bookmark_name(editing),
+                self._bookmark_label_rect(editing),
+            )
+        self.update()
+
+    def set_loaded_flags(self, flags: list[bool]) -> None:
+        if len(flags) != self.total_frames:
+            self.loaded_flags = (flags + [False] * self.total_frames)[: self.total_frames]
+        else:
+            self.loaded_flags = list(flags)
+        self.update()
+
+    def set_frame_loaded(self, frame: int, loaded: bool) -> None:
+        if 0 <= frame < self.total_frames:
+            self.loaded_flags[frame] = loaded
+            self.update()
+
+    # ── Bookmark queries ─────────────────────────────────────────────
 
     def _bookmark_near_pos(self, x: float, threshold_px: int = 8) -> int | None:
-        if not self.bookmarks:
-            return None
-
         nearest: int | None = None
-        nearest_distance: float | None = None
+        nearest_dist: float | None = None
         for bookmark in self.bookmarks:
-            marker_x = self._frame_x(bookmark.frame)
-            distance = abs(marker_x - x)
-            if distance > threshold_px:
+            marker_x = self._viewport.frame_x(bookmark.frame, self.total_frames, self.width())
+            dist = abs(marker_x - x)
+            if dist > threshold_px:
                 continue
-            if nearest_distance is None or distance < nearest_distance:
-                nearest_distance = distance
+            if nearest_dist is None or dist < nearest_dist:
+                nearest_dist = dist
                 nearest = bookmark.frame
         return nearest
 
     def _bookmark_name(self, frame: int) -> str:
-        for bookmark in self.bookmarks:
-            if bookmark.frame == frame:
-                return bookmark.name
-        return ""
+        return next((b.name for b in self.bookmarks if b.frame == frame), "")
 
     def _is_bookmark_locked(self, frame: int) -> bool:
-        for bookmark in self.bookmarks:
-            if bookmark.frame == frame:
-                return bookmark.locked
-        return False
+        return next((b.locked for b in self.bookmarks if b.frame == frame), False)
 
     def _bookmark_label_rect(self, frame: int) -> QRectF:
-        x = self._frame_x(frame)
+        x = self._viewport.frame_x(frame, self.total_frames, self.width())
         return QRectF(x - 90, 0, 180, 12)
 
     def _bookmark_at_position(self, x: float, y: float) -> int | None:
@@ -134,67 +180,11 @@ class TimelineTrack(QWidget):
                 return bookmark.frame
         return self._bookmark_near_pos(x)
 
-    def set_total_frames(self, total_frames: int):
-        self.total_frames = max(1, total_frames)
-        self.frame = clamp(self.frame, 0, self.total_frames - 1)
-        self.bookmarks = [bookmark for bookmark in self.bookmarks if bookmark.frame < self.total_frames]
-        if self._editing_bookmark_frame is not None and self._editing_bookmark_frame >= self.total_frames:
-            self._cancel_bookmark_rename()
-        self.loaded_flags = [False] * self.total_frames
-        self._set_viewport(self._view_start, self._view_span)
-        self.update()
-
-    def set_frame(self, f: int):
-        self.frame = clamp(f, 0, self.total_frames - 1)
-        if self.total_frames > 1:
-            norm_frame = self.frame / (self.total_frames - 1)
-            if norm_frame < self._view_start:
-                self._set_viewport(norm_frame, self._view_span)
-            elif norm_frame > self._visible_end():
-                self._set_viewport(norm_frame - self._view_span, self._view_span)
-        self.update()
-
-    def set_bookmarks(self, bookmarks: list[Bookmark]):
-        by_frame = {
-            clamp(bookmark.frame, 0, self.total_frames - 1): Bookmark(
-                frame=clamp(bookmark.frame, 0, self.total_frames - 1),
-                name=bookmark.name.strip(),
-                locked=bookmark.locked,
-            )
-            for bookmark in bookmarks
-        }
-        self.bookmarks = [
-            by_frame[frame]
-            for frame in sorted(by_frame)
-        ]
-        if self._editing_bookmark_frame is not None:
-            current = self._bookmark_name(self._editing_bookmark_frame)
-            if not any(bookmark.frame == self._editing_bookmark_frame for bookmark in self.bookmarks):
-                self._cancel_bookmark_rename()
-            else:
-                self._bookmark_editor.setText(current)
-                self._bookmark_editor.selectAll()
-                self._position_bookmark_editor(self._editing_bookmark_frame)
-        self.update()
-
-    def set_loaded_flags(self, flags: list[bool]):
-        if len(flags) != self.total_frames:
-            self.loaded_flags = (flags + [False] * self.total_frames)[:self.total_frames]
-        else:
-            self.loaded_flags = list(flags)
-        self.update()
-
-    def set_frame_loaded(self, frame: int, loaded: bool):
-        if frame < 0 or frame >= self.total_frames:
-            return
-        self.loaded_flags[frame] = loaded
-        self.update()
+    # ── Mouse events ─────────────────────────────────────────────────
 
     def mousePressEvent(self, ev):
         if ev.button() == Qt.MouseButton.MiddleButton:
-            self._panning = True
-            self._pan_anchor_x = ev.position().x()
-            self._pan_anchor_start = self._view_start
+            self._viewport.start_pan(ev.position().x())
             self.setCursor(Qt.CursorShape.SizeHorCursor)
             ev.accept()
             return
@@ -206,7 +196,7 @@ class TimelineTrack(QWidget):
         if ev.button() != Qt.MouseButton.LeftButton:
             return
 
-        if self._editing_bookmark_frame is not None:
+        if self._editor.editing_frame is not None:
             self._finish_bookmark_rename()
 
         bookmark = self._bookmark_near_pos(ev.position().x())
@@ -220,11 +210,13 @@ class TimelineTrack(QWidget):
             return
 
         self.scrubStarted.emit()
-        self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
+        self.frameChanged.emit(
+            self._viewport.frame_from_pos(ev.position().x(), self.width(), self.total_frames)
+        )
 
     def mouseMoveEvent(self, ev):
-        if self._panning:
-            self._pan_by_pixels(ev.position().x() - self._pan_anchor_x)
+        if self._viewport.panning:
+            self._emit_if_changed(self._viewport.pan_to(ev.position().x(), self.width()))
             self.update()
             ev.accept()
             return
@@ -233,15 +225,19 @@ class TimelineTrack(QWidget):
             return
 
         if self._dragging_bookmark:
-            self._drag_bookmark_frame = self._frame_from_pos(ev.position().x())
+            self._drag_bookmark_frame = self._viewport.frame_from_pos(
+                ev.position().x(), self.width(), self.total_frames
+            )
             self.update()
             return
 
-        self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
+        self.frameChanged.emit(
+            self._viewport.frame_from_pos(ev.position().x(), self.width(), self.total_frames)
+        )
 
     def mouseReleaseEvent(self, ev):
-        if ev.button() == Qt.MouseButton.MiddleButton and self._panning:
-            self._panning = False
+        if ev.button() == Qt.MouseButton.MiddleButton and self._viewport.panning:
+            self._viewport.stop_pan()
             self.setCursor(Qt.CursorShape.CrossCursor)
             ev.accept()
             return
@@ -276,13 +272,14 @@ class TimelineTrack(QWidget):
         if delta_y == 0:
             ev.ignore()
             return
-
-        self._zoom_at_position(ev.position().x(), zoom_in=delta_y > 0)
+        self._emit_if_changed(self._viewport.zoom_at(ev.position().x(), self.width(), zoom_in=delta_y > 0))
         self.update()
         ev.accept()
 
+    # ── Context menu ─────────────────────────────────────────────────
+
     def _show_bookmark_context_menu(self, ev) -> None:
-        clicked_frame = self._frame_from_pos(ev.position().x())
+        clicked_frame = self._viewport.frame_from_pos(ev.position().x(), self.width(), self.total_frames)
         bookmark = self._bookmark_near_pos(ev.position().x())
 
         menu = ContextMenuWidget(self)
@@ -290,20 +287,16 @@ class TimelineTrack(QWidget):
         if bookmark is None:
             add_action = menu.addAction("Add bookmark")
             menu.setActiveAction(add_action)
-            chosen_action = menu.exec(ev.globalPosition().toPoint())
-            if chosen_action == add_action:
+            if menu.exec(ev.globalPosition().toPoint()) == add_action:
                 self.bookmarkRequested.emit(clicked_frame)
             return
 
-        is_locked = self._is_bookmark_locked(bookmark)
-
-        if is_locked:
+        if self._is_bookmark_locked(bookmark):
             unlock_action = menu.addAction("Unlock bookmark")
             menu.setActiveAction(unlock_action)
-            chosen_action = menu.exec(ev.globalPosition().toPoint())
-            if chosen_action == unlock_action:
-                if self._editing_bookmark_frame == bookmark:
-                    self._cancel_bookmark_rename()
+            if menu.exec(ev.globalPosition().toPoint()) == unlock_action:
+                if self._editor.editing_frame == bookmark:
+                    self._editor.cancel()
                 self.bookmarkLockChanged.emit(bookmark, False)
             return
 
@@ -313,130 +306,51 @@ class TimelineTrack(QWidget):
         lock_action = menu.addAction("Lock bookmark")
         menu.setActiveAction(edit_name_action)
 
-        chosen_action = menu.exec(ev.globalPosition().toPoint())
-        if chosen_action == edit_name_action:
+        chosen = menu.exec(ev.globalPosition().toPoint())
+        if chosen == edit_name_action:
             self._start_bookmark_rename(bookmark)
-        elif chosen_action == delete_action:
-            if self._editing_bookmark_frame == bookmark:
-                self._cancel_bookmark_rename()
+        elif chosen == delete_action:
+            if self._editor.editing_frame == bookmark:
+                self._editor.cancel()
             self.bookmarkRemoved.emit(bookmark)
-        elif chosen_action == lock_action:
-            if self._editing_bookmark_frame == bookmark:
-                self._cancel_bookmark_rename()
+        elif chosen == lock_action:
+            if self._editor.editing_frame == bookmark:
+                self._editor.cancel()
             self.bookmarkLockChanged.emit(bookmark, True)
 
+    # ── Bookmark editor ──────────────────────────────────────────────
+
     def resizeEvent(self, ev):
-        if self._editing_bookmark_frame is not None:
-            self._position_bookmark_editor(self._editing_bookmark_frame)
+        editing = self._editor.editing_frame
+        if editing is not None:
+            self._editor.reposition(self._bookmark_label_rect(editing))
         super().resizeEvent(ev)
 
-    def _position_bookmark_editor(self, frame: int) -> None:
-        label_rect = self._bookmark_label_rect(frame)
-        edit_rect = label_rect.adjusted(0, 0, 0, 10)
-        self._bookmark_editor.setGeometry(edit_rect.toRect())
-
     def _start_bookmark_rename(self, frame: int) -> None:
-        self._editing_bookmark_frame = frame
-        self._bookmark_editor.setText(self._bookmark_name(frame))
-        self._position_bookmark_editor(frame)
-        self._bookmark_editor.show()
-        self._bookmark_editor.setFocus()
-        self._bookmark_editor.selectAll()
+        self._editor.start(frame, self._bookmark_name(frame), self._bookmark_label_rect(frame))
 
     def _finish_bookmark_rename(self) -> None:
-        if self._editing_bookmark_frame is None:
-            return
+        result = self._editor.finish()
+        if result is not None:
+            frame, name = result
+            self.bookmarkNameChanged.emit(frame, name)
 
-        frame = self._editing_bookmark_frame
-        self._editing_bookmark_frame = None
-        self._bookmark_editor.hide()
-        self.bookmarkNameChanged.emit(frame, self._bookmark_editor.text())
+    # ── Paint ────────────────────────────────────────────────────────
 
-    def _cancel_bookmark_rename(self) -> None:
-        self._editing_bookmark_frame = None
-        self._bookmark_editor.hide()
-
-    def paintEvent(self, ev):
-        w, h = self.width(), self.height()
+    def paintEvent(self, _ev):
         p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-
-        p.setBrush(QColor(12, 15, 18))
-        p.setPen(QPen(QColor(43, 52, 59), 1))
-        p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 9, 9)
-
-        total = max(1, self.total_frames - 1)
-        for s in self.segments:
-            left_norm = clamp(s.a / total, 0.0, 1.0)
-            right_norm = clamp(s.b / total, 0.0, 1.0)
-            if right_norm < self._view_start or left_norm > self._visible_end():
-                continue
-            left = int(((left_norm - self._view_start) / max(0.0001, self._view_span)) * w)
-            right = int(((right_norm - self._view_start) / max(0.0001, self._view_span)) * w)
-            seg_w = max(1, right - left)
-            p.setPen(Qt.PenStyle.NoPen)
-            p.setBrush(status_color(s.t))
-            p.drawRect(QRectF(left, 12, seg_w, h - 16))
-
-        self._draw_loaded_indicator(p, w, h)
-        self._draw_bookmarks(p)
-
-        frame_norm = self.frame / max(1, self.total_frames - 1)
-        xph = int(((frame_norm - self._view_start) / max(0.0001, self._view_span)) * w)
-        p.setPen(QPen(QColor(255, 80, 80, 240), 2))
-        p.drawLine(xph, -4, xph, h + 4)
+        TimelineTrackPainter.paint(
+            p,
+            self.width(),
+            self.height(),
+            self.total_frames,
+            self.frame,
+            self._viewport,
+            self.segments,
+            self.loaded_flags,
+            self.bookmarks,
+            self._dragging_bookmark,
+            self._drag_source_bookmark,
+            self._drag_bookmark_frame,
+        )
         p.end()
-
-    def _draw_loaded_indicator(self, painter: QPainter, w: int, h: int):
-        bar_h = 3
-        y = h - bar_h - 1
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        if w <= 1:
-            color = QColor(42, 160, 88, 240) if self.loaded_flags and self.loaded_flags[0] else QColor(95, 98, 102, 200)
-            painter.setBrush(color)
-            painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
-            return
-
-        for x in range(1, w - 1):
-            norm_pos = self._view_start + (x / max(1, w - 1)) * self._view_span
-            frame = int(clamp(norm_pos, 0.0, 1.0) * (self.total_frames - 1))
-            loaded = self.loaded_flags[frame] if frame < len(self.loaded_flags) else False
-            color = QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200)
-            painter.setBrush(color)
-            painter.drawRect(QRectF(x, y, 1, bar_h))
-
-    def _draw_bookmarks(self, painter: QPainter):
-        bookmarks_to_draw = list(self.bookmarks)
-        if self._dragging_bookmark and self._drag_bookmark_frame is not None:
-            bookmarks_to_draw = [
-                bookmark
-                for bookmark in self.bookmarks
-                if bookmark.frame != self._drag_source_bookmark
-            ]
-            bookmarks_to_draw.append(
-                Bookmark(
-                    frame=self._drag_bookmark_frame,
-                    name=self._bookmark_name(self._drag_source_bookmark or -1),
-                    locked=self._is_bookmark_locked(self._drag_source_bookmark or -1),
-                )
-            )
-
-        painter.setPen(Qt.PenStyle.NoPen)
-
-        for bookmark in sorted(bookmarks_to_draw, key=lambda item: item.frame):
-            marker_color = QColor(245, 139, 60, 240) if bookmark.locked else QColor(247, 193, 45, 240)
-            painter.setBrush(marker_color)
-            x = self._frame_x(bookmark.frame)
-            marker = QPolygonF([
-                QPointF(x - 6, 12),
-                QPointF(x + 6, 12),
-                QPointF(x, 22),
-            ])
-            painter.drawPolygon(marker)
-
-            if bookmark.name:
-                text_rect = QRectF(x - 90, 0, 180, 12)
-                painter.setPen(QColor(237, 241, 244, 230))
-                painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, bookmark.name)
-                painter.setPen(Qt.PenStyle.NoPen)

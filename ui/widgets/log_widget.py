@@ -26,6 +26,53 @@ class _LogEntry:
     progress_value: int | None = None
 
 
+class _LogEntryStore:
+    """Data model for log entries: CRUD and progress-key tracking."""
+
+    def __init__(self, history_limit: int):
+        self._history_limit = max(1, history_limit)
+        self._entries: list[_LogEntry] = []
+        self._by_key: dict[str, int] = {}
+        self._next_id = 1
+
+    @property
+    def entries(self) -> list[_LogEntry]:
+        return self._entries
+
+    def new_id(self) -> int:
+        value = self._next_id
+        self._next_id += 1
+        return value
+
+    def append(self, entry: _LogEntry) -> None:
+        self._entries.insert(0, entry)
+        self._entries = self._entries[: self._history_limit]
+        valid = {e.entry_id for e in self._entries}
+        self._by_key = {k: v for k, v in self._by_key.items() if v in valid}
+
+    def register_key(self, key: str, entry_id: int) -> None:
+        self._by_key[key] = entry_id
+
+    def unregister_key(self, key: str) -> None:
+        self._by_key.pop(key, None)
+
+    def remove(self, entry_id: int) -> _LogEntry | None:
+        entry = next((e for e in self._entries if e.entry_id == entry_id), None)
+        if entry is None:
+            return None
+        if entry.progress_key is not None:
+            self._by_key.pop(entry.progress_key, None)
+        self._entries = [e for e in self._entries if e.entry_id != entry_id]
+        return entry
+
+    def find_progress(self, key: str) -> _LogEntry | None:
+        nkey = (key or "").strip()
+        eid = self._by_key.get(nkey)
+        if eid is None:
+            return None
+        return next((e for e in self._entries if e.entry_id == eid), None)
+
+
 class LogWidget(QFrame):
     _EMPTY_TEXT = "No logs"
     _START_BOUNDARY_TEXT = "Beginning of logs"
@@ -40,10 +87,7 @@ class LogWidget(QFrame):
     def __init__(self, display_ms: int, history_limit: int, parent=None):
         super().__init__(parent)
         self.display_ms = max(100, int(display_ms))
-        self.history_limit = max(1, int(history_limit))
-        self._entries: list[_LogEntry] = []
-        self._entry_by_progress_key: dict[str, int] = {}
-        self._next_entry_id = 1
+        self._store = _LogEntryStore(history_limit)
 
         self.setObjectName("LogWidget")
 
@@ -77,7 +121,9 @@ class LogWidget(QFrame):
         if not message:
             return
         normalized_status = self._normalize_status(status)
-        self._append_entry(_LogEntry(entry_id=self._new_entry_id(), text=message, group=group, status=normalized_status))
+        entry = _LogEntry(entry_id=self._store.new_id(), text=message, group=group, status=normalized_status)
+        self._store.append(entry)
+        self._refresh_entries()
 
     def show_progress(self, key: str, text: str, group: str | None = None):
         normalized_key = (key or "").strip()
@@ -85,57 +131,45 @@ class LogWidget(QFrame):
         if not normalized_key or not message:
             return
 
-        existing_entry = self._find_progress_entry(normalized_key)
-        if existing_entry is not None:
-            existing_entry.text = message
-            existing_entry.group = group
-            existing_entry.progress_value = 0
-            existing_entry.status = None
+        existing = self._store.find_progress(normalized_key)
+        if existing is not None:
+            existing.text = message
+            existing.group = group
+            existing.progress_value = 0
+            existing.status = None
             self._refresh_entries()
             return
 
         entry = _LogEntry(
-            entry_id=self._new_entry_id(),
+            entry_id=self._store.new_id(),
             text=message,
             group=group,
             progress_key=normalized_key,
             progress_value=0,
         )
-        self._entry_by_progress_key[normalized_key] = entry.entry_id
-        self._append_entry(entry)
+        self._store.register_key(normalized_key, entry.entry_id)
+        self._store.append(entry)
+        self._refresh_entries()
 
     def update_progress(self, key: str, value: int, text: str | None = None):
-        entry = self._find_progress_entry(key)
+        entry = self._store.find_progress(key)
         if entry is None:
             return
-
         entry.progress_value = max(0, min(100, int(value)))
         if text is not None and text.strip():
             entry.text = text.strip()
         self._refresh_entries()
 
     def complete_progress(self, key: str, status: str, text: str | None = None):
-        entry = self._find_progress_entry(key)
+        entry = self._store.find_progress(key)
         if entry is None:
             return
-
         entry.progress_key = None
         entry.progress_value = None
         entry.status = self._normalize_status(status)
         if text is not None and text.strip():
             entry.text = text.strip()
-
-        normalized_key = (key or "").strip()
-        self._entry_by_progress_key.pop(normalized_key, None)
-        self._refresh_entries()
-
-    def _append_entry(self, entry: _LogEntry):
-        self._entries.insert(0, entry)
-        self._entries = self._entries[: self.history_limit]
-        valid_ids = {item.entry_id for item in self._entries}
-        self._entry_by_progress_key = {
-            key: entry_id for key, entry_id in self._entry_by_progress_key.items() if entry_id in valid_ids
-        }
+        self._store.unregister_key(key)
         self._refresh_entries()
 
     def _refresh_entries(self):
@@ -145,16 +179,19 @@ class LogWidget(QFrame):
             if widget is not None:
                 widget.deleteLater()
 
-        if not self._entries:
+        if not self._store.entries:
             self.empty_label.show()
             return
 
         self.empty_label.hide()
 
-        self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_boundary_widget(self._START_BOUNDARY_TEXT))
+        self._content_layout.insertWidget(
+            self._content_layout.count() - 1,
+            self._build_boundary_widget(self._START_BOUNDARY_TEXT),
+        )
 
         rendered_groups: set[str] = set()
-        for entry in self._entries:
+        for entry in self._store.entries:
             if entry.group and entry.group not in rendered_groups:
                 rendered_groups.add(entry.group)
                 group_label = QLabel(entry.group)
@@ -163,7 +200,10 @@ class LogWidget(QFrame):
 
             self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_entry_widget(entry))
 
-        self._content_layout.insertWidget(self._content_layout.count() - 1, self._build_boundary_widget(self._END_BOUNDARY_TEXT))
+        self._content_layout.insertWidget(
+            self._content_layout.count() - 1,
+            self._build_boundary_widget(self._END_BOUNDARY_TEXT),
+        )
 
     def _build_entry_widget(self, entry: _LogEntry) -> QWidget:
         card = QFrame()
@@ -236,25 +276,8 @@ class LogWidget(QFrame):
         return container
 
     def _remove_entry(self, entry_id: int):
-        entry = next((item for item in self._entries if item.entry_id == entry_id), None)
-        if entry is None:
-            return
-        if entry.progress_key is not None:
-            self._entry_by_progress_key.pop(entry.progress_key, None)
-        self._entries = [item for item in self._entries if item.entry_id != entry_id]
+        self._store.remove(entry_id)
         self._refresh_entries()
-
-    def _find_progress_entry(self, key: str) -> _LogEntry | None:
-        normalized_key = (key or "").strip()
-        entry_id = self._entry_by_progress_key.get(normalized_key)
-        if entry_id is None:
-            return None
-        return next((entry for entry in self._entries if entry.entry_id == entry_id), None)
-
-    def _new_entry_id(self) -> int:
-        value = self._next_entry_id
-        self._next_entry_id += 1
-        return value
 
     def _normalize_status(self, status: str) -> str:
         normalized = (status or "").strip().lower()

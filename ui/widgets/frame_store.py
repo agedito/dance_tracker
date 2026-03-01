@@ -1,15 +1,30 @@
 import re
-import threading
-import json
-from collections import OrderedDict
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtGui import QImage, QPixmap
+from PySide6.QtGui import QPixmap
+
+from ui.widgets.frame_preloader import FramePreloader
+from ui.widgets.pixmap_cache import PixmapCache
+from ui.widgets.sidecar_metadata_reader import SidecarMetadataReader
+
+_VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+
+
+def _scan_folder(folder: Path) -> list[Path]:
+    return [
+        p
+        for p in sorted(folder.iterdir(), key=_natural_sort_key)
+        if p.is_file() and p.suffix.lower() in _VALID_SUFFIXES
+    ]
+
+
+def _natural_sort_key(path: Path):
+    chunks = re.split(r"(\d+)", path.name.lower())
+    return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
 
 
 class FrameStore(QObject):
-    VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
     VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
     frame_preloaded = Signal(int, bool, int)
@@ -17,22 +32,13 @@ class FrameStore(QObject):
 
     def __init__(self, cache_radius: int):
         super().__init__()
-        self.cache_radius = cache_radius
         self._frame_files: list[Path] = []
         self._proxy_files: list[Path] = []
-        self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
-        self._base_sizes: dict[int, tuple[int, int]] = {}
-        self._proxy_cache_loaded = False
-        self._bookmark_anchor_frames: list[int] = []
-
-        self._full_images: list[QImage | None] = []
-        self._loaded_flags: list[bool] = []
-
-        self._preload_stop = threading.Event()
-        self._preload_threads: list[threading.Thread] = []
-        self._preload_generation = 0
-        self._preload_priority = 0
-        self._lock = threading.Lock()
+        self._metadata = SidecarMetadataReader()
+        self._cache = PixmapCache(cache_radius)
+        self._preloader = FramePreloader()
+        self._preloader.frame_preloaded.connect(self.frame_preloaded)
+        self._preloader.preload_finished.connect(self.preload_finished)
 
     @property
     def total_frames(self) -> int:
@@ -44,380 +50,50 @@ class FrameStore(QObject):
 
     @property
     def loaded_flags(self) -> list[bool]:
-        with self._lock:
-            return list(self._loaded_flags)
+        return self._preloader.loaded_flags
 
     @property
     def preload_generation(self) -> int:
-        return self._preload_generation
+        return self._preloader.generation
 
-    def shutdown(self):
-        self._stop_preload_thread(wait=True)
+    def shutdown(self) -> None:
+        self._preloader.stop(wait=True)
 
-    def clear(self):
-        self._stop_preload_thread(wait=True)
+    def clear(self) -> None:
+        self._preloader.stop(wait=True)
         self._frame_files = []
         self._proxy_files = []
         self._cache.clear()
-        self._base_sizes.clear()
-        self._proxy_cache_loaded = False
-        self._bookmark_anchor_frames = []
-        with self._lock:
-            self._full_images = []
-            self._loaded_flags = []
-            self._preload_priority = 0
+        self._preloader.reset()
 
     def load_folder(self, folder_path: str) -> int:
-        self._stop_preload_thread(wait=True)
+        self._preloader.stop(wait=True)
 
         folder = Path(folder_path)
         if not folder.exists() or not folder.is_dir():
             self.clear()
             return 0
 
-        files = [
-            p
-            for p in sorted(folder.iterdir(), key=self._natural_sort_key)
-            if p.is_file() and p.suffix.lower() in self.VALID_SUFFIXES
-        ]
-        self._frame_files = files
-        self._proxy_files = self._find_proxy_files(folder, len(files))
+        self._frame_files = _scan_folder(folder)
+        self._proxy_files = self._metadata.find_proxy_files(folder, self._frame_files)
         self._cache.clear()
-        self._base_sizes.clear()
-        self._proxy_cache_loaded = False
-        self._bookmark_anchor_frames = self._read_bookmark_anchor_frames(folder, len(files))
+        bookmark_anchors = self._metadata.read_bookmark_anchor_frames(folder, len(self._frame_files))
+        self._cache.preload_proxy(self._proxy_files)
+        self._preloader.start(self._frame_files, bookmark_anchors)
+        return len(self._frame_files)
 
-        with self._lock:
-            self._full_images = [None] * len(files)
-            self._loaded_flags = [False] * len(files)
-            self._preload_priority = 0
-
-        self._preload_proxy_cache()
-        self._start_full_preload_thread()
-        return len(files)
-
-    def request_preload_priority(self, frame_idx: int):
+    def request_preload_priority(self, frame_idx: int) -> None:
         if not self._frame_files:
             return
         target = max(0, min(frame_idx, len(self._frame_files) - 1))
-        with self._lock:
-            self._preload_priority = target
-
-    def _find_proxy_files(self, folder: Path, expected_count: int) -> list[Path]:
-        proxy_dir = self._proxy_dir_from_metadata(folder)
-        if proxy_dir is None:
-            proxy_dir = folder.parent / "low_frames"
-        if proxy_dir is None or not proxy_dir.exists() or not proxy_dir.is_dir():
-            proxy_dir = folder.parent / "frames_mino"
-        if not proxy_dir.exists() or not proxy_dir.is_dir():
-            return []
-
-        proxy_files = [
-            p
-            for p in sorted(proxy_dir.iterdir(), key=self._natural_sort_key)
-            if p.is_file() and p.suffix.lower() in self.VALID_SUFFIXES
-        ]
-        if len(proxy_files) != expected_count:
-            return []
-        return proxy_files
-
-    def _proxy_dir_from_metadata(self, folder: Path) -> Path | None:
-        for metadata_file in folder.parent.glob("*.json"):
-            try:
-                payload = json.loads(metadata_file.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-
-            if not isinstance(payload, dict):
-                continue
-
-            frames_value = payload.get("frames") or payload.get("frames_path")
-            low_frames_value = payload.get("low_frames")
-            if not isinstance(frames_value, str) or not isinstance(low_frames_value, str):
-                continue
-
-            resolved_frames = self._resolve_metadata_path(frames_value, metadata_file.parent)
-            if resolved_frames != folder.resolve():
-                continue
-
-            return self._resolve_metadata_path(low_frames_value, metadata_file.parent)
-
-        return None
-
-    @staticmethod
-    def _resolve_metadata_path(value: str, root: Path) -> Path:
-        candidate = Path(value).expanduser()
-        if candidate.is_absolute():
-            return candidate
-        return (root / candidate).resolve()
-
-    def _preload_proxy_cache(self):
-        if not self._proxy_files or self._proxy_cache_loaded:
-            return
-
-        for idx, path in enumerate(self._proxy_files):
-            pix = QPixmap(str(path))
-            if pix.isNull():
-                continue
-            self._cache[(True, idx)] = pix
-
-        self._proxy_cache_loaded = True
-
-    def _start_full_preload_thread(self):
-        if not self._frame_files:
-            return
-
-        self._preload_stop.clear()
-        self._preload_generation += 1
-        generation = self._preload_generation
-        total_frames = len(self._frame_files)
-        pending = set(range(total_frames))
-
-        anchors = [0, total_frames // 2, total_frames - 1, *self._bookmark_anchor_frames]
-        unique_anchors: list[int] = []
-        for anchor in anchors:
-            if 0 <= anchor < total_frames and anchor not in unique_anchors:
-                unique_anchors.append(anchor)
-
-        remaining_workers = len(unique_anchors)
-
-        def preload_worker(anchor: int):
-            nonlocal remaining_workers
-            while True:
-                if self._preload_stop.is_set() or generation != self._preload_generation:
-                    return
-
-                with self._lock:
-                    if not pending:
-                        break
-
-                    idx = min(pending, key=lambda i: abs(i - anchor))
-                    pending.remove(idx)
-
-                image = QImage(str(self._frame_files[idx]))
-                if self._preload_stop.is_set() or generation != self._preload_generation:
-                    return
-
-                if image.isNull():
-                    self._safe_emit_frame_preloaded(idx, False, generation)
-                    continue
-
-                with self._lock:
-                    if idx >= len(self._full_images):
-                        return
-                    self._full_images[idx] = image
-                    if idx < len(self._loaded_flags):
-                        self._loaded_flags[idx] = True
-
-                self._base_sizes[idx] = (image.width(), image.height())
-                self._safe_emit_frame_preloaded(idx, True, generation)
-
-            should_emit_finished = False
-            with self._lock:
-                remaining_workers -= 1
-                should_emit_finished = remaining_workers == 0
-
-            if should_emit_finished and not self._preload_stop.is_set() and generation == self._preload_generation:
-                try:
-                    self.preload_finished.emit(generation)
-                except RuntimeError:
-                    return
-
-        self._preload_threads = []
-        for anchor in unique_anchors:
-            thread = threading.Thread(target=preload_worker, args=(anchor,), daemon=True)
-            self._preload_threads.append(thread)
-            thread.start()
-
-    def _read_bookmark_anchor_frames(self, folder: Path, total_frames: int) -> list[int]:
-        if total_frames <= 0:
-            return []
-
-        for metadata_file in folder.parent.glob("*.json"):
-            payload = self._read_json_dict(metadata_file)
-            if payload is None:
-                continue
-
-            frames_value = payload.get("frames") or payload.get("frames_path")
-            if not isinstance(frames_value, str):
-                continue
-
-            resolved_frames = self._resolve_metadata_path(frames_value, metadata_file.parent)
-            if resolved_frames != folder.resolve():
-                continue
-
-            return self._extract_bookmark_frames(payload, total_frames)
-
-        return []
-
-    @staticmethod
-    def _read_json_dict(path: Path) -> dict | None:
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return None
-        return payload if isinstance(payload, dict) else None
-
-    @staticmethod
-    def _extract_bookmark_frames(payload: dict, total_frames: int) -> list[int]:
-        sequence = payload.get("sequence")
-        if not isinstance(sequence, dict):
-            return []
-
-        raw_bookmarks = sequence.get("bookmarks")
-        if not isinstance(raw_bookmarks, list):
-            return []
-
-        frames: list[int] = []
-        for raw_bookmark in raw_bookmarks:
-            if isinstance(raw_bookmark, dict):
-                frame_value = raw_bookmark.get("frame")
-            else:
-                frame_value = raw_bookmark
-
-            try:
-                frame = int(frame_value)
-            except (TypeError, ValueError):
-                continue
-
-            if 0 <= frame < total_frames and frame not in frames:
-                frames.append(frame)
-
-        return sorted(frames)
-
-    def _safe_emit_frame_preloaded(self, idx: int, loaded: bool, generation: int):
-        try:
-            self.frame_preloaded.emit(idx, loaded, generation)
-        except RuntimeError:
-            return
-
-    def _stop_preload_thread(self, wait: bool = False):
-        self._preload_stop.set()
-        self._preload_generation += 1
-        threads = list(self._preload_threads)
-        self._preload_threads = []
-        if wait:
-            for thread in threads:
-                if thread.is_alive():
-                    thread.join(timeout=0.5)
-
-    @staticmethod
-    def _natural_sort_key(path: Path):
-        chunks = re.split(r"(\d+)", path.name.lower())
-        return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+        self._preloader.set_priority(target)
 
     def get_frame(self, frame_idx: int, use_proxy: bool = False) -> QPixmap | None:
         if not self._frame_files or frame_idx < 0 or frame_idx >= len(self._frame_files):
             return None
-
-        source_files = self._proxy_files if use_proxy and self._proxy_files else self._frame_files
-        is_proxy = source_files is self._proxy_files
-        cache_key = (is_proxy, frame_idx)
-
-        pix = self._cache.get(cache_key)
-        if pix is None:
-            with self._lock:
-                full_image = None
-                if not is_proxy and frame_idx < len(self._full_images):
-                    full_image = self._full_images[frame_idx]
-
-            if full_image is not None:
-                pix = QPixmap.fromImage(full_image)
-            else:
-                pix = QPixmap(str(source_files[frame_idx]))
-
-            if pix.isNull():
-                return None
-
-            self._cache[cache_key] = pix
-            self._remember_base_size(frame_idx)
-            self._enforce_cache_limit(center_frame=frame_idx)
-        else:
-            self._cache.move_to_end(cache_key)
-
-        self._prefetch_neighbors(frame_idx, use_proxy=is_proxy)
-        return pix
+        return self._cache.get(
+            frame_idx, use_proxy, self._frame_files, self._proxy_files, self._preloader.get_image
+        )
 
     def get_display_size(self, frame_idx: int) -> tuple[int, int] | None:
-        if frame_idx in self._base_sizes:
-            return self._base_sizes[frame_idx]
-
-        if frame_idx < 0 or frame_idx >= len(self._frame_files):
-            return None
-
-        with self._lock:
-            image = self._full_images[frame_idx] if frame_idx < len(self._full_images) else None
-
-        if image is not None:
-            self._base_sizes[frame_idx] = (image.width(), image.height())
-            return self._base_sizes[frame_idx]
-
-        pix = self.get_frame(frame_idx, use_proxy=False)
-        if pix is None:
-            return None
-
-        self._remember_base_size(frame_idx)
-        return self._base_sizes.get(frame_idx)
-
-    def _remember_base_size(self, frame_idx: int):
-        if frame_idx in self._base_sizes or frame_idx < 0 or frame_idx >= len(self._frame_files):
-            return
-
-        with self._lock:
-            image = self._full_images[frame_idx] if frame_idx < len(self._full_images) else None
-
-        if image is not None:
-            self._base_sizes[frame_idx] = (image.width(), image.height())
-            return
-
-        key = (False, frame_idx)
-        base_pix = self._cache.get(key)
-        if base_pix is None:
-            base_pix = QPixmap(str(self._frame_files[frame_idx]))
-            if base_pix.isNull():
-                return
-            self._cache[key] = base_pix
-
-        self._base_sizes[frame_idx] = (base_pix.width(), base_pix.height())
-
-    def _prefetch_neighbors(self, center_frame: int, use_proxy: bool):
-        source_files = self._proxy_files if use_proxy and self._proxy_files else self._frame_files
-        source_key = source_files is self._proxy_files
-        for idx in range(
-                max(0, center_frame - self.cache_radius),
-                min(len(self._frame_files), center_frame + self.cache_radius + 1),
-        ):
-            key = (source_key, idx)
-            if key in self._cache:
-                continue
-
-            with self._lock:
-                image = self._full_images[idx] if (not source_key and idx < len(self._full_images)) else None
-
-            if image is not None:
-                pix = QPixmap.fromImage(image)
-            else:
-                pix = QPixmap(str(source_files[idx]))
-
-            if pix.isNull():
-                continue
-
-            self._cache[key] = pix
-            if not source_key:
-                self._base_sizes[idx] = (pix.width(), pix.height())
-
-        self._enforce_cache_limit(center_frame)
-
-    def _enforce_cache_limit(self, center_frame: int):
-        max_base_items = (self.cache_radius * 2) + 1
-        if max_base_items <= 0:
-            self._cache.clear()
-            return
-
-        while True:
-            base_keys = [key for key in self._cache.keys() if not key[0]]
-            if len(base_keys) <= max_base_items:
-                break
-
-            farthest_idx = max(base_keys, key=lambda key: abs(key[1] - center_frame))
-            self._cache.pop(farthest_idx, None)
+        return self._cache.get_display_size(frame_idx, self._frame_files, self._preloader.get_image)
