@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QObject, Qt, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
-from PySide6.QtWidgets import QProgressDialog, QWidget
+from PySide6.QtWidgets import QWidget
 
 from app.interface.media import MediaPort
+from ui.widgets.dialogs import BaseProgressDialog
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 SEQUENCE_SUFFIXES = {".json"}
@@ -40,12 +41,8 @@ class DropHandler(QObject):
         return False
 
     def _load_with_progress(self, path: str) -> None:
-        progress = QProgressDialog("Loading video...", "Cancel", 0, 100, self._parent_widget())
-        progress.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        progress = BaseProgressDialog("Loading video...", "Cancel", 0, 100, self._parent_widget())
         progress.setWindowTitle("Processing video")
-        progress.setMinimumDuration(0)
-        progress.setAutoClose(True)
-        progress.setAutoReset(True)
         progress.setValue(0)
         progress.show()
 
