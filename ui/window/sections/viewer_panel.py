@@ -1,5 +1,7 @@
 from typing import Callable
 
+from PySide6.QtCore import QPoint, Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
@@ -9,6 +11,8 @@ from ui.widgets.viewer import ViewerWidget
 
 class ViewerPanel(QFrame):
     """Single responsibility: viewer display and transport controls."""
+
+    cornerDragged = Signal(int, int)
 
     def __init__(
             self,
@@ -78,6 +82,21 @@ class ViewerPanel(QFrame):
         fl.addStretch(1)
         root.addWidget(footer)
 
+        self._corner_handle = _PanelCornerHandle(self)
+        self._corner_handle.dragged.connect(self.cornerDragged)
+        self._position_corner_handle()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_corner_handle()
+
+    def _position_corner_handle(self) -> None:
+        handle_size = self._corner_handle.sizeHint()
+        x = self.width() - handle_size.width()
+        y = self.height() - handle_size.height()
+        self._corner_handle.setGeometry(x, y, handle_size.width(), handle_size.height())
+        self._corner_handle.raise_()
+
     def update_frame_label(self, frame: int):
         total_ms = int((max(0, frame) / self._fps) * 1000)
         minutes, rem_ms = divmod(total_ms, 60_000)
@@ -101,3 +120,47 @@ class ViewerPanel(QFrame):
     def _set_pause_icon(self) -> None:
         self.play_pause_btn.setText("⏸")
         self.play_pause_btn.setStyleSheet("color: #D84C4C;")
+
+
+class _PanelCornerHandle(QFrame):
+    """Draggable bottom-right corner handle for two-axis panel resizing."""
+
+    dragged = Signal(int, int)
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self._last_global_pos: QPoint | None = None
+        self.setFixedSize(18, 18)
+        self.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        self.setToolTip("Drag to resize viewer area horizontally and vertically")
+        self.setStyleSheet(
+            "background-color: rgba(100, 100, 100, 120);"
+            "border-top-left-radius: 6px;"
+            "border: 1px solid rgba(210, 210, 210, 120);"
+        )
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() != Qt.MouseButton.LeftButton:
+            event.ignore()
+            return
+
+        self._last_global_pos = event.globalPosition().toPoint()
+        event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if not (event.buttons() & Qt.MouseButton.LeftButton) or self._last_global_pos is None:
+            event.ignore()
+            return
+
+        current_pos = event.globalPosition().toPoint()
+        delta = current_pos - self._last_global_pos
+        self._last_global_pos = current_pos
+        self.dragged.emit(delta.x(), delta.y())
+        event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._last_global_pos = None
+            event.accept()
+            return
+        event.ignore()

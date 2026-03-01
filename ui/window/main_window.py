@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
             on_next_bookmark=self._go_to_next_bookmark,
         )
         self._viewer_panel.viewer.folderLoaded.connect(self._on_folder_dropped)
+        self._viewer_panel.cornerDragged.connect(self._on_viewer_corner_dragged)
 
         self._right_panel = RightPanel(
             preferences=self._prefs,
@@ -229,6 +230,26 @@ class MainWindow(QMainWindow):
         for name in ("top_splitter", "bottom_splitter", "main_splitter"):
             self._prefs.save_splitter_sizes(name, getattr(self._layout, name).sizes())
         self._prefs.save()
+
+    def _on_viewer_corner_dragged(self, dx: int, dy: int) -> None:
+        self._resize_splitter_first_panel(self._layout.top_splitter, dx)
+        self._resize_splitter_first_panel(self._layout.main_splitter, dy)
+        self._save_splitters()
+
+    @staticmethod
+    def _resize_splitter_first_panel(splitter, delta: int) -> None:
+        if delta == 0:
+            return
+
+        sizes = splitter.sizes()
+        if len(sizes) < 2:
+            return
+
+        min_size = 120
+        total = sum(sizes)
+        first = max(min_size, min(total - min_size, sizes[0] + delta))
+        second = max(min_size, total - first)
+        splitter.setSizes([first, second])
 
     # ── Frame update (the single "sync all widgets" point) ───────────
 
