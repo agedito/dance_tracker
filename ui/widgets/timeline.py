@@ -15,6 +15,7 @@ def status_color(t: str) -> QColor:
 
 class TimelineTrack(QWidget):
     frameChanged = Signal(int)
+    viewportChanged = Signal(float, float)
     scrubStarted = Signal()
     scrubFinished = Signal()
     bookmarkRequested = Signal(int)
@@ -38,15 +39,62 @@ class TimelineTrack(QWidget):
         self._bookmark_editor.hide()
         self._bookmark_editor.editingFinished.connect(self._finish_bookmark_rename)
         self._bookmark_editor.setPlaceholderText("Bookmark name")
+        self._view_start = 0.0
+        self._view_span = 1.0
+        self._panning = False
+        self._pan_anchor_x = 0.0
+        self._pan_anchor_start = 0.0
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
 
+    def _visible_end(self) -> float:
+        return self._view_start + self._view_span
+
+    def _normalize_view(self):
+        self._view_span = clamp(self._view_span, 0.01, 1.0)
+        self._view_start = clamp(self._view_start, 0.0, 1.0 - self._view_span)
+
+    def _set_viewport(self, start: float, span: float, emit_signal: bool = True):
+        old_start = self._view_start
+        old_span = self._view_span
+        self._view_start = start
+        self._view_span = span
+        self._normalize_view()
+        if emit_signal and (
+            abs(self._view_start - old_start) > 1e-9
+            or abs(self._view_span - old_span) > 1e-9
+        ):
+            self.viewportChanged.emit(self._view_start, self._view_span)
+
+    def set_shared_viewport(self, start: float, span: float):
+        self._set_viewport(start, span, emit_signal=False)
+        self.update()
+
+    def _zoom_at_position(self, x: float, zoom_in: bool):
+        anchor = clamp(x / max(1, self.width()), 0.0, 1.0)
+        anchor_frame = self._view_start + anchor * self._view_span
+        factor = 0.84 if zoom_in else 1.19
+        new_span = self._view_span * factor
+        self._set_viewport(self._view_start, new_span, emit_signal=False)
+        self._set_viewport(anchor_frame - anchor * self._view_span, self._view_span)
+
+    def _pan_by_pixels(self, dx: float):
+        if self.width() <= 1:
+            return
+        delta = (dx / self.width()) * self._view_span
+        self._set_viewport(self._pan_anchor_start - delta, self._view_span)
+
     def _frame_from_pos(self, x: float) -> int:
-        norm_x = clamp(int(x), 0, self.width())
-        return int(round((norm_x / max(1, self.width())) * (self.total_frames - 1)))
+        norm_x = clamp(x, 0.0, float(self.width()))
+        view_pos = self._view_start + (norm_x / max(1, self.width())) * self._view_span
+        return int(round(clamp(view_pos, 0.0, 1.0) * (self.total_frames - 1)))
 
     def _frame_x(self, frame: int) -> int:
-        return int((clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)) * self.width())
+        norm_frame = clamp(frame, 0, self.total_frames - 1) / max(1, self.total_frames - 1)
+        if norm_frame < self._view_start or norm_frame > self._visible_end():
+            return -1000
+        relative = (norm_frame - self._view_start) / max(0.0001, self._view_span)
+        return int(relative * self.width())
 
     def _bookmark_near_pos(self, x: float, threshold_px: int = 8) -> int | None:
         if not self.bookmarks:
@@ -93,10 +141,17 @@ class TimelineTrack(QWidget):
         if self._editing_bookmark_frame is not None and self._editing_bookmark_frame >= self.total_frames:
             self._cancel_bookmark_rename()
         self.loaded_flags = [False] * self.total_frames
+        self._set_viewport(self._view_start, self._view_span)
         self.update()
 
     def set_frame(self, f: int):
         self.frame = clamp(f, 0, self.total_frames - 1)
+        if self.total_frames > 1:
+            norm_frame = self.frame / (self.total_frames - 1)
+            if norm_frame < self._view_start:
+                self._set_viewport(norm_frame, self._view_span)
+            elif norm_frame > self._visible_end():
+                self._set_viewport(norm_frame - self._view_span, self._view_span)
         self.update()
 
     def set_bookmarks(self, bookmarks: list[Bookmark]):
@@ -136,6 +191,14 @@ class TimelineTrack(QWidget):
         self.update()
 
     def mousePressEvent(self, ev):
+        if ev.button() == Qt.MouseButton.MiddleButton:
+            self._panning = True
+            self._pan_anchor_x = ev.position().x()
+            self._pan_anchor_start = self._view_start
+            self.setCursor(Qt.CursorShape.SizeHorCursor)
+            ev.accept()
+            return
+
         if ev.button() == Qt.MouseButton.RightButton:
             self._show_bookmark_context_menu(ev)
             return
@@ -160,6 +223,12 @@ class TimelineTrack(QWidget):
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def mouseMoveEvent(self, ev):
+        if self._panning:
+            self._pan_by_pixels(ev.position().x() - self._pan_anchor_x)
+            self.update()
+            ev.accept()
+            return
+
         if not (ev.buttons() & Qt.MouseButton.LeftButton):
             return
 
@@ -171,6 +240,12 @@ class TimelineTrack(QWidget):
         self.frameChanged.emit(self._frame_from_pos(ev.position().x()))
 
     def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.MouseButton.MiddleButton and self._panning:
+            self._panning = False
+            self.setCursor(Qt.CursorShape.CrossCursor)
+            ev.accept()
+            return
+
         if ev.button() == Qt.MouseButton.LeftButton and self._dragging_bookmark:
             source = self._drag_source_bookmark
             target = self._drag_bookmark_frame
@@ -195,6 +270,16 @@ class TimelineTrack(QWidget):
                 ev.accept()
                 return
         super().mouseDoubleClickEvent(ev)
+
+    def wheelEvent(self, ev):
+        delta_y = ev.angleDelta().y()
+        if delta_y == 0:
+            ev.ignore()
+            return
+
+        self._zoom_at_position(ev.position().x(), zoom_in=delta_y > 0)
+        self.update()
+        ev.accept()
 
     def _show_bookmark_context_menu(self, ev) -> None:
         clicked_frame = self._frame_from_pos(ev.position().x())
@@ -280,9 +365,14 @@ class TimelineTrack(QWidget):
         p.setPen(QPen(QColor(43, 52, 59), 1))
         p.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 9, 9)
 
+        total = max(1, self.total_frames - 1)
         for s in self.segments:
-            left = int((s.a / self.total_frames) * w)
-            right = int((s.b / self.total_frames) * w)
+            left_norm = clamp(s.a / total, 0.0, 1.0)
+            right_norm = clamp(s.b / total, 0.0, 1.0)
+            if right_norm < self._view_start or left_norm > self._visible_end():
+                continue
+            left = int(((left_norm - self._view_start) / max(0.0001, self._view_span)) * w)
+            right = int(((right_norm - self._view_start) / max(0.0001, self._view_span)) * w)
             seg_w = max(1, right - left)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(status_color(s.t))
@@ -291,7 +381,8 @@ class TimelineTrack(QWidget):
         self._draw_loaded_indicator(p, w, h)
         self._draw_bookmarks(p)
 
-        xph = int((self.frame / max(1, self.total_frames - 1)) * w)
+        frame_norm = self.frame / max(1, self.total_frames - 1)
+        xph = int(((frame_norm - self._view_start) / max(0.0001, self._view_span)) * w)
         p.setPen(QPen(QColor(255, 80, 80, 240), 2))
         p.drawLine(xph, -4, xph, h + 4)
         p.end()
@@ -308,7 +399,8 @@ class TimelineTrack(QWidget):
             return
 
         for x in range(1, w - 1):
-            frame = int((x / max(1, w - 1)) * (self.total_frames - 1))
+            norm_pos = self._view_start + (x / max(1, w - 1)) * self._view_span
+            frame = int(clamp(norm_pos, 0.0, 1.0) * (self.total_frames - 1))
             loaded = self.loaded_flags[frame] if frame < len(self.loaded_flags) else False
             color = QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200)
             painter.setBrush(color)

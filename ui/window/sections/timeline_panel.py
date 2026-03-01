@@ -1,7 +1,7 @@
 from typing import Callable
 
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QScrollArea,
+    QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea,
     QVBoxLayout, QWidget,
 )
 
@@ -30,6 +30,12 @@ class TimelinePanel(QFrame):
 
         self.time_info = QLabel("")
         self.time_info.setObjectName("Muted")
+        self.zoom_bar = QProgressBar()
+        self.zoom_bar.setRange(0, 100)
+        self.zoom_bar.setValue(0)
+        self.zoom_bar.setFixedWidth(140)
+        self.zoom_bar.setTextVisible(True)
+        self.zoom_bar.setFormat("Zoom %p%")
         self.track_widgets: list[TimelineTrack] = []
 
         root = QVBoxLayout(self)
@@ -42,6 +48,7 @@ class TimelinePanel(QFrame):
         hl = QHBoxLayout(header)
         hl.setContentsMargins(10, 8, 10, 8)
         hl.addWidget(QLabel("MASTER TIMELINE"))
+        hl.addWidget(self.zoom_bar)
         hl.addStretch(1)
         hl.addWidget(self.time_info)
         root.addWidget(header)
@@ -76,6 +83,7 @@ class TimelinePanel(QFrame):
             track.bookmarkNameChanged.connect(on_bookmark_name_changed)
             track.bookmarkLockChanged.connect(on_bookmark_lock_changed)
             self.track_widgets.append(track)
+            track.viewportChanged.connect(self._sync_viewport_from_track)
 
             rl.addWidget(name)
             rl.addWidget(track, 1)
@@ -125,3 +133,19 @@ class TimelinePanel(QFrame):
         self.time_info.setText(
             f"Total frames: {total_frames} · Error frames: {error_count}{loaded_text}"
         )
+
+    def _sync_viewport_from_track(self, start: float, span: float):
+        source_track = self.sender()
+        for track in self.track_widgets:
+            if track is source_track:
+                continue
+            track.set_shared_viewport(start, span)
+        self._update_zoom_bar_from_span(span)
+
+    def _update_zoom_bar_from_span(self, span: float):
+        if not self.track_widgets:
+            self.zoom_bar.setValue(0)
+            return
+        normalized = (1.0 - span) / 0.99
+        zoom_value = int(round(max(0.0, min(1.0, normalized)) * 100.0))
+        self.zoom_bar.setValue(zoom_value)
