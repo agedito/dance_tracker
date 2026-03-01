@@ -41,11 +41,11 @@ class FramePreloader(QObject):
             return
 
         self._stop.clear()
-        self._generation += 1
-        generation = self._generation
         total_frames = len(frame_files)
 
         with self._lock:
+            self._generation += 1
+            generation = self._generation
             self._full_images = [None] * total_frames
             self._loaded_flags = [False] * total_frames
             self._priority = 0
@@ -107,7 +107,8 @@ class FramePreloader(QObject):
 
     def stop(self, wait: bool = False) -> None:
         self._stop.set()
-        self._generation += 1
+        with self._lock:
+            self._generation += 1
         threads = list(self._threads)
         self._threads = []
         if wait:
