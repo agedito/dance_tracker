@@ -77,7 +77,7 @@ class TrackDetectorService:
         self._active_detector_name = detector_name
         return True
 
-    def detect_people_for_sequence(self, frames_folder_path: str) -> int:
+    def detect_people_for_sequence(self, frames_folder_path: str, frame_index: int | None = None) -> int:
         detector = self._detectors.get(self._active_detector_name)
         if detector is None:
             self._detections_by_frame = {}
@@ -85,6 +85,24 @@ class TrackDetectorService:
             return 0
 
         frame_files = self._frame_files(frames_folder_path)
+        if frame_index is not None:
+            if frame_index < 0 or frame_index >= len(frame_files):
+                return 0
+
+            detections = dict(self._detections_by_frame)
+            if not detections:
+                detections = self._read_json(frames_folder_path)
+
+            previous_detections = detections.get(frame_index - 1)
+            frame_detections = detector.detect_people_in_frame(
+                frame_path=str(frame_files[frame_index]),
+                previous_detections=previous_detections,
+            )
+            detections[frame_index] = frame_detections
+            self._detections_by_frame = detections
+            self._write_json(frames_folder_path, detections)
+            return 1
+
         detections: dict[int, list[PersonDetection]] = {}
         previous_detections: list[PersonDetection] | None = None
 
