@@ -37,6 +37,9 @@ class TimelinePanel(QFrame):
         self.zoom_bar.setTextVisible(True)
         self.zoom_bar.setFormat("Zoom %p%")
         self.track_widgets: list[TimelineTrack] = []
+        self._shared_view_start = 0.0
+        self._shared_view_span = 1.0
+        self._syncing_viewport = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -135,11 +138,18 @@ class TimelinePanel(QFrame):
         )
 
     def _sync_viewport_from_track(self, start: float, span: float):
-        source_track = self.sender()
-        for track in self.track_widgets:
-            if track is source_track:
-                continue
-            track.set_shared_viewport(start, span)
+        if self._syncing_viewport:
+            return
+
+        self._shared_view_start = start
+        self._shared_view_span = span
+        self._syncing_viewport = True
+        try:
+            for track in self.track_widgets:
+                track.set_shared_viewport(self._shared_view_start, self._shared_view_span)
+        finally:
+            self._syncing_viewport = False
+
         self._update_zoom_bar_from_span(span)
 
     def _update_zoom_bar_from_span(self, span: float):
