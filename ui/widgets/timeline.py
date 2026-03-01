@@ -136,10 +136,6 @@ class TimelineTrack(QWidget):
         self.update()
 
     def mousePressEvent(self, ev):
-        if ev.button() == Qt.MouseButton.MiddleButton:
-            self.bookmarkRequested.emit(self._frame_from_pos(ev.position().x()))
-            return
-
         if ev.button() == Qt.MouseButton.RightButton:
             self._show_bookmark_context_menu(ev)
             return
@@ -201,12 +197,20 @@ class TimelineTrack(QWidget):
         super().mouseDoubleClickEvent(ev)
 
     def _show_bookmark_context_menu(self, ev) -> None:
+        clicked_frame = self._frame_from_pos(ev.position().x())
         bookmark = self._bookmark_near_pos(ev.position().x())
+
+        menu = ContextMenuWidget(self)
+
         if bookmark is None:
+            add_action = menu.addAction("Add bookmark")
+            menu.setActiveAction(add_action)
+            chosen_action = menu.exec(ev.globalPosition().toPoint())
+            if chosen_action == add_action:
+                self.bookmarkRequested.emit(clicked_frame)
             return
 
         is_locked = self._is_bookmark_locked(bookmark)
-        menu = ContextMenuWidget(self)
 
         if is_locked:
             unlock_action = menu.addAction("Unlock bookmark")
