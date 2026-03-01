@@ -69,12 +69,6 @@ class TimelineTrack(QWidget):
         self._view_start = self._pan_anchor_start - delta
         self._normalize_view()
 
-    def _pan_by_steps(self, steps: int):
-        if steps == 0:
-            return
-        self._view_start -= steps * self._view_span * 0.12
-        self._normalize_view()
-
     def _frame_from_pos(self, x: float) -> int:
         norm_x = clamp(x, 0.0, float(self.width()))
         view_pos = self._view_start + (norm_x / max(1, self.width())) * self._view_span
@@ -270,10 +264,7 @@ class TimelineTrack(QWidget):
             ev.ignore()
             return
 
-        if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            self._zoom_at_position(ev.position().x(), zoom_in=delta_y > 0)
-        else:
-            self._pan_by_steps(1 if delta_y > 0 else -1)
+        self._zoom_at_position(ev.position().x(), zoom_in=delta_y > 0)
         self.update()
         ev.accept()
 
