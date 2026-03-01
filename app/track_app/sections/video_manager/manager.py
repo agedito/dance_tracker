@@ -53,6 +53,7 @@ class VideoManager:
 
         capture = cv2.VideoCapture(str(source))
         if not capture.isOpened():
+            capture.release()
             return None
 
         total_frames = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
