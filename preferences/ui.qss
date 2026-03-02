@@ -90,6 +90,15 @@ QPushButton#PrimaryButton {
     border-style: solid;
 }
 
+QPushButton[transportControl="true"] {
+    min-width: 34px;
+    max-width: 34px;
+    min-height: 34px;
+    max-height: 34px;
+    padding: 2px;
+    font-size: 19px;
+}
+
 QPushButton#RecentFolderIcon {
     min-width: 28px;
     max-width: 28px;
@@ -100,6 +109,10 @@ QPushButton#RecentFolderIcon {
     font-size: 14px;
 }
 
+
+QPushButton#RecentFolderIcon[isActive="true"] {
+    border: 2px solid #35C76F;
+}
 QPushButton#TopCloseButton {
     min-width: 28px;
     max-width: 28px;
@@ -131,4 +144,19 @@ QFrame#ThumbFrame {
     border: 1px #2B343B;
     border-style: solid;
     border-radius: 10px;
+}
+
+QPushButton#SequenceThumbnail {
+    background: #0C0F12;
+    border: 1px solid #2B343B;
+    border-radius: 10px;
+    padding: 0px;
+}
+
+QPushButton#SequenceThumbnail:hover {
+    background: #12171B;
+}
+
+QPushButton#SequenceThumbnail[isSelected="true"] {
+    border: 3px solid #35C76F;
 }

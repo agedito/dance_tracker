@@ -1,24 +1,25 @@
-from typing import Callable
+from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QPushButton, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QWidget
 
-from ui.window.sections.preferences_manager import PreferencesManager
+from app.interface.sequence_data import SequenceDataPort
+
+
+class _EditableTitleLabel(QLabel):
+    doubleClicked = Signal()
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.doubleClicked.emit()
+        super().mouseDoubleClickEvent(event)
 
 
 class TopBar(QWidget):
-    """Single responsibility: render the top bar with recent folder icons."""
+    """Render top bar and current sequence title with inline rename support."""
 
-    def __init__(
-            self,
-            preferences: PreferencesManager,
-            on_folder_clicked: Callable[[str], None],
-            on_close: Callable[[], None],
-    ):
+    def __init__(self, on_close, sequence_data: SequenceDataPort):
         super().__init__()
-        self._prefs = preferences
-        self._on_folder_clicked = on_folder_clicked
 
         self.setObjectName("TopBar")
         layout = QHBoxLayout(self)
@@ -28,65 +29,72 @@ class TopBar(QWidget):
         title.setObjectName("TopTitle")
         layout.addWidget(title)
 
-        hint = QLabel("Drop folder or video to load frames")
-        hint.setObjectName("TopHint")
-
-        # Recent folders container
-        self._folders_container = QWidget()
-        self._folders_layout = QHBoxLayout(self._folders_container)
-        self._folders_layout.setContentsMargins(0, 0, 0, 0)
-        self._folders_layout.setSpacing(6)
-
+        self._sequence_data = sequence_data
+        self._active_folder: str | None = None
+        self._sequence_name = _EditableTitleLabel("No sequence selected")
+        self._sequence_name.setObjectName("TopSequenceName")
+        self._sequence_name.setCursor(Qt.CursorShape.IBeamCursor)
+        self._sequence_name.doubleClicked.connect(self._start_rename)
         layout.addSpacing(12)
-        layout.addWidget(self._folders_container)
+        layout.addWidget(self._sequence_name)
+
+        self._sequence_editor = QLineEdit()
+        self._sequence_editor.setObjectName("TopSequenceEditor")
+        self._sequence_editor.setPlaceholderText("Sequence name")
+        self._sequence_editor.hide()
+        self._sequence_editor.editingFinished.connect(self._finish_rename)
+        layout.addWidget(self._sequence_editor)
+
         layout.addStretch(1)
-        layout.addWidget(hint)
 
         close_button = QPushButton("✕")
         close_button.setObjectName("TopCloseButton")
         close_button.setToolTip("Close app")
         close_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_button.clicked.connect(on_close)
         layout.addSpacing(10)
         layout.addWidget(close_button)
 
-        self.refresh_icons()
-
     def refresh_icons(self):
-        """Rebuild folder icon buttons from current preferences."""
-        while self._folders_layout.count():
-            item = self._folders_layout.takeAt(0)
-            w = item.widget()
-            if w is not None:
-                w.deleteLater()
+        """Compatibility no-op: top bar no longer shows recent media."""
 
-        for folder in self._prefs.recent_folders():
-            btn = QPushButton()
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setObjectName("RecentFolderIcon")
-            btn.setToolTip(folder)
+    def set_active_folder(self, folder_path):
+        if not folder_path:
+            self._active_folder = None
+            self._sequence_name.setText("No sequence selected")
+            self._sequence_name.show()
+            self._sequence_editor.hide()
+            return
 
-            thumbnail = self._prefs.thumbnail_for_folder(folder)
-            if thumbnail:
-                btn.setIcon(QIcon(thumbnail))
-            btn.setIconSize(QSize(42, 42))
-            btn.setFixedSize(QSize(46, 46))
+        self._active_folder = folder_path
+        name = self._sequence_data.get_sequence_name(folder_path)
+        if not name:
+            name = Path(folder_path).expanduser().parent.name or "Sequence"
+        self._sequence_name.setText(name)
 
-            btn.clicked.connect(lambda _=False, p=folder: self._on_folder_clicked(p))
+    def _start_rename(self):
+        if self._active_folder is None:
+            return
 
-            btn.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            btn.customContextMenuRequested.connect(
-                lambda pos, p=folder, b=btn: self._show_context_menu(p, b.mapToGlobal(pos))
-            )
-            self._folders_layout.addWidget(btn)
+        self._sequence_editor.setText(self._sequence_name.text())
+        self._sequence_name.hide()
+        self._sequence_editor.show()
+        self._sequence_editor.setFocus()
+        self._sequence_editor.selectAll()
 
-    def _show_context_menu(self, folder_path: str, global_pos):
-        menu = QMenu(self)
-        remove = QAction("Remove folder", self)
-        remove.triggered.connect(lambda _=False, p=folder_path: self._remove_folder(p))
-        menu.addAction(remove)
-        menu.exec(global_pos)
+    def _finish_rename(self):
+        if self._active_folder is None:
+            self._sequence_editor.hide()
+            self._sequence_name.show()
+            return
 
-    def _remove_folder(self, folder_path: str):
-        self._prefs.remove_recent_folder(folder_path)
-        self.refresh_icons()
+        new_name = self._sequence_editor.text().strip()
+        if not new_name:
+            self._sequence_editor.setText(self._sequence_name.text())
+        else:
+            self._sequence_data.set_sequence_name(self._active_folder, new_name)
+            self._sequence_name.setText(new_name)
+
+        self._sequence_editor.hide()
+        self._sequence_name.show()

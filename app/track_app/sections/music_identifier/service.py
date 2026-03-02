@@ -1,0 +1,24 @@
+from app.interface.music import SongMetadata, SongStatus
+from app.track_app.services.music_identifier.ports import (
+    AudioSampleExtractorPort,
+    AudioSongRecognizerPort,
+)
+
+
+class MusicIdentifierService:
+    """Single responsibility: orchestrate extraction + identification for a video."""
+
+    def __init__(self, extractor: AudioSampleExtractorPort, identifier: AudioSongRecognizerPort):
+        self._extractor = extractor
+        self._identifier = identifier
+
+    def identify_from_video(self, video_path: str) -> SongMetadata:
+        audio_sample = self._extractor.extract_sample(video_path)
+        if not audio_sample:
+            return SongMetadata(
+                status=SongStatus.UNAVAILABLE,
+                provider="ffmpeg",
+                message="Could not extract audio (check dependency installation).",
+            )
+
+        return self._identifier.identify(audio_sample)

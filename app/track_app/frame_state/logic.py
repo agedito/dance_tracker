@@ -30,6 +30,21 @@ class ReviewState:
     def prev_frame(self) -> int:
         return self.set_frame(self.cur_frame - 1)
 
+    def play(self) -> None:
+        self.playing = True
+
+    def pause(self) -> None:
+        self.playing = False
+
+    def step(self, delta: int) -> int:
+        return self.set_frame(self.cur_frame + delta)
+
+    def go_to_start(self) -> int:
+        return self.set_frame(0)
+
+    def go_to_end(self) -> int:
+        return self.set_frame(max(0, self.total_frames - 1))
+
     def next_error_frame(self):
         for frame in self.error_frames:
             if frame > self.cur_frame:
