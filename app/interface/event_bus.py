@@ -41,8 +41,9 @@ class EventBus:
     def off(self, event: Event, callback: Callable[..., None]) -> None:
         with self._lock:
             listeners = self._listeners.get(event)
-            if listeners and callback in listeners:
-                listeners.remove(callback)
+            if not listeners or callback not in listeners:
+                raise ValueError(f"Callback not registered for {event}")
+            listeners.remove(callback)
 
     def emit(self, event: Event, *args: Any) -> None:
         with self._lock:
@@ -56,3 +57,10 @@ class EventBus:
         self.on(Event.SequencesChanged, listener.on_sequences_changed)
         self.on(Event.DetectionsUpdated, listener.on_detections_updated)
         self.on(Event.BookmarksChanged, listener.on_bookmarks_changed)
+
+    def disconnect(self, listener: EventsListener) -> None:
+        self.off(Event.FramesLoaded, listener.on_frames_loaded)
+        self.off(Event.SongIdentified, listener.on_song_identified)
+        self.off(Event.SequencesChanged, listener.on_sequences_changed)
+        self.off(Event.DetectionsUpdated, listener.on_detections_updated)
+        self.off(Event.BookmarksChanged, listener.on_bookmarks_changed)
