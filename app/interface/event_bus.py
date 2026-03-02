@@ -1,3 +1,4 @@
+import threading
 from collections import defaultdict
 from enum import Enum, auto
 from typing import Any, Callable, Protocol
@@ -31,17 +32,22 @@ class EventBus:
 
     def __init__(self):
         self._listeners: dict[Event, list[Callable[..., None]]] = defaultdict(list)
+        self._lock = threading.Lock()
 
     def on(self, event: Event, callback: Callable[..., None]) -> None:
-        self._listeners[event].append(callback)
+        with self._lock:
+            self._listeners[event].append(callback)
 
     def off(self, event: Event, callback: Callable[..., None]) -> None:
-        listeners = self._listeners.get(event)
-        if listeners and callback in listeners:
-            listeners.remove(callback)
+        with self._lock:
+            listeners = self._listeners.get(event)
+            if listeners and callback in listeners:
+                listeners.remove(callback)
 
     def emit(self, event: Event, *args: Any) -> None:
-        for callback in self._listeners.get(event, []):
+        with self._lock:
+            callbacks = list(self._listeners.get(event, []))
+        for callback in callbacks:
             callback(*args)
 
     def connect(self, listener: EventsListener) -> None:
