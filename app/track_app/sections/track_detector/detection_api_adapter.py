@@ -1,7 +1,10 @@
+import logging
 from pathlib import Path
 
 from app.interface.track_detector import BoundingBox, PersonDetection, RelativeBoundingBox
 from services.detection.client import DetectResponse, DetectionApiClient
+
+log = logging.getLogger(__name__)
 
 
 class DetectionApiPersonDetector:
@@ -67,7 +70,8 @@ class DetectionApiPersonDetector:
                 score_threshold=self._score_threshold,
                 max_results=self._max_results,
             )
-        except Exception:
+        except Exception as e:
+            log.error("[%s] detect frame failed: %s", self._provider, e)
             return []
         return self._map_response(response)
 
@@ -79,7 +83,8 @@ class DetectionApiPersonDetector:
                 score_threshold=self._score_threshold,
                 max_results=self._max_results,
             )
-        except Exception:
+        except Exception as e:
+            log.error("[%s] detect_video failed: %s", self._provider, e)
             return []
         return [self._map_response(r) for r in responses]
 
@@ -91,6 +96,7 @@ class DetectionApiPersonDetector:
                 score_threshold=self._score_threshold,
                 max_results=self._max_results,
             )
-        except Exception:
+        except Exception as e:
+            log.error("[%s] detect_batch failed: %s", self._provider, e)
             return []
         return [self._map_response(r) for r in responses]

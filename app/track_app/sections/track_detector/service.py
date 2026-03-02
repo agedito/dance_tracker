@@ -29,6 +29,7 @@ class TrackDetectorService:
         if detector_name not in self._detectors:
             return False
         self._active_detector_name = detector_name
+        self._detections_by_frame = {}
         return True
 
     def detect_people_for_sequence(self, frames_folder_path: str, frame_index: int | None = None) -> int:
@@ -45,7 +46,9 @@ class TrackDetectorService:
 
             detections = dict(self._detections_by_frame)
             if not detections:
-                detections, _ = DetectionsStore.read(frames_folder_path)
+                file_detections, saved_name = DetectionsStore.read(frames_folder_path)
+                if saved_name is None or saved_name == self._active_detector_name:
+                    detections = file_detections
 
             previous_detections = detections.get(frame_index - 1)
             frame_detections = detector.detect_people_in_frame(
@@ -77,7 +80,7 @@ class TrackDetectorService:
 
         self._detections_by_frame = detections
         DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
-        return len(frame_files)
+        return len(detections)
 
     def load_detections(self, frames_folder_path: str) -> None:
         detections, saved_name = DetectionsStore.read(frames_folder_path)

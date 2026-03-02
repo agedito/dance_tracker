@@ -70,6 +70,7 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
+        print("[detect] raw response:", raw)
         return _parse_detect_response(raw)
 
     def detect_batch(
@@ -138,6 +139,8 @@ class DetectionApiClient:
 
 
 def _parse_detect_response(raw: dict) -> DetectResponse:
+    # Single-frame endpoint nests frame data under "frame"; batch/video use flat structure.
+    frame = raw.get("frame") or raw
     persons = [
         DetectPerson(
             id=p["id"],
@@ -152,14 +155,14 @@ def _parse_detect_response(raw: dict) -> DetectResponse:
             center_y=p["center_y"],
             crop_path=p.get("crop_path"),
         )
-        for p in raw.get("persons", [])
+        for p in frame.get("persons", [])
     ]
     return DetectResponse(
         provider=raw["provider"],
-        num_persons=raw["num_persons"],
-        image_width=raw["image_width"],
-        image_height=raw["image_height"],
+        num_persons=frame.get("num_persons", len(persons)),
+        image_width=frame["image_width"],
+        image_height=frame["image_height"],
         persons=persons,
-        output_path=raw.get("output_path"),
+        output_path=frame.get("output_path"),
         elapsed_ms=float(raw.get("elapsed_ms", 0.0)),
     )

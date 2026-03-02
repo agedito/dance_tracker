@@ -1,8 +1,10 @@
+import logging
+
 from bootstrap.launcher import launch
 
 
 def main():
-    # ToDo: Create logger
+    logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
     launch()
 
 
