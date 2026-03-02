@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.interface.track_detector import PersonDetection, PersonDetector
 from app.track_app.sections.track_detector.detections_store import DetectionsStore
+from app.track_app.sections.video_manager import sequence_file_store
 
 
 class TrackDetectorService:
@@ -56,7 +57,11 @@ class TrackDetectorService:
             DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
             return 1
 
-        if hasattr(detector, "detect_people_in_batch"):
+        video_path = _find_video_path(frames_folder_path)
+        if hasattr(detector, "detect_people_in_video") and video_path:
+            batch_results = detector.detect_people_in_video(video_path)
+            detections = {i: r for i, r in enumerate(batch_results)}
+        elif hasattr(detector, "detect_people_in_batch"):
             batch_results = detector.detect_people_in_batch(frames_folder_path)
             detections = {i: r for i, r in enumerate(batch_results)}
         else:
@@ -98,3 +103,18 @@ class TrackDetectorService:
 def _natural_sort_key(path: Path):
     chunks = re.split(r"(\d+)", path.name.lower())
     return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+
+
+def _find_video_path(frames_folder_path: str) -> str | None:
+    folder = Path(frames_folder_path).expanduser()
+    metadata_path = sequence_file_store.find_metadata_for_frames(folder)
+    if not metadata_path:
+        return None
+    metadata = sequence_file_store.read(metadata_path)
+    if not metadata:
+        return None
+    video_name = sequence_file_store.video_path_from_metadata(metadata)
+    if not video_name:
+        return None
+    video_file = metadata_path.parent / video_name
+    return str(video_file) if video_file.exists() else None

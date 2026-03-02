@@ -1,4 +1,5 @@
 import json
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -95,6 +96,44 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
+        return [_parse_detect_response(r) for r in raw]
+
+    def batch_video(
+            self,
+            video_path: str,
+            provider: str,
+            score_threshold: float = 0.4,
+            max_results: int = 50,
+            batch_size: int = 32,
+            save_crops: bool = False,
+    ) -> list[DetectResponse]:
+        url = (
+            f"{self._base_url}/api/detect/video"
+            f"?provider={urllib.parse.quote(provider)}&render=false"
+        )
+        body = json.dumps({
+            "video_path": video_path,
+            "score_threshold": score_threshold,
+            "max_results": max_results,
+            "batch_size": batch_size,
+            "save_crops": save_crops,
+        }).encode("utf-8")
+        print(url)
+        print(body)
+        t0 = time.time()
+        print("Requesting....")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        tn = time.time()
+        print("...request done")
+        print(f"Elapsed: {tn - t0:.2f}s")
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+        print(raw)
         return [_parse_detect_response(r) for r in raw]
 
 

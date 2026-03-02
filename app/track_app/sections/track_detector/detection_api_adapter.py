@@ -71,6 +71,18 @@ class DetectionApiPersonDetector:
             return []
         return self._map_response(response)
 
+    def detect_people_in_video(self, video_path: str) -> list[list[PersonDetection]]:
+        try:
+            responses = self._client.batch_video(
+                video_path=self._relative_path(video_path),
+                provider=self._provider,
+                score_threshold=self._score_threshold,
+                max_results=self._max_results,
+            )
+        except Exception:
+            return []
+        return [self._map_response(r) for r in responses]
+
     def detect_people_in_batch(self, folder_path: str) -> list[list[PersonDetection]]:
         try:
             responses = self._client.detect_batch(
