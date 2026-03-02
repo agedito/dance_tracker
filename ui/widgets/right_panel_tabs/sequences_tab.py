@@ -19,11 +19,13 @@ class SequencesTabWidget(QWidget):
     def __init__(self, media_manager: MediaPort, sequences: SequencePort, event_bus: EventBus):
         super().__init__()
         self._sequences = sequences
+        self._event_bus = event_bus
         self._drop_handler = DropHandler(media_manager, parent=self)
         self._state = SequenceState(items=[], active_folder=None)
 
         self.setAcceptDrops(True)
         event_bus.on(Event.SequencesChanged, self._on_sequences_changed)
+        self.destroyed.connect(self._unsubscribe)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -67,6 +69,9 @@ class SequencesTabWidget(QWidget):
         if watched is self._scroll.viewport() and event.type() == QEvent.Type.Resize:
             self._rebuild_grid()
         return super().eventFilter(watched, event)
+
+    def _unsubscribe(self, _: object = None) -> None:
+        self._event_bus.off(Event.SequencesChanged, self._on_sequences_changed)
 
     def _on_sequences_changed(self, state: SequenceState) -> None:
         self._state = state
