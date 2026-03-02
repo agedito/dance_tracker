@@ -38,6 +38,7 @@ class TimelinePanel(QFrame):
         self.zoom_bar.setTextVisible(True)
         self.zoom_bar.setFormat("Zoom 0% · Pan 0%")
         self.viewport_bar = ViewportOverviewBar()
+        self.viewport_bar.viewportChangeRequested.connect(self._sync_viewport_from_overview)
         self.track_widgets: list[TimelineTrack] = []
         self._shared_view_start = 0.0
         self._shared_view_span = 1.0
@@ -170,3 +171,6 @@ class TimelinePanel(QFrame):
         pan_value = int(round(max(0.0, min(1.0, start)) * 100.0))
         self.zoom_bar.setValue(zoom_value)
         self.zoom_bar.setFormat(f"Zoom {zoom_value}% · Pan {pan_value}%")
+
+    def _sync_viewport_from_overview(self, start: float, span: float):
+        self._sync_viewport_from_track(start, span)
