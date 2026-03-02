@@ -42,7 +42,7 @@ class DanceTrackerApp:
 def _load_detection_api_detectors(base_url: str, data_path: str = "", timeout: int = 5) -> dict:
     try:
         caps = DetectionApiClient(base_url, timeout=timeout).capabilities()
-        detection_client = DetectionApiClient(base_url, timeout=30)
+        detection_client = DetectionApiClient(base_url, timeout=30, video_timeout=600)
         return {
             provider: DetectionApiPersonDetector(detection_client, provider, data_path=data_path)
             for provider in caps.get("providers", [])

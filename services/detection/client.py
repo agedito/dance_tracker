@@ -1,5 +1,4 @@
 import json
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -25,6 +24,17 @@ class DetectPerson:
 
 
 @dataclass(frozen=True)
+class VideoDetectSummary:
+    provider: str
+    source: str
+    total_frames: int
+    processed: int
+    failed: int
+    json_path: str | None
+    elapsed_ms: float
+
+
+@dataclass(frozen=True)
 class DetectResponse:
     provider: str
     num_persons: int
@@ -36,9 +46,10 @@ class DetectResponse:
 
 
 class DetectionApiClient:
-    def __init__(self, base_url: str = "http://localhost:9000", timeout: int = 5):
+    def __init__(self, base_url: str = "http://localhost:9000", timeout: int = 5, video_timeout: int = 600):
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
+        self._video_timeout = video_timeout
 
     def capabilities(self) -> dict:
         req = urllib.request.Request(self._base_url + "/capabilities/detection")
@@ -107,7 +118,7 @@ class DetectionApiClient:
             max_results: int = 50,
             batch_size: int = 32,
             save_crops: bool = False,
-    ) -> list[DetectResponse]:
+    ) -> VideoDetectSummary:
         url = (
             f"{self._base_url}/api/detect/video"
             f"?provider={urllib.parse.quote(provider)}&render=false"
@@ -121,7 +132,6 @@ class DetectionApiClient:
         }).encode("utf-8")
         print(url)
         print(body)
-        t0 = time.time()
         print("Requesting....")
         req = urllib.request.Request(
             url,
@@ -129,13 +139,18 @@ class DetectionApiClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        tn = time.time()
-        print("...request done")
-        print(f"Elapsed: {tn - t0:.2f}s")
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+        with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
-        print(raw)
-        return [_parse_detect_response(r) for r in raw]
+        print(f"Elapsed: {raw.get('elapsed_ms', 0) / 1000:.1f}s  frames={raw.get('processed', '?')}")
+        return VideoDetectSummary(
+            provider=raw["provider"],
+            source=raw.get("source", ""),
+            total_frames=raw.get("total_frames", 0),
+            processed=raw.get("processed", 0),
+            failed=raw.get("failed", 0),
+            json_path=raw.get("json_path"),
+            elapsed_ms=float(raw.get("elapsed_ms", 0.0)),
+        )
 
 
 def _parse_detect_response(raw: dict) -> DetectResponse:

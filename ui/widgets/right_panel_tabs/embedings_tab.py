@@ -8,10 +8,10 @@ from ui.widgets.right_panel_tabs.common import section_label
 
 class EmbedingsTabWidget(QWidget):
     def __init__(
-        self,
-        app: DanceTrackerPort,
-        get_current_folder: Callable[[], str | None],
-        log_message: Callable[[str], None],
+            self,
+            app: DanceTrackerPort,
+            get_current_folder: Callable[[], str | None],
+            log_message: Callable[[str], None],
     ):
         super().__init__()
         self._app = app
@@ -68,6 +68,7 @@ class EmbedingsTabWidget(QWidget):
 
         detector_name = self._app.track_detector.active_detector()
         detect_current_only = self._detect_current_frame_checkbox.isChecked()
+        print(f"Detector {detector_name} only frame? {detect_current_only}")
         if detect_current_only:
             frame_index = self._app.frames.cur_frame
             self._log_message(
