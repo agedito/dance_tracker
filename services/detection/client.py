@@ -49,7 +49,7 @@ class DetectionApiClient:
             image_path: str,
             provider: str,
             score_threshold: float = 0.4,
-            max_results: int = 20,
+            max_results: int = 2,
     ) -> DetectResponse:
         url = (
             f"{self._base_url}/api/detect"
@@ -60,8 +60,7 @@ class DetectionApiClient:
             "score_threshold": score_threshold,
             "max_results": max_results,
         }).encode("utf-8")
-        print(url)
-        print(body)
+
         req = urllib.request.Request(
             url,
             data=body,
@@ -70,30 +69,58 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
-            print(raw)
+        return _parse_detect_response(raw)
 
-        persons = [
-            DetectPerson(
-                id=p["id"],
-                bbox=DetectBBox(
-                    x=p["bbox"]["x"],
-                    y=p["bbox"]["y"],
-                    width=p["bbox"]["width"],
-                    height=p["bbox"]["height"],
-                ),
-                score=float(p["score"]),
-                center_x=p["center_x"],
-                center_y=p["center_y"],
-                crop_path=p.get("crop_path"),
-            )
-            for p in raw.get("persons", [])
-        ]
-        return DetectResponse(
-            provider=raw["provider"],
-            num_persons=raw["num_persons"],
-            image_width=raw["image_width"],
-            image_height=raw["image_height"],
-            persons=persons,
-            output_path=raw.get("output_path"),
-            elapsed_ms=float(raw.get("elapsed_ms", 0.0)),
+    def detect_batch(
+            self,
+            folder_path: str,
+            provider: str,
+            score_threshold: float = 0.4,
+            max_results: int = 20,
+    ) -> list[DetectResponse]:
+        url = (
+            f"{self._base_url}/api/detect/batch"
+            f"?provider={urllib.parse.quote(provider)}&render=false"
         )
+        body = json.dumps({
+            "folder_path": folder_path,
+            "score_threshold": score_threshold,
+            "max_results": max_results,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+        return [_parse_detect_response(r) for r in raw]
+
+
+def _parse_detect_response(raw: dict) -> DetectResponse:
+    persons = [
+        DetectPerson(
+            id=p["id"],
+            bbox=DetectBBox(
+                x=p["bbox"]["x"],
+                y=p["bbox"]["y"],
+                width=p["bbox"]["width"],
+                height=p["bbox"]["height"],
+            ),
+            score=float(p["score"]),
+            center_x=p["center_x"],
+            center_y=p["center_y"],
+            crop_path=p.get("crop_path"),
+        )
+        for p in raw.get("persons", [])
+    ]
+    return DetectResponse(
+        provider=raw["provider"],
+        num_persons=raw["num_persons"],
+        image_width=raw["image_width"],
+        image_height=raw["image_height"],
+        persons=persons,
+        output_path=raw.get("output_path"),
+        elapsed_ms=float(raw.get("elapsed_ms", 0.0)),
+    )

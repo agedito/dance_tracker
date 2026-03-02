@@ -56,16 +56,19 @@ class TrackDetectorService:
             DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
             return 1
 
-        detections: dict[int, list[PersonDetection]] = {}
-        previous_detections: list[PersonDetection] | None = None
-
-        for index, frame_path in enumerate(frame_files):
-            frame_detections = detector.detect_people_in_frame(
-                frame_path=str(frame_path),
-                previous_detections=previous_detections,
-            )
-            detections[index] = frame_detections
-            previous_detections = frame_detections
+        if hasattr(detector, "detect_people_in_batch"):
+            batch_results = detector.detect_people_in_batch(frames_folder_path)
+            detections = {i: r for i, r in enumerate(batch_results)}
+        else:
+            detections = {}
+            previous_detections: list[PersonDetection] | None = None
+            for index, frame_path in enumerate(frame_files):
+                frame_detections = detector.detect_people_in_frame(
+                    frame_path=str(frame_path),
+                    previous_detections=previous_detections,
+                )
+                detections[index] = frame_detections
+                previous_detections = frame_detections
 
         self._detections_by_frame = detections
         DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)

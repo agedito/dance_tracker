@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.interface.track_detector import BoundingBox, PersonDetection, RelativeBoundingBox
-from services.detection.client import DetectionApiClient
+from services.detection.client import DetectResponse, DetectionApiClient
 
 
 class DetectionApiPersonDetector:
@@ -27,25 +27,9 @@ class DetectionApiPersonDetector:
         except ValueError:
             return frame_path
 
-    def detect_people_in_frame(
-        self,
-        frame_path: str,
-        previous_detections: list[PersonDetection] | None = None,
-    ) -> list[PersonDetection]:
-        _ = previous_detections
-        try:
-            response = self._client.detect(
-                image_path=self._relative_path(frame_path),
-                provider=self._provider,
-                score_threshold=self._score_threshold,
-                max_results=self._max_results,
-            )
-        except Exception:
-            return []
-
+    def _map_response(self, response: DetectResponse) -> list[PersonDetection]:
         if response.image_width <= 0 or response.image_height <= 0:
             return []
-
         width = response.image_width
         height = response.image_height
         detections: list[PersonDetection] = []
@@ -69,3 +53,32 @@ class DetectionApiPersonDetector:
                 )
             )
         return detections
+
+    def detect_people_in_frame(
+        self,
+        frame_path: str,
+        previous_detections: list[PersonDetection] | None = None,
+    ) -> list[PersonDetection]:
+        _ = previous_detections
+        try:
+            response = self._client.detect(
+                image_path=self._relative_path(frame_path),
+                provider=self._provider,
+                score_threshold=self._score_threshold,
+                max_results=self._max_results,
+            )
+        except Exception:
+            return []
+        return self._map_response(response)
+
+    def detect_people_in_batch(self, folder_path: str) -> list[list[PersonDetection]]:
+        try:
+            responses = self._client.detect_batch(
+                folder_path=self._relative_path(folder_path),
+                provider=self._provider,
+                score_threshold=self._score_threshold,
+                max_results=self._max_results,
+            )
+        except Exception:
+            return []
+        return [self._map_response(r) for r in responses]
