@@ -6,7 +6,14 @@ from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
-from ui.widgets.right_panel_tabs import DataTabWidget, EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
+from ui.widgets.right_panel_tabs import (
+    DancersTabWidget,
+    DataTabWidget,
+    EmbedingsTabWidget,
+    LayerViewersTabWidget,
+    MusicTabWidget,
+    SequencesTabWidget,
+)
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
@@ -75,6 +82,7 @@ class RightPanel(QFrame):
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
             "data": self.data_tab,
+            "dancers": DancersTabWidget(),
             "embedings": EmbedingsTabWidget(
                 app=app,
                 get_current_folder=self.current_folder_path,
@@ -87,6 +95,7 @@ class RightPanel(QFrame):
             "visor_3d": "Visor 3D",
             "music": "Music",
             "data": "Data",
+            "dancers": "Dancers",
             "embedings": "Embedings",
         }
 
