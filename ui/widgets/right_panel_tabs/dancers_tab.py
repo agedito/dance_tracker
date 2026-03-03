@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QTabWidget,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -182,10 +181,7 @@ class DancerProfileWidget(QWidget):
         labeling_form.addRow("Color", color_row)
 
         skeleton_section = CollapsibleSection("MediaPipe Skeleton (A Pose)")
-        skeleton_layout = QVBoxLayout()
-        skeleton_layout.setContentsMargins(0, 0, 0, 0)
-        skeleton_layout.addWidget(SkeletonAPoseWidget(profile_data.skeleton))
-        skeleton_section.content_layout.addLayout(skeleton_layout)
+        skeleton_section.form_layout.addRow(SkeletonAPoseWidget(profile_data.skeleton))
 
         content_layout.addWidget(personal_section)
         content_layout.addWidget(labeling_section)
