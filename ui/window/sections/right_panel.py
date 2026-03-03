@@ -68,6 +68,11 @@ class RightPanel(QFrame):
         )
         self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
         self.data_tab = DataTabWidget(app.sequence_data)
+        self.embedings_tab = EmbedingsTabWidget(
+            app=app,
+            get_current_folder=self.current_folder_path,
+            log_message=self.logger_widget.log,
+        )
 
         tab_widgets: dict[str, QWidget] = {
             "sequences": self.sequences_tab,
@@ -75,11 +80,7 @@ class RightPanel(QFrame):
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
             "data": self.data_tab,
-            "embedings": EmbedingsTabWidget(
-                app=app,
-                get_current_folder=self.current_folder_path,
-                log_message=self.logger_widget.log,
-            ),
+            "embedings": self.embedings_tab,
         }
         tab_labels: dict[str, str] = {
             "sequences": "Sequences",
@@ -119,3 +120,6 @@ class RightPanel(QFrame):
 
     def clear_sequence_data(self) -> None:
         self.data_tab.clear()
+
+    def sync_detector_selection(self) -> None:
+        self.embedings_tab.sync_selected_detector()
