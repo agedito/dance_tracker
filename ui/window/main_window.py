@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         self._right_panel.set_current_folder_path(path)
         self._right_panel.update_sequence_data(path)
         self._app.track_detector.load_detections(path)
+        self._right_panel.sync_detector_selection()
         self._folder_session.load_folder(path)
 
     def on_song_identified(self, song: SongMetadata) -> None:

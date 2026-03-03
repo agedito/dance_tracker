@@ -47,6 +47,19 @@ class EmbeddingsTabWidget(QWidget):
         layout.addLayout(controls_layout)
         layout.addStretch(1)
 
+    def sync_selected_detector(self) -> None:
+        active_detector = self._app.track_detector.active_detector()
+        active_index = self._detectors_combo.findText(active_detector)
+        if active_index < 0:
+            return
+
+        if self._detectors_combo.currentIndex() == active_index:
+            return
+
+        self._detectors_combo.blockSignals(True)
+        self._detectors_combo.setCurrentIndex(active_index)
+        self._detectors_combo.blockSignals(False)
+
     def _set_detection_controls_enabled(self, enabled: bool) -> None:
         self._detect_button.setEnabled(enabled)
         self._detectors_combo.setEnabled(enabled)
