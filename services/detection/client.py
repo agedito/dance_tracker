@@ -81,7 +81,7 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
-        print("[detect] raw response:", raw)
+        print("[frame detect] raw response:", raw)
         return _parse_detect_response(raw)
 
     def detect_batch(
@@ -141,7 +141,7 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
-        print(raw)
+        print("[video detect]", raw)
         return VideoDetectSummary(
             provider=raw["provider"],
             source=raw.get("source", ""),
