@@ -1,9 +1,12 @@
+import logging
 import re
 from pathlib import Path
 
 from app.interface.track_detector import PersonDetection, PersonDetector
 from app.track_app.sections.track_detector.detections_store import DetectionsStore
 from app.track_app.sections.video_manager import sequence_file_store
+
+log = logging.getLogger(__name__)
 
 
 class TrackDetectorService:
@@ -90,8 +93,11 @@ class TrackDetectorService:
         if not video_path:
             return self.detect_people_for_sequence(frames_folder_path)
 
-        batch_results = detector.detect_people_in_video(video_path)
+        image_size = _read_video_dimensions(frames_folder_path)
+        batch_results = detector.detect_people_in_video(video_path, image_size=image_size)
         detections = {i: r for i, r in enumerate(batch_results)}
+        non_empty = sum(1 for v in detections.values() if v)
+        log.debug("detect_people_for_video: %d frames, %d with detections", len(detections), non_empty)
         self._detections_by_frame = detections
         DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
         return len(detections)
@@ -120,6 +126,18 @@ class TrackDetectorService:
 def _natural_sort_key(path: Path):
     chunks = re.split(r"(\d+)", path.name.lower())
     return [int(chunk) if chunk.isdigit() else chunk for chunk in chunks]
+
+
+def _read_video_dimensions(frames_folder_path: str) -> tuple[int, int]:
+    folder = Path(frames_folder_path).expanduser()
+    metadata_path = sequence_file_store.find_metadata_for_frames(folder)
+    if not metadata_path:
+        return (0, 0)
+    metadata = sequence_file_store.read(metadata_path)
+    if not metadata:
+        return (0, 0)
+    resolution = metadata.get("video", {}).get("data", {}).get("resolution", {})
+    return (int(resolution.get("width", 0)), int(resolution.get("height", 0)))
 
 
 def _find_video_path(frames_folder_path: str) -> str | None:

@@ -100,6 +100,9 @@ class DetectionApiClient:
             "score_threshold": score_threshold,
             "max_results": max_results,
         }).encode("utf-8")
+        print(url)
+        print(body)
+        print("Requesting....")
         req = urllib.request.Request(
             url,
             data=body,
@@ -108,6 +111,8 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
+        print("...response")
+        print(raw)
         return [_parse_detect_response(r) for r in raw]
 
     def batch_video(

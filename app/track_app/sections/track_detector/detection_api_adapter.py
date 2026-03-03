@@ -30,11 +30,15 @@ class DetectionApiPersonDetector:
         except ValueError:
             return frame_path
 
-    def _map_response(self, response: DetectResponse) -> list[PersonDetection]:
-        if response.image_width <= 0 or response.image_height <= 0:
+    def _map_response(
+        self,
+        response: DetectResponse,
+        fallback_size: tuple[int, int] = (0, 0),
+    ) -> list[PersonDetection]:
+        width = response.image_width if response.image_width > 0 else fallback_size[0]
+        height = response.image_height if response.image_height > 0 else fallback_size[1]
+        if width <= 0 or height <= 0:
             return []
-        width = response.image_width
-        height = response.image_height
         detections: list[PersonDetection] = []
         for person in response.persons:
             box = BoundingBox(
@@ -75,7 +79,11 @@ class DetectionApiPersonDetector:
             return []
         return self._map_response(response)
 
-    def detect_people_in_video(self, video_path: str) -> list[list[PersonDetection]]:
+    def detect_people_in_video(
+        self,
+        video_path: str,
+        image_size: tuple[int, int] = (0, 0),
+    ) -> list[list[PersonDetection]]:
         try:
             responses = self._client.batch_video(
                 video_path=self._relative_path(video_path),
@@ -86,7 +94,11 @@ class DetectionApiPersonDetector:
         except Exception as e:
             log.error("[%s] detect_video failed: %s", self._provider, e)
             return []
-        return [self._map_response(r) for r in responses]
+        if responses:
+            r0 = responses[0]
+            log.debug("[%s] video first frame: w=%d h=%d persons=%d",
+                      self._provider, r0.image_width, r0.image_height, len(r0.persons))
+        return [self._map_response(r, fallback_size=image_size) for r in responses]
 
     def detect_people_in_batch(self, folder_path: str) -> list[list[PersonDetection]]:
         try:
