@@ -1,9 +1,13 @@
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
 from ui.widgets.right_panel_tabs.common import section_label
+
+_MODE_FRAME = "Frame"
+_MODE_SEQUENCE = "Sequence"
+_MODE_VIDEO = "Video"
 
 
 class EmbeddingsTabWidget(QWidget):
@@ -37,8 +41,9 @@ class EmbeddingsTabWidget(QWidget):
         self._detectors_combo.currentTextChanged.connect(self._on_detector_changed)
         controls_layout.addWidget(self._detectors_combo, 1)
 
-        self._detect_current_frame_checkbox = QCheckBox("Current frame only")
-        controls_layout.addWidget(self._detect_current_frame_checkbox)
+        self._mode_combo = QComboBox()
+        self._mode_combo.addItems([_MODE_FRAME, _MODE_SEQUENCE, _MODE_VIDEO])
+        controls_layout.addWidget(self._mode_combo)
 
         self._detect_button = QPushButton("Detect people")
         self._detect_button.clicked.connect(self._on_detect_people_clicked)
@@ -63,7 +68,7 @@ class EmbeddingsTabWidget(QWidget):
     def _set_detection_controls_enabled(self, enabled: bool) -> None:
         self._detect_button.setEnabled(enabled)
         self._detectors_combo.setEnabled(enabled)
-        self._detect_current_frame_checkbox.setEnabled(enabled)
+        self._mode_combo.setEnabled(enabled)
 
     def _on_detector_changed(self, detector_name: str) -> None:
         if not detector_name:
@@ -80,19 +85,21 @@ class EmbeddingsTabWidget(QWidget):
             return
 
         detector_name = self._app.track_detector.active_detector()
-        detect_current_only = self._detect_current_frame_checkbox.isChecked()
-        print(f"Detector {detector_name} only frame? {detect_current_only}")
-        if detect_current_only:
+        mode = self._mode_combo.currentText()
+
+        if mode == _MODE_FRAME:
             frame_index = self._app.frames.cur_frame
-            self._log_message(
-                f"Person detection started with detector: {detector_name}. Current frame mode at frame {frame_index}."
-            )
+            self._log_message(f"Detection started [{detector_name}] — frame {frame_index}.")
             processed = self._app.track_detector.detect_people_for_sequence(frames_folder_path, frame_index=frame_index)
-            self._log_message(f"Person detection finished. Processed {processed} frame.")
+            self._log_message(f"Detection finished. Processed {processed} frame.")
             return
 
         self._set_detection_controls_enabled(False)
-        self._log_message(f"Person detection started with detector: {detector_name}.")
-        processed = self._app.track_detector.detect_people_for_sequence(frames_folder_path)
+        if mode == _MODE_VIDEO:
+            self._log_message(f"Detection started [{detector_name}] — video mode.")
+            processed = self._app.track_detector.detect_people_for_video(frames_folder_path)
+        else:
+            self._log_message(f"Detection started [{detector_name}] — sequence mode.")
+            processed = self._app.track_detector.detect_people_for_sequence(frames_folder_path)
         self._set_detection_controls_enabled(True)
-        self._log_message(f"Person detection finished. Processed {processed} frames.")
+        self._log_message(f"Detection finished. Processed {processed} frames.")

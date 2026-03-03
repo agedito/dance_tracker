@@ -384,6 +384,11 @@ class TrackDetectorAdapter:
         self._events.emit(Event.DetectionsUpdated, frames_folder_path)
         return detected_frames
 
+    def detect_people_for_video(self, frames_folder_path: str) -> int:
+        detected_frames = self._service.detect_people_for_video(frames_folder_path)
+        self._events.emit(Event.DetectionsUpdated, frames_folder_path)
+        return detected_frames
+
     def load_detections(self, frames_folder_path: str) -> None:
         self._service.load_detections(frames_folder_path)
         self._events.emit(Event.DetectionsUpdated, frames_folder_path)

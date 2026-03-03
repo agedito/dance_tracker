@@ -60,11 +60,7 @@ class TrackDetectorService:
             DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
             return 1
 
-        video_path = _find_video_path(frames_folder_path)
-        if hasattr(detector, "detect_people_in_video") and video_path:
-            batch_results = detector.detect_people_in_video(video_path)
-            detections = {i: r for i, r in enumerate(batch_results)}
-        elif hasattr(detector, "detect_people_in_batch"):
+        if hasattr(detector, "detect_people_in_batch"):
             batch_results = detector.detect_people_in_batch(frames_folder_path)
             detections = {i: r for i, r in enumerate(batch_results)}
         else:
@@ -78,6 +74,24 @@ class TrackDetectorService:
                 detections[index] = frame_detections
                 previous_detections = frame_detections
 
+        self._detections_by_frame = detections
+        DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
+        return len(detections)
+
+    def detect_people_for_video(self, frames_folder_path: str) -> int:
+        detector = self._detectors.get(self._active_detector_name)
+        if detector is None:
+            return 0
+
+        if not hasattr(detector, "detect_people_in_video"):
+            return self.detect_people_for_sequence(frames_folder_path)
+
+        video_path = _find_video_path(frames_folder_path)
+        if not video_path:
+            return self.detect_people_for_sequence(frames_folder_path)
+
+        batch_results = detector.detect_people_in_video(video_path)
+        detections = {i: r for i, r in enumerate(batch_results)}
         self._detections_by_frame = detections
         DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
         return len(detections)
