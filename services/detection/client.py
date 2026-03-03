@@ -141,7 +141,7 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
-        print(f"Elapsed: {raw.get('elapsed_ms', 0) / 1000:.1f}s  frames={raw.get('processed', '?')}")
+        print(raw)
         return VideoDetectSummary(
             provider=raw["provider"],
             source=raw.get("source", ""),
