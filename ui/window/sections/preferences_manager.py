@@ -133,6 +133,14 @@ class PreferencesManager:
         ]
         self.save()
 
+    def right_panel_active_tab_id(self) -> str | None:
+        tab_id = self._prefs.get("right_panel_active_tab_id")
+        return tab_id if isinstance(tab_id, str) and tab_id else None
+
+    def save_right_panel_active_tab_id(self, tab_id: str):
+        self._prefs["right_panel_active_tab_id"] = tab_id if isinstance(tab_id, str) and tab_id else None
+        self.save()
+
     def save_recent_folders_order(self, order: list[str]):
         normalized_order = [
             str(Path(folder).expanduser())

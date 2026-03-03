@@ -11,7 +11,7 @@ from ui.window.sections.preferences_manager import PreferencesManager
 
 
 class _TabOrderManager:
-    """Restores and persists the drag-reorder position of each tab."""
+    """Restores and persists right panel tab order and active tab."""
 
     def __init__(
         self,
@@ -25,7 +25,9 @@ class _TabOrderManager:
         self._labels = labels
         self._preferences = preferences
         self._add_in_saved_order()
+        self._restore_active_tab()
         tabs.tabBar().tabMoved.connect(self._save_order)
+        tabs.currentChanged.connect(self._save_active_tab)
 
     def _add_in_saved_order(self) -> None:
         desired_order = self._preferences.right_panel_tab_order()
@@ -39,13 +41,30 @@ class _TabOrderManager:
         current_order: list[str] = []
         for i in range(self._tabs.count()):
             widget = self._tabs.widget(i)
-            tab_id = next(
-                (id_ for id_, w in self._widgets.items() if w is widget),
-                None,
-            )
+            tab_id = self._tab_id_for_widget(widget)
             if tab_id:
                 current_order.append(tab_id)
         self._preferences.save_right_panel_tab_order(current_order)
+
+    def _restore_active_tab(self) -> None:
+        saved_tab_id = self._preferences.right_panel_active_tab_id()
+        if not saved_tab_id:
+            return
+        widget = self._widgets.get(saved_tab_id)
+        if widget is None:
+            return
+        index = self._tabs.indexOf(widget)
+        if index >= 0:
+            self._tabs.setCurrentIndex(index)
+
+    def _save_active_tab(self, index: int) -> None:
+        widget = self._tabs.widget(index)
+        tab_id = self._tab_id_for_widget(widget)
+        if tab_id:
+            self._preferences.save_right_panel_active_tab_id(tab_id)
+
+    def _tab_id_for_widget(self, widget: QWidget | None) -> str | None:
+        return next((id_ for id_, w in self._widgets.items() if w is widget), None)
 
 
 class RightPanel(QFrame):
