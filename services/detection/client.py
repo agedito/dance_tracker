@@ -82,7 +82,14 @@ class DetectionApiClient:
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
             raw = json.loads(resp.read())
         print("[frame detect] raw response:", raw)
-        return _parse_detect_response(raw)
+        provider = raw["provider"]
+        frames = raw.get("frames", [])
+        if not frames:
+            return DetectResponse(provider=provider, num_persons=0, image_width=0,
+                                  image_height=0, persons=[], output_path=None,
+                                  elapsed_ms=float(raw.get("elapsed_ms", 0.0)))
+        return _parse_detect_response({"provider": provider, "frame": frames[0],
+                                       "elapsed_ms": raw.get("elapsed_ms", 0.0)})
 
     def detect_batch(
             self,
@@ -113,7 +120,9 @@ class DetectionApiClient:
             raw = json.loads(resp.read())
         print("...response")
         print(raw)
-        return [_parse_detect_response(r) for r in raw]
+        provider = raw["provider"]
+        frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
+        return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
 
     def batch_video(
             self,

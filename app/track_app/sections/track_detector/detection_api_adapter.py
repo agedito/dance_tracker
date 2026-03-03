@@ -9,12 +9,12 @@ log = logging.getLogger(__name__)
 
 class DetectionApiPersonDetector:
     def __init__(
-        self,
-        client: DetectionApiClient,
-        provider: str,
-        data_path: str = "",
-        score_threshold: float = 0.4,
-        max_results: int = 20,
+            self,
+            client: DetectionApiClient,
+            provider: str,
+            data_path: str = "",
+            score_threshold: float = 0.4,
+            max_results: int = 20,
     ):
         self._client = client
         self._provider = provider
@@ -31,9 +31,9 @@ class DetectionApiPersonDetector:
             return frame_path
 
     def _map_response(
-        self,
-        response: DetectResponse,
-        fallback_size: tuple[int, int] = (0, 0),
+            self,
+            response: DetectResponse,
+            fallback_size: tuple[int, int] = (0, 0),
     ) -> list[PersonDetection]:
         width = response.image_width if response.image_width > 0 else fallback_size[0]
         height = response.image_height if response.image_height > 0 else fallback_size[1]
@@ -62,9 +62,9 @@ class DetectionApiPersonDetector:
         return detections
 
     def detect_people_in_frame(
-        self,
-        frame_path: str,
-        previous_detections: list[PersonDetection] | None = None,
+            self,
+            frame_path: str,
+            previous_detections: list[PersonDetection] | None = None,
     ) -> list[PersonDetection]:
         _ = previous_detections
         try:
@@ -80,9 +80,9 @@ class DetectionApiPersonDetector:
         return self._map_response(response)
 
     def detect_people_in_video(
-        self,
-        video_path: str,
-        image_size: tuple[int, int] = (0, 0),
+            self,
+            video_path: str,
+            image_size: tuple[int, int] = (0, 0),
     ) -> list[list[PersonDetection]]:
         try:
             responses = self._client.batch_video(
@@ -96,11 +96,13 @@ class DetectionApiPersonDetector:
             return []
         if responses:
             r0 = responses[0]
-            log.debug("[%s] video first frame: w=%d h=%d persons=%d",
-                      self._provider, r0.image_width, r0.image_height, len(r0.persons))
         return [self._map_response(r, fallback_size=image_size) for r in responses]
 
-    def detect_people_in_batch(self, folder_path: str) -> list[list[PersonDetection]]:
+    def detect_people_in_batch(
+            self,
+            folder_path: str,
+            image_size: tuple[int, int] = (0, 0),
+    ) -> list[list[PersonDetection]]:
         try:
             responses = self._client.detect_batch(
                 folder_path=self._relative_path(folder_path),
@@ -111,4 +113,4 @@ class DetectionApiPersonDetector:
         except Exception as e:
             log.error("[%s] detect_batch failed: %s", self._provider, e)
             return []
-        return [self._map_response(r) for r in responses]
+        return [self._map_response(r, fallback_size=image_size) for r in responses]

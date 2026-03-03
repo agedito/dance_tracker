@@ -64,7 +64,8 @@ class TrackDetectorService:
             return 1
 
         if hasattr(detector, "detect_people_in_batch"):
-            batch_results = detector.detect_people_in_batch(frames_folder_path)
+            image_size = _read_video_dimensions(frames_folder_path)
+            batch_results = detector.detect_people_in_batch(frames_folder_path, image_size=image_size)
             detections = {i: r for i, r in enumerate(batch_results)}
         else:
             detections = {}
@@ -97,7 +98,6 @@ class TrackDetectorService:
         batch_results = detector.detect_people_in_video(video_path, image_size=image_size)
         detections = {i: r for i, r in enumerate(batch_results)}
         non_empty = sum(1 for v in detections.values() if v)
-        log.debug("detect_people_for_video: %d frames, %d with detections", len(detections), non_empty)
         self._detections_by_frame = detections
         DetectionsStore.write(frames_folder_path, self._active_detector_name, detections)
         return len(detections)
