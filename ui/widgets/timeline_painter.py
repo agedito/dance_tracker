@@ -52,11 +52,34 @@ class TimelineTrackPainter:
         TimelineTrackPainter._draw_bookmarks(
             painter, bookmarks, total_frames, width, viewport, dragging, drag_source, drag_target
         )
+        TimelineTrackPainter._draw_timeline_bounds(painter, width, height, total_frames, viewport)
 
         frame_norm = frame / max(1, total_frames - 1)
         xph = int(((frame_norm - viewport.view_start) / max(0.0001, viewport.view_span)) * width)
         painter.setPen(QPen(QColor(255, 80, 80, 240), 2))
         painter.drawLine(xph, -4, xph, height + 4)
+
+    @staticmethod
+    def _draw_timeline_bounds(
+        painter: QPainter,
+        width: int,
+        height: int,
+        total_frames: int,
+        viewport: TimelineViewport,
+    ) -> None:
+        if total_frames <= 1:
+            return
+
+        start_x = viewport.frame_x(0, total_frames, width)
+        end_x = viewport.frame_x(total_frames - 1, total_frames, width)
+
+        painter.setPen(QPen(QColor(120, 198, 255, 240), 2))
+
+        if 0 <= start_x <= width:
+            painter.drawLine(start_x, 8, start_x, height - 8)
+
+        if 0 <= end_x <= width:
+            painter.drawLine(end_x, 8, end_x, height - 8)
 
     @staticmethod
     def _draw_loaded_indicator(
