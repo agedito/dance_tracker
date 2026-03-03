@@ -118,7 +118,7 @@ class DetectionApiClient:
             max_results: int = 50,
             batch_size: int = 32,
             save_crops: bool = False,
-    ) -> VideoDetectSummary:
+    ) -> list[DetectResponse]:
         url = (
             f"{self._base_url}/api/detect/video"
             f"?provider={urllib.parse.quote(provider)}&render=false"
@@ -141,16 +141,10 @@ class DetectionApiClient:
         )
         with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
-        print("[video detect]", raw)
-        return VideoDetectSummary(
-            provider=raw["provider"],
-            source=raw.get("source", ""),
-            total_frames=raw.get("total_frames", 0),
-            processed=raw.get("processed", 0),
-            failed=raw.get("failed", 0),
-            json_path=raw.get("json_path"),
-            elapsed_ms=float(raw.get("elapsed_ms", 0.0)),
-        )
+        print("[Video response]", raw)
+        provider = raw["provider"]
+        frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
+        return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
 
 
 def _parse_detect_response(raw: dict) -> DetectResponse:
