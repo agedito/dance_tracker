@@ -6,7 +6,7 @@ from app.interface.application import DanceTrackerPort
 from ui.widgets.right_panel_tabs.common import section_label
 
 
-class EmbedingsTabWidget(QWidget):
+class EmbeddingsTabWidget(QWidget):
     def __init__(
             self,
             app: DanceTrackerPort,
@@ -20,7 +20,7 @@ class EmbedingsTabWidget(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(section_label("Embedings"))
+        layout.addWidget(section_label("Embeddings"))
 
         info = QLabel("Run a person detector over loaded frames.")
         info.setWordWrap(True)

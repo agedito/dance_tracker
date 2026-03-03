@@ -6,7 +6,7 @@ from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
-from ui.widgets.right_panel_tabs import DataTabWidget, EmbedingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
+from ui.widgets.right_panel_tabs import DataTabWidget, EmbeddingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
@@ -14,11 +14,11 @@ class _TabOrderManager:
     """Restores and persists the drag-reorder position of each tab."""
 
     def __init__(
-        self,
-        tabs: QTabWidget,
-        widgets: dict[str, QWidget],
-        labels: dict[str, str],
-        preferences: PreferencesManager,
+            self,
+            tabs: QTabWidget,
+            widgets: dict[str, QWidget],
+            labels: dict[str, str],
+            preferences: PreferencesManager,
     ):
         self._tabs = tabs
         self._widgets = widgets
@@ -75,7 +75,7 @@ class RightPanel(QFrame):
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
             "data": self.data_tab,
-            "embedings": EmbedingsTabWidget(
+            "embedings": EmbeddingsTabWidget(
                 app=app,
                 get_current_folder=self.current_folder_path,
                 log_message=self.logger_widget.log,
