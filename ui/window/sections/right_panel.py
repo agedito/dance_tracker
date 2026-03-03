@@ -6,7 +6,7 @@ from app.interface.event_bus import EventBus
 from app.interface.music import SongMetadata
 from ui.widgets.log_widget import LogWidget
 from ui.widgets.pose_3d_viewer import Pose3DViewerWidget
-from ui.widgets.right_panel_tabs import DataTabWidget, EmbeddingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
+from ui.widgets.right_panel_tabs import DancersTabWidget, DataTabWidget, EmbeddingsTabWidget, LayerViewersTabWidget, MusicTabWidget, SequencesTabWidget
 from ui.window.sections.preferences_manager import PreferencesManager
 
 
@@ -87,6 +87,7 @@ class RightPanel(QFrame):
         )
         self.sequences_tab = SequencesTabWidget(app.media, app.sequences, event_bus)
         self.data_tab = DataTabWidget(app.sequence_data)
+        self.dancers_tab = DancersTabWidget()
         self.embeddings_tab = EmbeddingsTabWidget(
             app=app,
             get_current_folder=self.current_folder_path,
@@ -99,6 +100,7 @@ class RightPanel(QFrame):
             "visor_3d": self.pose_3d_viewer,
             "music": self.music_tab,
             "data": self.data_tab,
+            "dancers": self.dancers_tab,
             "embedings": self.embeddings_tab,
         }
         tab_labels: dict[str, str] = {
@@ -107,6 +109,7 @@ class RightPanel(QFrame):
             "visor_3d": "Visor 3D",
             "music": "Music",
             "data": "Data",
+            "dancers": "Dancers",
             "embedings": "Embedings",
         }
 
