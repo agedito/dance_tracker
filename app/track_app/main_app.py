@@ -8,6 +8,7 @@ from app.track_app.services.music_identifier.audd_client import AuddSongIdentifi
 from app.track_app.services.music_identifier.service import MusicIdentifierService
 from app.track_app.services.music_identifier.tempo_analyzer import ScipyTempoAnalyzer
 from app.track_app.sections.track_detector.detection_api_adapter import DetectionApiPersonDetector
+from app.track_app.sections.track_detector.movenet_adapter import MoveNetPersonDetector
 from app.track_app.sections.track_detector.mpvision_adapter import MPVisionPersonDetector
 from app.track_app.sections.track_detector.mock_detectors import MockPersonDetector, NearbyMockPersonDetector
 from app.track_app.sections.track_detector.service import TrackDetectorService
@@ -33,6 +34,10 @@ class DanceTrackerApp:
                 "Random detector": MockPersonDetector(),
                 "Nearby random detector": NearbyMockPersonDetector(),
                 "MPVision detector": MPVisionPersonDetector(),
+                "MoveNet detector": MoveNetPersonDetector(
+                    base_url=cfg.detection_api_base_url,
+                    data_path=cfg.data_path,
+                ),
                 **detection_api_detectors,
             },
             default_detector_name="Random detector",
@@ -46,6 +51,7 @@ def _load_detection_api_detectors(base_url: str, data_path: str = "", timeout: i
         return {
             provider: DetectionApiPersonDetector(detection_client, provider, data_path=data_path)
             for provider in caps.get("providers", [])
+            if provider.lower() != "movenet"
         }
     except Exception:
         return {}
