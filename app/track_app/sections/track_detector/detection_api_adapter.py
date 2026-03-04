@@ -14,7 +14,7 @@ class DetectionApiPersonDetector:
             provider: str,
             data_path: str = "",
             score_threshold: float = 0.4,
-            max_results: int = 20,
+            max_results: int = 2,
     ):
         self._client = client
         self._provider = provider

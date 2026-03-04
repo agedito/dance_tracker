@@ -4,6 +4,8 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from utils.timer import Timer
+
 
 @dataclass(frozen=True)
 class DetectBBox:
@@ -79,9 +81,11 @@ class DetectionApiClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-            raw = json.loads(resp.read())
-        print("[frame detect] raw response:", raw)
+        with Timer(f"frame request {url} {body}"):
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                raw = json.loads(resp.read())
+
+        print("[Frame detect] raw response:", raw)
         provider = raw["provider"]
         frames = raw.get("frames", [])
         if not frames:
@@ -107,19 +111,17 @@ class DetectionApiClient:
             "score_threshold": score_threshold,
             "max_results": max_results,
         }).encode("utf-8")
-        print(url)
-        print(body)
-        print("Requesting....")
         req = urllib.request.Request(
             url,
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-            raw = json.loads(resp.read())
-        print("...response")
-        print(raw)
+        with Timer(f"batch request {url} {body}"):
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+                raw = json.loads(resp.read())
+
+        print("Batch response]", raw)
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
@@ -144,15 +146,16 @@ class DetectionApiClient:
             "batch_size": batch_size,
             "save_crops": save_crops,
         }).encode("utf-8")
-        print(url)
-        print(body)
-        print("Requesting....")
         req = urllib.request.Request(
             url,
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+        with Timer(f"Video request {url} {body}"):
+            with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
+                raw = json.loads(resp.read())
+
         with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
         print("[Video response]", raw)
