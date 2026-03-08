@@ -45,7 +45,7 @@ class SidecarMetadataReader:
             if resolved_frames != folder.resolve():
                 continue
 
-            return _extract_bookmark_frames(payload, total_frames)
+            return _extract_anchor_frames(payload, total_frames)
 
         return []
 
@@ -88,28 +88,32 @@ def _read_json_dict(path: Path) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _extract_bookmark_frames(payload: dict, total_frames: int) -> list[int]:
+def _extract_anchor_frames(payload: dict, total_frames: int) -> list[int]:
     sequence = payload.get("sequence")
     if not isinstance(sequence, dict):
         return []
 
-    raw_bookmarks = sequence.get("bookmarks")
-    if not isinstance(raw_bookmarks, list):
-        return []
-
     frames: list[int] = []
-    for raw_bookmark in raw_bookmarks:
-        if isinstance(raw_bookmark, dict):
-            frame_value = raw_bookmark.get("frame")
-        else:
-            frame_value = raw_bookmark
 
-        try:
-            frame = int(frame_value)
-        except (TypeError, ValueError):
-            continue
+    raw_bookmarks = sequence.get("bookmarks")
+    if isinstance(raw_bookmarks, list):
+        for raw_bookmark in raw_bookmarks:
+            if isinstance(raw_bookmark, dict):
+                frame_value = raw_bookmark.get("frame")
+            else:
+                frame_value = raw_bookmark
+            try:
+                frame = int(frame_value)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= frame < total_frames and frame not in frames:
+                frames.append(frame)
 
-        if 0 <= frame < total_frames and frame not in frames:
-            frames.append(frame)
+    try:
+        last_frame = int(sequence.get("last_frame"))
+        if 0 <= last_frame < total_frames and last_frame not in frames:
+            frames.append(last_frame)
+    except (TypeError, ValueError):
+        pass
 
     return sorted(frames)

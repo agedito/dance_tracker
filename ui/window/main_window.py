@@ -88,11 +88,13 @@ class MainWindow(QMainWindow):
     # ── EventBus handlers ────────────────────────────────────────────
 
     def on_frames_loaded(self, path: str) -> None:
+        self._save_current_frame()
         self._right_panel.set_current_folder_path(path)
         self._right_panel.update_sequence_data(path)
         self._app.track_detector.load_detections(path)
         self._right_panel.sync_detector_selection()
-        self._folder_session.load_folder(path)
+        target = self._app.sequence_data.get_last_frame(path) or 0
+        self._folder_session.load_folder(path, target_frame=target)
 
     def on_song_identified(self, song: SongMetadata) -> None:
         self._right_panel.update_song_info(song)
@@ -328,9 +330,15 @@ class MainWindow(QMainWindow):
         self._bookmarks.refresh()
         self.set_frame(0)
 
+    def _save_current_frame(self) -> None:
+        path = self._folder_session.current_folder_path
+        if path:
+            self._app.sequence_data.save_last_frame(path, self._frames.cur_frame)
+
     # ── Lifecycle ────────────────────────────────────────────────────
 
     def closeEvent(self, event: QCloseEvent):
+        self._save_current_frame()
         self._folder_session.remember_current_frame(self._frames.cur_frame)
         self._layout_persistence.save_screen()
         self._layout_persistence.save()

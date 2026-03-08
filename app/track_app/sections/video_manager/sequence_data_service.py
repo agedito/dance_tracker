@@ -145,6 +145,34 @@ class SequenceDataService:
         payload.setdefault("sequence", {})["name"] = name.strip()
         sequence_file_store.write_payload(metadata_path, payload)
 
+    def save_last_frame(self, frames_folder_path: str, frame: int) -> None:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        metadata_path = sequence_file_store.find_metadata_for_frames(frames_folder)
+        if metadata_path is None:
+            return
+        payload = sequence_file_store.read(metadata_path)
+        if payload is None:
+            return
+        payload.setdefault("sequence", {})["last_frame"] = frame
+        sequence_file_store.write_payload(metadata_path, payload)
+
+    def get_last_frame(self, frames_folder_path: str) -> int | None:
+        frames_folder = Path(frames_folder_path).expanduser().resolve()
+        metadata_path = sequence_file_store.find_metadata_for_frames(frames_folder)
+        if metadata_path is None:
+            return None
+        payload = sequence_file_store.read(metadata_path)
+        if payload is None:
+            return None
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            return None
+        value = sequence.get("last_frame")
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
     def previous_bookmark_frame(self, frames_folder_path: str, current_frame: int) -> int | None:
         bookmarks = self.read_bookmarks(frames_folder_path)
         candidates = sorted(b.frame for b in bookmarks if b.frame < current_frame)
