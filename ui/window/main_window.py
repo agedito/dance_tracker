@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
         loaded_flags = self._frame_store.loaded_flags
         self._timeline.set_loaded_flags(loaded_flags)
         self._timeline.set_proxy_loaded_flags(self._frame_store.proxy_loaded_flags)
-        self._timeline.set_detected_flags([False] * total_frames)
+        self._timeline.set_detected_flags(self._app.track_detector.detected_frame_flags(total_frames))
         self._preload_tracker.reset(total_frames, self._frame_store.preload_generation, loaded_flags)
         self._bookmarks.refresh()
         source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"

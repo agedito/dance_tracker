@@ -153,6 +153,9 @@ class TrackDetectorService:
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return list(self._detections_by_frame.get(frame_index, []))
 
+    def detected_frame_flags(self, total_frames: int) -> list[bool]:
+        return [bool(self._detections_by_frame.get(i)) for i in range(total_frames)]
+
     def _frame_files(self, frames_folder_path: str) -> list[Path]:
         folder = Path(frames_folder_path).expanduser()
         if not folder.is_dir():

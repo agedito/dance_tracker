@@ -402,6 +402,9 @@ class TrackDetectorAdapter:
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return self._service.detections_for_frame(frame_index)
 
+    def detected_frame_flags(self, total_frames: int) -> list[bool]:
+        return self._service.detected_frame_flags(total_frames)
+
     def detect_people_streaming(
         self,
         frames_folder_path: str,

@@ -49,6 +49,8 @@ class TrackDetectorPort(Protocol):
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]: ...
 
+    def detected_frame_flags(self, total_frames: int) -> list[bool]: ...
+
     def detect_people_streaming(
         self,
         frames_folder_path: str,
