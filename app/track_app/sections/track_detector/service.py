@@ -6,6 +6,7 @@ from pathlib import Path
 from app.interface.track_detector import PersonDetection, PersonDetector
 from app.track_app.sections.track_detector.detections_store import DetectionsStore
 from app.track_app.sections.video_manager import sequence_file_store
+from utils.frame_scheduler import FrameScheduler
 
 log = logging.getLogger(__name__)
 
@@ -114,10 +115,13 @@ class TrackDetectorService:
         frames_folder_path: str,
         on_frame_resolved: Callable[[int, list[PersonDetection]], None],
         should_cancel: Callable[[], bool] | None = None,
+        current_frame: int = 0,
     ) -> int:
         """Detect frame-by-frame via single-frame endpoint, calling on_frame_resolved after each.
 
         Loads existing detections from disk first so the in-memory state is up to date.
+        Processes frames in scheduler order (anchors: current, start, end, mid, quartiles,
+        bookmarks) so coverage is spread evenly instead of sequential 0→N.
         Writes the full detections.json only when the loop finishes (or is cancelled).
         """
         detector = self._detectors.get(self._active_detector_name)
@@ -131,24 +135,52 @@ class TrackDetectorService:
             self._detections_by_frame = {}
 
         frame_files = self._frame_files(frames_folder_path)
-        previous_detections: list[PersonDetection] | None = None
-        resolved_count = 0
+        total_frames = len(frame_files)
+        if total_frames == 0:
+            return 0
 
-        for index, frame_path in enumerate(frame_files):
+        bookmark_frames = self._bookmark_frames(frames_folder_path)
+        anchors = FrameScheduler.make_anchors(total_frames, bookmarks=bookmark_frames, current_frame=current_frame)
+        order = FrameScheduler.build_order(total_frames, anchors)
+
+        resolved_count = 0
+        for index in order:
             if should_cancel and should_cancel():
                 break
 
             frame_detections = detector.detect_people_in_frame(
-                frame_path=str(frame_path),
-                previous_detections=previous_detections,
+                frame_path=str(frame_files[index]),
+                previous_detections=None,
             )
             self._detections_by_frame[index] = frame_detections
-            previous_detections = frame_detections
             resolved_count += 1
             on_frame_resolved(index, frame_detections)
 
         DetectionsStore.write(frames_folder_path, self._active_detector_name, self._detections_by_frame)
         return resolved_count
+
+    def _bookmark_frames(self, frames_folder_path: str) -> list[int]:
+        folder = Path(frames_folder_path).expanduser()
+        metadata_path = sequence_file_store.find_metadata_for_frames(folder)
+        if metadata_path is None:
+            return []
+        payload = sequence_file_store.read(metadata_path)
+        if not payload:
+            return []
+        sequence = payload.get("sequence")
+        if not isinstance(sequence, dict):
+            return []
+        raw = sequence.get("bookmarks")
+        if not isinstance(raw, list):
+            return []
+        frames = []
+        for item in raw:
+            frame_val = item.get("frame") if isinstance(item, dict) else item
+            try:
+                frames.append(int(frame_val))
+            except (TypeError, ValueError):
+                pass
+        return frames
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return list(self._detections_by_frame.get(frame_index, []))

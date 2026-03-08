@@ -55,4 +55,5 @@ class TrackDetectorPort(Protocol):
         self,
         frames_folder_path: str,
         should_cancel: Callable[[], bool] | None = None,
+        current_frame: int = 0,
     ) -> int: ...

@@ -4,6 +4,8 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
 
+from utils.frame_scheduler import FrameScheduler
+
 
 class FramePreloader(QObject):
     frame_preloaded = Signal(int, bool, int)    # (frame_idx, loaded, generation)
@@ -76,11 +78,7 @@ class FramePreloader(QObject):
             self._priority = 0
 
         # ── Full-res workers (anchor-based, parallel) ─────────────────
-        anchors = [0, total_frames // 2, total_frames - 1, *bookmark_anchors]
-        unique_anchors: list[int] = []
-        for anchor in anchors:
-            if 0 <= anchor < total_frames and anchor not in unique_anchors:
-                unique_anchors.append(anchor)
+        unique_anchors = FrameScheduler.make_anchors(total_frames, bookmarks=bookmark_anchors)
 
         pending = set(range(total_frames))
         remaining_workers = len(unique_anchors)

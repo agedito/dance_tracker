@@ -139,7 +139,7 @@ class EmbeddingsTabWidget(QWidget):
         self._cancel_button.setVisible(True)
         self._detection_start_time = time.monotonic()
 
-        worker = DetectionStreamWorker(self._app, frames_folder_path)
+        worker = DetectionStreamWorker(self._app, frames_folder_path, current_frame=self._app.frames.cur_frame)
         worker.finished.connect(self._on_worker_finished)
         self._stream_worker = worker
         worker.start()

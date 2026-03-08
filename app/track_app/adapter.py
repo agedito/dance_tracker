@@ -409,13 +409,16 @@ class TrackDetectorAdapter:
         self,
         frames_folder_path: str,
         should_cancel=None,
+        current_frame: int = 0,
     ) -> int:
         self._events.emit(Event.DetectionStarted, frames_folder_path)
 
         def _on_frame(frame_index: int, _detections: list) -> None:
             self._events.emit(Event.DetectionFrameResolved, frames_folder_path, frame_index)
 
-        result = self._service.detect_people_streaming(frames_folder_path, _on_frame, should_cancel)
+        result = self._service.detect_people_streaming(
+            frames_folder_path, _on_frame, should_cancel, current_frame=current_frame
+        )
         self._events.emit(Event.DetectionsUpdated, frames_folder_path)
         return result
 

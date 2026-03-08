@@ -14,10 +14,11 @@ class DetectionStreamWorker(QThread):
 
     finished = Signal(int, bool)  # (resolved_frame_count, was_cancelled)
 
-    def __init__(self, app: DanceTrackerPort, frames_folder_path: str) -> None:
+    def __init__(self, app: DanceTrackerPort, frames_folder_path: str, current_frame: int = 0) -> None:
         super().__init__()
         self._app = app
         self._frames_folder_path = frames_folder_path
+        self._current_frame = current_frame
         self._cancel_requested = False
 
     def cancel(self) -> None:
@@ -29,6 +30,7 @@ class DetectionStreamWorker(QThread):
             count = self._app.track_detector.detect_people_streaming(
                 self._frames_folder_path,
                 should_cancel=lambda: self._cancel_requested,
+                current_frame=self._current_frame,
             )
         except Exception:
             pass
