@@ -156,5 +156,5 @@ class EmbeddingsTabWidget(QWidget):
         status = "cancelled" if was_cancelled else "finished"
         self._log_message(
             f"Streaming detection {status}. "
-            f"Frames: {resolved_count} · Time: {elapsed:.2f}s."
+            f"Frames: {resolved_count} · Time: {elapsed:.2f}s. ({resolved_count / elapsed:.2f} fps)"
         )

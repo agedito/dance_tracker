@@ -85,7 +85,6 @@ class DetectionApiClient:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = json.loads(resp.read())
 
-        print("[Frame detect] raw response:", raw)
         provider = raw["provider"]
         frames = raw.get("frames", [])
         if not frames:
@@ -121,7 +120,6 @@ class DetectionApiClient:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = json.loads(resp.read())
 
-        print("Batch response]", raw)
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
@@ -158,7 +156,6 @@ class DetectionApiClient:
 
         with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
             raw = json.loads(resp.read())
-        print("[Video response]", raw)
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]

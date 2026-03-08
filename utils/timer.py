@@ -8,10 +8,10 @@ class Timer:
 
     def __enter__(self):
         self.start = time.perf_counter()
-        print(f"Starting {self.name}...")
+        # print(f"Starting {self.name}...")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         end = time.perf_counter()
         elapsed = end - self.start
-        print(f"...{self.name}: {elapsed:.2f} s")
+        # print(f"...{self.name}: {elapsed:.2f} s")
