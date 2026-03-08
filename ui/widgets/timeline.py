@@ -69,10 +69,11 @@ class TimelineTrack(QWidget):
     bookmarkNameChanged = Signal(int, str)
     bookmarkLockChanged = Signal(int, bool)
 
-    def __init__(self, total_frames: int, segments: list[Segment], parent=None):
+    def __init__(self, total_frames: int, segments: list[Segment], kind: str = "", parent=None):
         super().__init__(parent)
         self.total_frames = max(1, total_frames)
         self.segments = segments
+        self.kind = kind
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
         self.proxy_loaded_flags = [False] * self.total_frames
@@ -382,5 +383,6 @@ class TimelineTrack(QWidget):
             self._dragging_bookmark,
             self._drag_source_bookmark,
             self._drag_bookmark_frame,
+            self.kind,
         )
         p.end()

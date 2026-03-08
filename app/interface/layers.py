@@ -13,3 +13,4 @@ class Segment:
 class Layer:
     name: str
     segments: List[Segment]
+    kind: str = ""  # "image" | "bbox" | "pose" | "segmentation"

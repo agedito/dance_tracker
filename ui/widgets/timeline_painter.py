@@ -31,6 +31,7 @@ class TimelineTrackPainter:
         dragging: bool,
         drag_source: int | None,
         drag_target: int | None,
+        kind: str = "",
     ) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
@@ -50,10 +51,12 @@ class TimelineTrackPainter:
             painter.setBrush(_status_color(s.t))
             painter.drawRect(QRectF(left, 12, max(1, right - left), height - 16))
 
-        TimelineTrackPainter._draw_detected_indicator(painter, width, height, total_frames, detected_flags, viewport)
-        TimelineTrackPainter._draw_loaded_indicator(
-            painter, width, height, total_frames, loaded_flags, proxy_loaded_flags, viewport
-        )
+        if kind in ("", "bbox"):
+            TimelineTrackPainter._draw_detected_indicator(painter, width, height, total_frames, detected_flags, viewport)
+        if kind in ("", "image"):
+            TimelineTrackPainter._draw_loaded_indicator(
+                painter, width, height, total_frames, loaded_flags, proxy_loaded_flags, viewport
+            )
         TimelineTrackPainter._draw_bookmarks(
             painter, bookmarks, total_frames, width, viewport, dragging, drag_source, drag_target
         )

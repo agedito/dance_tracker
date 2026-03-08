@@ -80,7 +80,7 @@ class TimelinePanel(QFrame):
             name.setObjectName("LayerName")
             name.setFixedWidth(160)
 
-            track = TimelineTrack(total_frames, layer.segments)
+            track = TimelineTrack(total_frames, layer.segments, kind=layer.kind)
             track.frameChanged.connect(on_frame_changed)
             track.scrubStarted.connect(on_scrub_start)
             track.scrubFinished.connect(on_scrub_end)
