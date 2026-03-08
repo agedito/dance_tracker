@@ -4,6 +4,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
+from app.interface.track_detector import CapabilityInfo, EndpointInfo
 from utils.timer import Timer
 
 
@@ -53,10 +54,13 @@ class DetectionApiClient:
         self._timeout = timeout
         self._video_timeout = video_timeout
 
-    def capabilities(self) -> dict:
-        req = urllib.request.Request(self._base_url + "/capabilities/detection")
+    def capabilities(self) -> dict[str, CapabilityInfo]:
+        url = self._base_url + "/capabilities"
+        print(f"[DetectionApiClient] GET {url}")
+        req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-            return json.loads(resp.read())
+            raw = json.loads(resp.read())
+        return _parse_capabilities(raw)
 
     def detect(
             self,
@@ -74,6 +78,7 @@ class DetectionApiClient:
             "score_threshold": score_threshold,
             "max_results": max_results,
         }).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
 
         req = urllib.request.Request(
             url,
@@ -81,9 +86,10 @@ class DetectionApiClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with Timer(f"frame request {url} {body}"):
+        with Timer(f"detect {provider} {image_path}"):
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = json.loads(resp.read())
+                print(raw)
 
         provider = raw["provider"]
         frames = raw.get("frames", [])
@@ -110,15 +116,18 @@ class DetectionApiClient:
             "score_threshold": score_threshold,
             "max_results": max_results,
         }).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
         req = urllib.request.Request(
             url,
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with Timer(f"batch request {url} {body}"):
+        with Timer(f"detect_batch {provider} {folder_path}"):
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = json.loads(resp.read())
+                print(raw)
 
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
@@ -144,25 +153,50 @@ class DetectionApiClient:
             "batch_size": batch_size,
             "save_crops": save_crops,
         }).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
         req = urllib.request.Request(
             url,
             data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with Timer(f"Video request {url} {body}"):
+        with Timer(f"batch_video {provider} {video_path}"):
             with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
                 raw = json.loads(resp.read())
+                print(raw)
 
-        with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
-            raw = json.loads(resp.read())
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
 
 
+def _parse_capabilities(raw: dict) -> dict[str, CapabilityInfo]:
+    result: dict[str, CapabilityInfo] = {}
+    caps = raw.get("capabilities", {})
+    if not isinstance(caps, dict):
+        return result
+    for key, value in caps.items():
+        if not isinstance(value, dict):
+            continue
+        endpoints: dict[str, EndpointInfo] = {}
+        for ep_key, ep_val in value.get("endpoints", {}).items():
+            if not isinstance(ep_val, dict):
+                continue
+            endpoints[ep_key] = EndpointInfo(
+                path=ep_val.get("path", ""),
+                method=ep_val.get("method", "POST"),
+                providers=list(ep_val.get("providers", [])),
+            )
+        result[key] = CapabilityInfo(
+            description=value.get("description", ""),
+            providers=list(value.get("providers", [])),
+            endpoints=endpoints,
+        )
+    return result
+
+
 def _parse_detect_response(raw: dict) -> DetectResponse:
-    # Single-frame endpoint nests frame data under "frame"; batch/video use flat structure.
     frame = raw.get("frame") or raw
     persons = [
         DetectPerson(

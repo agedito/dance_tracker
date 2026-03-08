@@ -119,6 +119,29 @@ class PreferencesManager:
     def save_last_screen_name(self, screen_name: str | None):
         self._prefs["last_screen_name"] = screen_name if screen_name else None
 
+    # ── Embeddings group state ──────────────────────────────────────
+
+    def embeddings_group_state(self, group_key: str) -> dict:
+        groups = self._prefs.get("embeddings_groups", {})
+        if not isinstance(groups, dict):
+            return {}
+        state = groups.get(group_key, {})
+        return state if isinstance(state, dict) else {}
+
+    def save_embeddings_group_state(
+        self, group_key: str, provider: str, endpoint: str, single_per_frame: bool
+    ) -> None:
+        groups = self._prefs.get("embeddings_groups", {})
+        if not isinstance(groups, dict):
+            groups = {}
+        groups[group_key] = {
+            "provider": provider,
+            "endpoint": endpoint,
+            "single_per_frame": single_per_frame,
+        }
+        self._prefs["embeddings_groups"] = groups
+        self.save()
+
     # ── Right panel tabs ───────────────────────────────────────────
 
     def right_panel_tab_order(self) -> list[str]:

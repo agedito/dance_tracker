@@ -3,7 +3,7 @@ import re
 from collections.abc import Callable
 from pathlib import Path
 
-from app.interface.track_detector import PersonDetection, PersonDetector
+from app.interface.track_detector import CapabilityInfo, PersonDetection, PersonDetector
 from app.track_app.sections.track_detector.detections_store import DetectionsStore
 from app.track_app.sections.video_manager import sequence_file_store
 from utils.frame_scheduler import FrameScheduler
@@ -14,7 +14,12 @@ log = logging.getLogger(__name__)
 class TrackDetectorService:
     _VALID_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-    def __init__(self, detectors: dict[str, PersonDetector], default_detector_name: str):
+    def __init__(
+        self,
+        detectors: dict[str, PersonDetector],
+        default_detector_name: str,
+        capabilities: dict[str, CapabilityInfo] | None = None,
+    ):
         self._detectors = dict(detectors)
         self._active_detector_name = (
             default_detector_name
@@ -23,6 +28,7 @@ class TrackDetectorService:
         )
         self._detections_by_frame: dict[int, list[PersonDetection]] = {}
         self._store = DetectionsStore()
+        self._capabilities: dict[str, CapabilityInfo] = capabilities or {}
 
     def available_detectors(self) -> list[str]:
         return list(self._detectors.keys())
@@ -187,6 +193,9 @@ class TrackDetectorService:
 
     def detected_frame_flags(self, total_frames: int) -> list[bool]:
         return [bool(self._detections_by_frame.get(i)) for i in range(total_frames)]
+
+    def service_capabilities(self) -> dict[str, CapabilityInfo]:
+        return dict(self._capabilities)
 
     def _frame_files(self, frames_folder_path: str) -> list[Path]:
         folder = Path(frames_folder_path).expanduser()

@@ -8,8 +8,6 @@ from app.track_app.services.music_identifier.audd_client import AuddSongIdentifi
 from app.track_app.services.music_identifier.service import MusicIdentifierService
 from app.track_app.services.music_identifier.tempo_analyzer import ScipyTempoAnalyzer
 from app.track_app.sections.track_detector.detection_api_adapter import DetectionApiPersonDetector
-from app.track_app.sections.track_detector.mpvision_adapter import MPVisionPersonDetector
-from app.track_app.sections.track_detector.mock_detectors import MockPersonDetector, NearbyMockPersonDetector
 from app.track_app.sections.track_detector.service import TrackDetectorService
 from services.detection.client import DetectionApiClient
 from app.track_app.sections.video_manager.manager import VideoManager
@@ -27,25 +25,25 @@ class DanceTrackerApp:
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
             analyzer=ScipyTempoAnalyzer(),
         )
-        detection_api_detectors = _load_detection_api_detectors(cfg.detection_api_base_url, cfg.data_path)
+        detectors, capabilities = _load_from_capabilities(cfg.detection_api_base_url, cfg.data_path)
         self.track_detector: TrackDetectorPort = TrackDetectorService(
-            detectors={
-                "Random detector": MockPersonDetector(),
-                "Nearby random detector": NearbyMockPersonDetector(),
-                "MPVision detector": MPVisionPersonDetector(),
-                **detection_api_detectors,
-            },
-            default_detector_name="Random detector",
+            detectors=detectors,
+            default_detector_name=next(iter(detectors), ""),
+            capabilities=capabilities,
         )
 
 
-def _load_detection_api_detectors(base_url: str, data_path: str = "", timeout: int = 5) -> dict:
+def _load_from_capabilities(base_url: str, data_path: str = "", timeout: int = 5):
     try:
-        caps = DetectionApiClient(base_url, timeout=timeout).capabilities()
-        detection_client = DetectionApiClient(base_url, timeout=30, video_timeout=600)
-        return {
-            provider: DetectionApiPersonDetector(detection_client, provider, data_path=data_path)
-            for provider in caps.get("providers", [])
+        client = DetectionApiClient(base_url, timeout=timeout)
+        capabilities = client.capabilities()
+        detection_providers = capabilities.get("detection", None)
+        providers = detection_providers.providers if detection_providers else []
+        detect_client = DetectionApiClient(base_url, timeout=30, video_timeout=600)
+        detectors = {
+            provider: DetectionApiPersonDetector(detect_client, provider, data_path=data_path)
+            for provider in providers
         }
+        return detectors, capabilities
     except Exception:
-        return {}
+        return {}, {}

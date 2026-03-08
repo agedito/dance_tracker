@@ -91,6 +91,7 @@ class RightPanel(QFrame):
             app=app,
             get_current_folder=self.current_folder_path,
             log_message=self.logger_widget.log,
+            preferences=preferences,
         )
 
         tab_widgets: dict[str, QWidget] = {

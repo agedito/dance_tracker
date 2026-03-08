@@ -405,6 +405,9 @@ class TrackDetectorAdapter:
     def detected_frame_flags(self, total_frames: int) -> list[bool]:
         return self._service.detected_frame_flags(total_frames)
 
+    def service_capabilities(self):
+        return self._service.service_capabilities()
+
     def detect_people_streaming(
         self,
         frames_folder_path: str,

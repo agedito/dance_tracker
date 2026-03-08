@@ -1,18 +1,23 @@
-import time
 from collections.abc import Callable
 
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from app.interface.application import DanceTrackerPort
+from app.interface.track_detector import CapabilityInfo
 from ui.widgets.detection_stream_worker import DetectionStreamWorker
+from ui.widgets.generic_widgets.detection_group import DetectionGroupWidget
 from ui.widgets.right_panel_tabs.common import section_label
+from ui.window.sections.preferences_manager import PreferencesManager
 
-_MODE_FRAME = "Frame"
-_MODE_SEQUENCE = "Sequence"
-_MODE_VIDEO = "Video"
+_STREAMING_CAPABLE_PROVIDERS = frozenset({"rtdetr", "mediapipe"})
 
-# Detectors that support sequential /detect streaming via the single-frame endpoint.
-_STREAMING_CAPABLE_DETECTORS = frozenset({"rtdetr", "mediapipe"})
+# Capability keys in display order
+_CAPABILITY_ORDER = ["detection", "pose", "segmentation"]
+_GROUP_TITLES = {
+    "detection": "Detections",
+    "pose": "Pose",
+    "segmentation": "Segmentation",
+}
 
 
 class EmbeddingsTabWidget(QWidget):
@@ -21,140 +26,88 @@ class EmbeddingsTabWidget(QWidget):
             app: DanceTrackerPort,
             get_current_folder: Callable[[], str | None],
             log_message: Callable[[str], None],
+            preferences: PreferencesManager,
     ):
         super().__init__()
         self._app = app
         self._get_current_folder = get_current_folder
         self._log_message = log_message
-        self._stream_worker: DetectionStreamWorker | None = None
-        self._detection_start_time: float = 0.0
+        self._preferences = preferences
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
         layout.addWidget(section_label("Embeddings"))
 
-        info = QLabel("Run a person detector over loaded frames.")
-        info.setWordWrap(True)
-        layout.addWidget(info)
+        capabilities = app.track_detector.service_capabilities()
+        self._groups: dict[str, DetectionGroupWidget] = {}
 
-        controls_layout = QHBoxLayout()
+        for key in _CAPABILITY_ORDER:
+            cap: CapabilityInfo | None = capabilities.get(key)
+            title = _GROUP_TITLES.get(key, key.capitalize())
+            is_detection = key == "detection"
+            saved = preferences.embeddings_group_state(key)
 
-        self._detectors_combo = QComboBox()
-        self._detectors_combo.addItems(self._app.track_detector.available_detectors())
-        active_detector = self._app.track_detector.active_detector()
-        active_index = self._detectors_combo.findText(active_detector)
-        if active_index >= 0:
-            self._detectors_combo.setCurrentIndex(active_index)
-        self._detectors_combo.currentTextChanged.connect(self._on_detector_changed)
-        controls_layout.addWidget(self._detectors_combo, 1)
+            group = DetectionGroupWidget(
+                title=title,
+                capability=cap,
+                get_current_folder=get_current_folder,
+                log_message=log_message,
+                on_detector_changed=self._on_detector_changed if is_detection else None,
+                on_detect=self._make_detect_fn() if is_detection else None,
+                create_stream_worker=self._make_stream_worker if is_detection else None,
+                on_state_changed=self._make_state_changed_fn(key),
+                initial_provider=saved.get("provider", ""),
+                initial_endpoint=saved.get("endpoint", ""),
+                initial_single_per_frame=bool(saved.get("single_per_frame", False)),
+            )
+            self._groups[key] = group
+            layout.addWidget(group)
 
-        self._mode_combo = QComboBox()
-        self._mode_combo.addItems([_MODE_FRAME, _MODE_SEQUENCE, _MODE_VIDEO])
-        controls_layout.addWidget(self._mode_combo)
-
-        self._detect_button = QPushButton("Detect people")
-        self._detect_button.clicked.connect(self._on_detect_people_clicked)
-        controls_layout.addWidget(self._detect_button)
-
-        self._cancel_button = QPushButton("Cancel")
-        self._cancel_button.setVisible(False)
-        self._cancel_button.clicked.connect(self._on_cancel_clicked)
-        controls_layout.addWidget(self._cancel_button)
-
-        layout.addLayout(controls_layout)
         layout.addStretch(1)
 
-    # ── Public ───────────────────────────────────────────────────────
+    # ── Public ────────────────────────────────────────────────────────
 
     def sync_selected_detector(self) -> None:
-        active_detector = self._app.track_detector.active_detector()
-        active_index = self._detectors_combo.findText(active_detector)
-        if active_index < 0:
+        detection_group = self._groups.get("detection")
+        if detection_group:
+            detection_group.sync_provider(self._app.track_detector.active_detector())
+
+    # ── Private ───────────────────────────────────────────────────────
+
+    def _on_detector_changed(self, provider: str) -> None:
+        if not provider:
             return
-
-        if self._detectors_combo.currentIndex() == active_index:
-            return
-
-        self._detectors_combo.blockSignals(True)
-        self._detectors_combo.setCurrentIndex(active_index)
-        self._detectors_combo.blockSignals(False)
-
-    # ── Private helpers ──────────────────────────────────────────────
-
-    def _uses_streaming(self) -> bool:
-        mode = self._mode_combo.currentText()
-        detector = self._app.track_detector.active_detector()
-        return mode == _MODE_SEQUENCE and detector in _STREAMING_CAPABLE_DETECTORS
-
-    def _set_detection_controls_enabled(self, enabled: bool) -> None:
-        self._detect_button.setEnabled(enabled)
-        self._detectors_combo.setEnabled(enabled)
-        self._mode_combo.setEnabled(enabled)
-
-    # ── Slots ────────────────────────────────────────────────────────
-
-    def _on_detector_changed(self, detector_name: str) -> None:
-        if not detector_name:
-            return
-        if self._app.track_detector.set_active_detector(detector_name):
-            self._log_message(f"Detector selected: {detector_name}.")
-            return
-        self._log_message(f"Unable to select detector: {detector_name}.")
-
-    def _on_detect_people_clicked(self) -> None:
-        frames_folder_path = self._get_current_folder()
-        if not frames_folder_path:
-            self._log_message("No sequence loaded. Load a sequence before running detection.")
-            return
-
-        detector_name = self._app.track_detector.active_detector()
-        mode = self._mode_combo.currentText()
-
-        if mode == _MODE_FRAME:
-            frame_index = self._app.frames.cur_frame
-            self._log_message(f"Detection started [{detector_name}] — frame {frame_index}.")
-            processed = self._app.track_detector.detect_people_for_sequence(
-                frames_folder_path, frame_index=frame_index
-            )
-            self._log_message(f"Detection finished. Processed {processed} frame.")
-            return
-
-        if mode == _MODE_SEQUENCE and self._uses_streaming():
-            self._start_streaming_detection(frames_folder_path, detector_name)
-            return
-
-        self._set_detection_controls_enabled(False)
-        if mode == _MODE_VIDEO:
-            self._log_message(f"Detection started [{detector_name}] — video mode.")
-            processed = self._app.track_detector.detect_people_for_video(frames_folder_path)
+        if self._app.track_detector.set_active_detector(provider):
+            self._log_message(f"Detector selected: {provider}.")
         else:
-            self._log_message(f"Detection started [{detector_name}] — sequence mode.")
-            processed = self._app.track_detector.detect_people_for_sequence(frames_folder_path)
-        self._set_detection_controls_enabled(True)
-        self._log_message(f"Detection finished. Processed {processed} frames.")
+            self._log_message(f"Unable to select detector: {provider}.")
 
-    def _start_streaming_detection(self, frames_folder_path: str, detector_name: str) -> None:
-        self._log_message(f"Streaming detection started [{detector_name}] — sequence mode.")
-        self._set_detection_controls_enabled(False)
-        self._cancel_button.setVisible(True)
-        self._detection_start_time = time.monotonic()
+    def _make_detect_fn(self) -> Callable[[str, str, str], int]:
+        def _detect(folder: str, provider: str, endpoint_type: str) -> int:
+            self._app.track_detector.set_active_detector(provider)
+            if endpoint_type == "single":
+                return self._app.track_detector.detect_people_for_sequence(
+                    folder, frame_index=self._app.frames.cur_frame
+                )
+            if endpoint_type == "batch":
+                return self._app.track_detector.detect_people_for_sequence(folder)
+            if endpoint_type == "video":
+                return self._app.track_detector.detect_people_for_video(folder)
+            return 0
+        return _detect
 
-        worker = DetectionStreamWorker(self._app, frames_folder_path, current_frame=self._app.frames.cur_frame)
-        worker.finished.connect(self._on_worker_finished)
-        self._stream_worker = worker
-        worker.start()
-
-    def _on_cancel_clicked(self) -> None:
-        if self._stream_worker:
-            self._stream_worker.cancel()
-
-    def _on_worker_finished(self, resolved_count: int, was_cancelled: bool) -> None:
-        elapsed = time.monotonic() - self._detection_start_time
-        self._stream_worker = None
-        self._cancel_button.setVisible(False)
-        self._set_detection_controls_enabled(True)
-        status = "cancelled" if was_cancelled else "finished"
-        self._log_message(
-            f"Streaming detection {status}. "
-            f"Frames: {resolved_count} · Time: {elapsed:.2f}s. ({resolved_count / elapsed:.2f} fps)"
+    def _make_stream_worker(self, folder: str, provider: str) -> DetectionStreamWorker:
+        return DetectionStreamWorker(
+            self._app,
+            folder,
+            provider=provider,
+            current_frame=self._app.frames.cur_frame,
         )
+
+    def _make_state_changed_fn(self, group_key: str) -> Callable[[str, str, bool], None]:
+        def _save(provider: str, endpoint: str, single_per_frame: bool) -> None:
+            self._preferences.save_embeddings_group_state(
+                group_key, provider, endpoint, single_per_frame
+            )
+        return _save

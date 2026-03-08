@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
@@ -26,6 +26,20 @@ class PersonDetection:
     bbox_relative: RelativeBoundingBox
 
 
+@dataclass
+class EndpointInfo:
+    path: str
+    method: str
+    providers: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CapabilityInfo:
+    description: str
+    providers: list[str] = field(default_factory=list)
+    endpoints: dict[str, EndpointInfo] = field(default_factory=dict)
+
+
 class PersonDetector(Protocol):
     def detect_people_in_frame(
         self,
@@ -50,6 +64,8 @@ class TrackDetectorPort(Protocol):
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]: ...
 
     def detected_frame_flags(self, total_frames: int) -> list[bool]: ...
+
+    def service_capabilities(self) -> dict[str, CapabilityInfo]: ...
 
     def detect_people_streaming(
         self,
