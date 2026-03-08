@@ -121,6 +121,14 @@ class TimelinePanel(QFrame):
         for track in self.track_widgets:
             track.set_frame_loaded(frame, loaded)
 
+    def set_proxy_loaded_flags(self, flags: list[bool]):
+        for track in self.track_widgets:
+            track.set_proxy_loaded_flags(flags)
+
+    def set_frame_proxy_loaded(self, frame: int, loaded: bool):
+        for track in self.track_widgets:
+            track.set_frame_proxy_loaded(frame, loaded)
+
     def set_detected_flags(self, flags: list[bool]):
         for track in self.track_widgets:
             track.set_detected_flags(flags)

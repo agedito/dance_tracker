@@ -25,6 +25,7 @@ class TimelineTrackPainter:
         viewport: TimelineViewport,
         segments: list[Segment],
         loaded_flags: list[bool],
+        proxy_loaded_flags: list[bool],
         detected_flags: list[bool],
         bookmarks: list[Bookmark],
         dragging: bool,
@@ -50,7 +51,9 @@ class TimelineTrackPainter:
             painter.drawRect(QRectF(left, 12, max(1, right - left), height - 16))
 
         TimelineTrackPainter._draw_detected_indicator(painter, width, height, total_frames, detected_flags, viewport)
-        TimelineTrackPainter._draw_loaded_indicator(painter, width, height, total_frames, loaded_flags, viewport)
+        TimelineTrackPainter._draw_loaded_indicator(
+            painter, width, height, total_frames, loaded_flags, proxy_loaded_flags, viewport
+        )
         TimelineTrackPainter._draw_bookmarks(
             painter, bookmarks, total_frames, width, viewport, dragging, drag_source, drag_target
         )
@@ -117,23 +120,34 @@ class TimelineTrackPainter:
         h: int,
         total_frames: int,
         loaded_flags: list[bool],
+        proxy_loaded_flags: list[bool],
         viewport: TimelineViewport,
     ) -> None:
+        """Three-state loading bar: gray → proxy loaded (muted green) → full loaded (bright green)."""
         bar_h = 3
         y = h - bar_h - 1
         painter.setPen(Qt.PenStyle.NoPen)
 
         if w <= 1:
-            loaded = bool(loaded_flags and loaded_flags[0])
-            painter.setBrush(QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200))
+            full = bool(loaded_flags and loaded_flags[0])
+            proxy = bool(proxy_loaded_flags and proxy_loaded_flags[0])
+            color = QColor(42, 160, 88, 240) if full else (QColor(50, 110, 65, 180) if proxy else QColor(95, 98, 102, 200))
+            painter.setBrush(color)
             painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
             return
 
         for x in range(1, w - 1):
             norm_pos = viewport.view_start + (x / max(1, w - 1)) * viewport.view_span
             f = int(clamp(norm_pos, 0.0, 1.0) * (total_frames - 1))
-            loaded = loaded_flags[f] if f < len(loaded_flags) else False
-            painter.setBrush(QColor(42, 160, 88, 240) if loaded else QColor(95, 98, 102, 200))
+            full = loaded_flags[f] if f < len(loaded_flags) else False
+            proxy = proxy_loaded_flags[f] if f < len(proxy_loaded_flags) else False
+            if full:
+                color = QColor(42, 160, 88, 240)
+            elif proxy:
+                color = QColor(50, 110, 65, 180)
+            else:
+                color = QColor(95, 98, 102, 200)
+            painter.setBrush(color)
             painter.drawRect(QRectF(x, y, 1, bar_h))
 
     @staticmethod

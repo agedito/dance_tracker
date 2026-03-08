@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
             on_finished=self._on_preload_complete,
         )
         self._frame_store.frame_preloaded.connect(self._preload_tracker.on_frame_preloaded)
+        self._frame_store.proxy_frame_preloaded.connect(self._on_proxy_frame_preloaded)
         self._frame_store.preload_finished.connect(self._preload_tracker.on_preload_finished)
 
         self._folder_session = FolderSessionManager(
@@ -260,6 +261,10 @@ class MainWindow(QMainWindow):
 
     # ── Preload callbacks ─────────────────────────────────────────────
 
+    def _on_proxy_frame_preloaded(self, frame: int, generation: int) -> None:
+        if generation == self._frame_store.preload_generation:
+            self._timeline.set_frame_proxy_loaded(frame, True)
+
     def _on_preload_frame_loaded(self, frame: int, loaded: bool, loaded_count: int, preload_done: bool) -> None:
         self._timeline.set_frame_loaded(frame, loaded)
         self._timeline.update_info(
@@ -288,6 +293,7 @@ class MainWindow(QMainWindow):
         self._timeline.set_total_frames(total_frames)
         loaded_flags = self._frame_store.loaded_flags
         self._timeline.set_loaded_flags(loaded_flags)
+        self._timeline.set_proxy_loaded_flags(self._frame_store.proxy_loaded_flags)
         self._timeline.set_detected_flags([False] * total_frames)
         self._preload_tracker.reset(total_frames, self._frame_store.preload_generation, loaded_flags)
         self._bookmarks.refresh()
@@ -313,6 +319,7 @@ class MainWindow(QMainWindow):
         self._viewer_panel.viewer.set_total_frames(self._frames.total_frames)
         self._timeline.set_total_frames(self._frames.total_frames)
         self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
+        self._timeline.set_proxy_loaded_flags([False] * 1000)
         self._timeline.set_detected_flags([False] * 1000)
         self._preload_tracker.reset(1000, self._frame_store.preload_generation, self._frame_store.loaded_flags)
         self._topbar.set_active_folder(None)

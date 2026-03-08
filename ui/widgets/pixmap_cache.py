@@ -18,21 +18,10 @@ class PixmapCache:
         self._cache_radius = cache_radius
         self._cache: OrderedDict[tuple[bool, int], QPixmap] = OrderedDict()
         self._base_sizes: dict[int, tuple[int, int]] = {}
-        self._proxy_loaded = False
 
     def clear(self) -> None:
         self._cache.clear()
         self._base_sizes.clear()
-        self._proxy_loaded = False
-
-    def preload_proxy(self, proxy_files: list[Path]) -> None:
-        if not proxy_files or self._proxy_loaded:
-            return
-        for idx, path in enumerate(proxy_files):
-            pix = QPixmap(str(path))
-            if not pix.isNull():
-                self._cache[(True, idx)] = pix
-        self._proxy_loaded = True
 
     def get(
         self,
@@ -41,6 +30,7 @@ class PixmapCache:
         frame_files: list[Path],
         proxy_files: list[Path],
         get_full_image: Callable[[int], QImage | None],
+        get_proxy_image: Callable[[int], QImage | None] | None = None,
     ) -> QPixmap | None:
         source_files = proxy_files if use_proxy and proxy_files else frame_files
         is_proxy = source_files is proxy_files
@@ -48,9 +38,13 @@ class PixmapCache:
 
         pix = self._cache.get(cache_key)
         if pix is None:
-            full_image = None if is_proxy else get_full_image(frame_idx)
-            if full_image is not None:
-                pix = QPixmap.fromImage(full_image)
+            if is_proxy:
+                image = get_proxy_image(frame_idx) if get_proxy_image else None
+            else:
+                image = get_full_image(frame_idx)
+
+            if image is not None:
+                pix = QPixmap.fromImage(image)
             else:
                 pix = QPixmap(str(source_files[frame_idx]))
 
@@ -63,7 +57,9 @@ class PixmapCache:
         else:
             self._cache.move_to_end(cache_key)
 
-        self._prefetch_neighbors(frame_idx, is_proxy, frame_files, proxy_files, get_full_image)
+        self._prefetch_neighbors(
+            frame_idx, is_proxy, frame_files, proxy_files, get_full_image, get_proxy_image
+        )
         return pix
 
     def get_display_size(
@@ -111,6 +107,7 @@ class PixmapCache:
         frame_files: list[Path],
         proxy_files: list[Path],
         get_full_image: Callable[[int], QImage | None],
+        get_proxy_image: Callable[[int], QImage | None] | None = None,
     ) -> None:
         source_files = proxy_files if is_proxy else frame_files
         for idx in range(
@@ -121,7 +118,10 @@ class PixmapCache:
             if key in self._cache:
                 continue
 
-            image = get_full_image(idx) if not is_proxy else None
+            if is_proxy:
+                image = get_proxy_image(idx) if get_proxy_image else None
+            else:
+                image = get_full_image(idx)
             if image is not None:
                 pix = QPixmap.fromImage(image)
             else:

@@ -28,6 +28,7 @@ class FrameStore(QObject):
     VIDEO_SUFFIXES = {".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm"}
 
     frame_preloaded = Signal(int, bool, int)
+    proxy_frame_preloaded = Signal(int, int)
     preload_finished = Signal(int)
 
     def __init__(self, cache_radius: int):
@@ -38,6 +39,7 @@ class FrameStore(QObject):
         self._cache = PixmapCache(cache_radius)
         self._preloader = FramePreloader()
         self._preloader.frame_preloaded.connect(self.frame_preloaded)
+        self._preloader.proxy_frame_preloaded.connect(self.proxy_frame_preloaded)
         self._preloader.preload_finished.connect(self.preload_finished)
 
     @property
@@ -51,6 +53,10 @@ class FrameStore(QObject):
     @property
     def loaded_flags(self) -> list[bool]:
         return self._preloader.loaded_flags
+
+    @property
+    def proxy_loaded_flags(self) -> list[bool]:
+        return self._preloader.proxy_loaded_flags
 
     @property
     def preload_generation(self) -> int:
@@ -78,8 +84,7 @@ class FrameStore(QObject):
         self._proxy_files = self._metadata.find_proxy_files(folder, self._frame_files)
         self._cache.clear()
         bookmark_anchors = self._metadata.read_bookmark_anchor_frames(folder, len(self._frame_files))
-        self._cache.preload_proxy(self._proxy_files)
-        self._preloader.start(self._frame_files, bookmark_anchors)
+        self._preloader.start(self._frame_files, self._proxy_files, bookmark_anchors)
         return len(self._frame_files)
 
     def request_preload_priority(self, frame_idx: int) -> None:
@@ -92,7 +97,8 @@ class FrameStore(QObject):
         if not self._frame_files or frame_idx < 0 or frame_idx >= len(self._frame_files):
             return None
         return self._cache.get(
-            frame_idx, use_proxy, self._frame_files, self._proxy_files, self._preloader.get_image
+            frame_idx, use_proxy, self._frame_files, self._proxy_files,
+            self._preloader.get_image, self._preloader.get_proxy_image,
         )
 
     def get_display_size(self, frame_idx: int) -> tuple[int, int] | None:
