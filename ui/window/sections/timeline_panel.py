@@ -121,6 +121,14 @@ class TimelinePanel(QFrame):
         for track in self.track_widgets:
             track.set_frame_loaded(frame, loaded)
 
+    def set_detected_flags(self, flags: list[bool]):
+        for track in self.track_widgets:
+            track.set_detected_flags(flags)
+
+    def set_frame_detected(self, frame: int, detected: bool):
+        for track in self.track_widgets:
+            track.set_frame_detected(frame, detected)
+
     def update_info(
             self,
             total_frames: int,

@@ -12,6 +12,8 @@ class Event(Enum):
     SongIdentified = auto()
     SequencesChanged = auto()
     DetectionsUpdated = auto()
+    DetectionStarted = auto()
+    DetectionFrameResolved = auto()
     BookmarksChanged = auto()
 
 
@@ -23,6 +25,10 @@ class EventsListener(Protocol):
     def on_sequences_changed(self, state: "SequenceState") -> None: ...
 
     def on_detections_updated(self, frames_folder_path: str) -> None: ...
+
+    def on_detection_started(self, frames_folder_path: str) -> None: ...
+
+    def on_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None: ...
 
     def on_bookmarks_changed(self, frames_folder_path: str) -> None: ...
 
@@ -111,6 +117,8 @@ class EventBus:
         self.on(Event.SongIdentified, listener.on_song_identified)
         self.on(Event.SequencesChanged, listener.on_sequences_changed)
         self.on(Event.DetectionsUpdated, listener.on_detections_updated)
+        self.on(Event.DetectionStarted, listener.on_detection_started)
+        self.on(Event.DetectionFrameResolved, listener.on_detection_frame_resolved)
         self.on(Event.BookmarksChanged, listener.on_bookmarks_changed)
 
     def disconnect(self, listener: EventsListener) -> None:
@@ -118,4 +126,6 @@ class EventBus:
         self.off(Event.SongIdentified, listener.on_song_identified)
         self.off(Event.SequencesChanged, listener.on_sequences_changed)
         self.off(Event.DetectionsUpdated, listener.on_detections_updated)
+        self.off(Event.DetectionStarted, listener.on_detection_started)
+        self.off(Event.DetectionFrameResolved, listener.on_detection_frame_resolved)
         self.off(Event.BookmarksChanged, listener.on_bookmarks_changed)

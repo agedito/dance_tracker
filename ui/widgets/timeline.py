@@ -75,6 +75,7 @@ class TimelineTrack(QWidget):
         self.segments = segments
         self.frame = 0
         self.loaded_flags = [False] * self.total_frames
+        self.detected_flags = [False] * self.total_frames
         self.bookmarks: list[Bookmark] = []
         self._dragging_bookmark = False
         self._drag_source_bookmark: int | None = None
@@ -103,6 +104,7 @@ class TimelineTrack(QWidget):
         if self._editor.editing_frame is not None and self._editor.editing_frame >= self.total_frames:
             self._editor.cancel()
         self.loaded_flags = [False] * self.total_frames
+        self.detected_flags = [False] * self.total_frames
         self._emit_if_changed(self._viewport.set(self._viewport.view_start, self._viewport.view_span))
         self.update()
 
@@ -147,6 +149,18 @@ class TimelineTrack(QWidget):
     def set_frame_loaded(self, frame: int, loaded: bool) -> None:
         if 0 <= frame < self.total_frames:
             self.loaded_flags[frame] = loaded
+            self.update()
+
+    def set_detected_flags(self, flags: list[bool]) -> None:
+        if len(flags) != self.total_frames:
+            self.detected_flags = (flags + [False] * self.total_frames)[: self.total_frames]
+        else:
+            self.detected_flags = list(flags)
+        self.update()
+
+    def set_frame_detected(self, frame: int, detected: bool) -> None:
+        if 0 <= frame < self.total_frames:
+            self.detected_flags[frame] = detected
             self.update()
 
     # ── Bookmark queries ─────────────────────────────────────────────
@@ -348,6 +362,7 @@ class TimelineTrack(QWidget):
             self._viewport,
             self.segments,
             self.loaded_flags,
+            self.detected_flags,
             self.bookmarks,
             self._dragging_bookmark,
             self._drag_source_bookmark,

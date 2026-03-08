@@ -396,6 +396,20 @@ class TrackDetectorAdapter:
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return self._service.detections_for_frame(frame_index)
 
+    def detect_people_streaming(
+        self,
+        frames_folder_path: str,
+        should_cancel=None,
+    ) -> int:
+        self._events.emit(Event.DetectionStarted, frames_folder_path)
+
+        def _on_frame(frame_index: int, _detections: list) -> None:
+            self._events.emit(Event.DetectionFrameResolved, frames_folder_path, frame_index)
+
+        result = self._service.detect_people_streaming(frames_folder_path, _on_frame, should_cancel)
+        self._events.emit(Event.DetectionsUpdated, frames_folder_path)
+        return result
+
 
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus, prefs: SequencePreferencesPort):

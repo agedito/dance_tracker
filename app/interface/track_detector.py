@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -47,3 +48,9 @@ class TrackDetectorPort(Protocol):
     def load_detections(self, frames_folder_path: str) -> None: ...
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]: ...
+
+    def detect_people_streaming(
+        self,
+        frames_folder_path: str,
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> int: ...

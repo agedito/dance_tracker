@@ -1,5 +1,6 @@
 import logging
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from app.interface.track_detector import PersonDetection, PersonDetector
@@ -107,6 +108,47 @@ class TrackDetectorService:
         self._detections_by_frame = detections
         if saved_name is not None and saved_name in self._detectors:
             self._active_detector_name = saved_name
+
+    def detect_people_streaming(
+        self,
+        frames_folder_path: str,
+        on_frame_resolved: Callable[[int, list[PersonDetection]], None],
+        should_cancel: Callable[[], bool] | None = None,
+    ) -> int:
+        """Detect frame-by-frame via single-frame endpoint, calling on_frame_resolved after each.
+
+        Loads existing detections from disk first so the in-memory state is up to date.
+        Writes the full detections.json only when the loop finishes (or is cancelled).
+        """
+        detector = self._detectors.get(self._active_detector_name)
+        if detector is None:
+            return 0
+
+        saved_detections, saved_name = DetectionsStore.read(frames_folder_path)
+        if saved_name is None or saved_name == self._active_detector_name:
+            self._detections_by_frame = dict(saved_detections)
+        else:
+            self._detections_by_frame = {}
+
+        frame_files = self._frame_files(frames_folder_path)
+        previous_detections: list[PersonDetection] | None = None
+        resolved_count = 0
+
+        for index, frame_path in enumerate(frame_files):
+            if should_cancel and should_cancel():
+                break
+
+            frame_detections = detector.detect_people_in_frame(
+                frame_path=str(frame_path),
+                previous_detections=previous_detections,
+            )
+            self._detections_by_frame[index] = frame_detections
+            previous_detections = frame_detections
+            resolved_count += 1
+            on_frame_resolved(index, frame_detections)
+
+        DetectionsStore.write(frames_folder_path, self._active_detector_name, self._detections_by_frame)
+        return resolved_count
 
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return list(self._detections_by_frame.get(frame_index, []))

@@ -107,6 +107,14 @@ class MainWindow(QMainWindow):
         source_name = Path(frames_folder_path).name or "sequence"
         self._log_message(f"Detections updated for: {source_name}.")
 
+    def on_detection_started(self, frames_folder_path: str) -> None:
+        self._timeline.set_detected_flags([False] * self._frames.total_frames)
+
+    def on_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None:
+        self._timeline.set_frame_detected(frame_index, True)
+        if frame_index == self._frames.cur_frame:
+            self._viewer_panel.viewer.update()
+
     def on_bookmarks_changed(self, frames_folder_path: str) -> None:
         current = self._folder_session.current_folder_path
         if current and Path(current).expanduser() == Path(frames_folder_path).expanduser():
@@ -280,6 +288,7 @@ class MainWindow(QMainWindow):
         self._timeline.set_total_frames(total_frames)
         loaded_flags = self._frame_store.loaded_flags
         self._timeline.set_loaded_flags(loaded_flags)
+        self._timeline.set_detected_flags([False] * total_frames)
         self._preload_tracker.reset(total_frames, self._frame_store.preload_generation, loaded_flags)
         self._bookmarks.refresh()
         source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"
@@ -304,6 +313,7 @@ class MainWindow(QMainWindow):
         self._viewer_panel.viewer.set_total_frames(self._frames.total_frames)
         self._timeline.set_total_frames(self._frames.total_frames)
         self._timeline.set_loaded_flags(self._frame_store.loaded_flags)
+        self._timeline.set_detected_flags([False] * 1000)
         self._preload_tracker.reset(1000, self._frame_store.preload_generation, self._frame_store.loaded_flags)
         self._topbar.set_active_folder(None)
         self._right_panel.set_current_folder_path(None)

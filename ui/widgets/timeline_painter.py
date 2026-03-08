@@ -25,6 +25,7 @@ class TimelineTrackPainter:
         viewport: TimelineViewport,
         segments: list[Segment],
         loaded_flags: list[bool],
+        detected_flags: list[bool],
         bookmarks: list[Bookmark],
         dragging: bool,
         drag_source: int | None,
@@ -48,6 +49,7 @@ class TimelineTrackPainter:
             painter.setBrush(_status_color(s.t))
             painter.drawRect(QRectF(left, 12, max(1, right - left), height - 16))
 
+        TimelineTrackPainter._draw_detected_indicator(painter, width, height, total_frames, detected_flags, viewport)
         TimelineTrackPainter._draw_loaded_indicator(painter, width, height, total_frames, loaded_flags, viewport)
         TimelineTrackPainter._draw_bookmarks(
             painter, bookmarks, total_frames, width, viewport, dragging, drag_source, drag_target
@@ -80,6 +82,33 @@ class TimelineTrackPainter:
 
         if 0 <= end_x <= width:
             painter.drawLine(end_x, 8, end_x, height - 8)
+
+    @staticmethod
+    def _draw_detected_indicator(
+        painter: QPainter,
+        w: int,
+        h: int,
+        total_frames: int,
+        detected_flags: list[bool],
+        viewport: TimelineViewport,
+    ) -> None:
+        """Cyan bar just above the loaded indicator, fills in as frames are detected."""
+        bar_h = 3
+        y = h - bar_h - 1 - 4  # 4 px above the loaded bar
+        painter.setPen(Qt.PenStyle.NoPen)
+
+        if w <= 1:
+            detected = bool(detected_flags and detected_flags[0])
+            painter.setBrush(QColor(80, 180, 220, 220) if detected else QColor(40, 45, 55, 60))
+            painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
+            return
+
+        for x in range(1, w - 1):
+            norm_pos = viewport.view_start + (x / max(1, w - 1)) * viewport.view_span
+            f = int(clamp(norm_pos, 0.0, 1.0) * (total_frames - 1))
+            detected = detected_flags[f] if f < len(detected_flags) else False
+            painter.setBrush(QColor(80, 180, 220, 220) if detected else QColor(40, 45, 55, 60))
+            painter.drawRect(QRectF(x, y, 1, bar_h))
 
     @staticmethod
     def _draw_loaded_indicator(
