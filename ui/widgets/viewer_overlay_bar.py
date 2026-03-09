@@ -1,7 +1,9 @@
-"""Combined detection + pose toggle bar rendered over the video frame."""
+"""Combined detection + pose + segmentation toggle bar rendered over the video frame."""
+
+from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QToolButton, QWidget
 
 _ICON_PX = 30   # icon pixmap side length
@@ -87,6 +89,59 @@ def _pose_icon(active: bool) -> QIcon:
     return QIcon(px)
 
 
+def _segmentation_icon(active: bool) -> QIcon:
+    """Person silhouette: filled shape with a vertical split — left darkened, right bright."""
+    s = _ICON_PX
+    px = QPixmap(s, s)
+    px.fill(Qt.GlobalColor.transparent)
+    p = QPainter(px)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+    if active:
+        bg_color     = QColor(30, 30, 40, 180)
+        person_color = QColor(255, 180, 40, 230)
+        dim_color    = QColor(80, 80, 90, 180)
+    else:
+        bg_color     = QColor(60, 60, 70, 80)
+        person_color = QColor(120, 125, 132, 120)
+        dim_color    = QColor(60, 60, 70, 80)
+
+    cx = s / 2.0
+
+    # Background rectangle
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(bg_color)
+    p.drawRoundedRect(QRectF(1, 1, s - 2, s - 2), 3, 3)
+
+    # Person silhouette — right half (bright = inside mask)
+    p.setBrush(person_color)
+    p.setClipRect(QRectF(cx, 0, s, s))
+    _draw_silhouette(p, s, cx)
+
+    # Person silhouette — left half (dim = outside mask)
+    p.setBrush(dim_color)
+    p.setClipRect(QRectF(0, 0, cx, s))
+    _draw_silhouette(p, s, cx)
+
+    p.setClipping(False)
+    p.end()
+    return QIcon(px)
+
+
+def _draw_silhouette(p: QPainter, s: float, cx: float) -> None:
+    """Draw a simple body silhouette (head + torso/legs block) centered at cx."""
+    hr = s * 0.10
+    head_cy = s * 0.15
+    # Head
+    p.drawEllipse(QRectF(cx - hr, head_cy - hr, hr * 2, hr * 2))
+    # Body block
+    body_top = head_cy + hr
+    p.drawRoundedRect(
+        QRectF(cx - s * 0.18, body_top, s * 0.36, s * 0.78),
+        s * 0.06, s * 0.06,
+    )
+
+
 # ── Skeleton drawing constants (MediaPipe 33 landmarks) ───────────────────────
 
 _POSE_CONNECTIONS = [
@@ -107,6 +162,8 @@ _C_RIGHT  = QColor(255, 80, 160, 210)
 _C_MID    = QColor(200, 180, 255, 200)
 _VIS_THR  = 0.5
 _PT_R     = 3.0
+
+_SEG_DARKEN = QColor(0, 0, 0, 160)  # overlay color for non-masked areas
 
 
 def _lm_color(idx: int) -> QColor:
@@ -140,20 +197,22 @@ _BTN_STYLE = (
 
 
 class ViewerOverlayBar(QWidget):
-    """Horizontal bar with detection + pose toggle buttons, placed top-right of the video.
+    """Horizontal bar with detection + pose + segmentation toggle buttons, placed top-right of video.
 
-    Also owns the paint logic for both overlays so the viewer calls a single
+    Also owns the paint logic for all three overlays so the viewer calls a single
     ``paint()`` method.
     """
 
     repaintRequested = Signal()
 
-    def __init__(self, track_detector, pose_detector, parent: QWidget) -> None:
+    def __init__(self, track_detector, pose_detector, segmentation, parent: QWidget) -> None:
         super().__init__(parent)
-        self._track_detector = track_detector
-        self._pose_detector  = pose_detector
+        self._track_detector  = track_detector
+        self._pose_detector   = pose_detector
+        self._segmentation    = segmentation
         self._show_detections = True
         self._show_poses      = True
+        self._show_segmentation = True
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
@@ -167,10 +226,12 @@ class ViewerOverlayBar(QWidget):
         layout.setContentsMargins(5, 4, 5, 4)
         layout.setSpacing(2)
 
-        self._btn_det  = self._build_button(_detection_icon, "Show / hide bounding box detections", self._on_detection_toggled)
-        self._btn_pose = self._build_button(_pose_icon,      "Show / hide pose skeleton",            self._on_pose_toggled)
+        self._btn_det  = self._build_button(_detection_icon,   "Show / hide bounding box detections", self._on_detection_toggled)
+        self._btn_pose = self._build_button(_pose_icon,        "Show / hide pose skeleton",            self._on_pose_toggled)
+        self._btn_seg  = self._build_button(_segmentation_icon,"Show / hide segmentation mask",        self._on_segmentation_toggled)
         layout.addWidget(self._btn_det)
         layout.addWidget(self._btn_pose)
+        layout.addWidget(self._btn_seg)
 
         self.adjustSize()
 
@@ -185,6 +246,8 @@ class ViewerOverlayBar(QWidget):
         self.raise_()
 
     def paint(self, painter: QPainter, video_rect: QRectF, frame: int) -> None:
+        if self._show_segmentation:
+            self._paint_segmentation(painter, video_rect, frame)
         if self._show_detections:
             self._paint_detections(painter, video_rect, frame)
         if self._show_poses:
@@ -211,6 +274,10 @@ class ViewerOverlayBar(QWidget):
 
     def _on_pose_toggled(self, checked: bool) -> None:
         self._show_poses = checked
+        self.repaintRequested.emit()
+
+    def _on_segmentation_toggled(self, checked: bool) -> None:
+        self._show_segmentation = checked
         self.repaintRequested.emit()
 
     def _paint_detections(self, painter: QPainter, video_rect: QRectF, frame: int) -> None:
@@ -271,4 +338,48 @@ class ViewerOverlayBar(QWidget):
                 ly = video_rect.y() + lm.y * video_rect.height()
                 painter.setBrush(_lm_color(lm.index))
                 painter.drawEllipse(QRectF(lx - _PT_R, ly - _PT_R, _PT_R * 2, _PT_R * 2))
+        painter.restore()
+
+    def _paint_segmentation(self, painter: QPainter, video_rect: QRectF, frame: int) -> None:
+        result = self._segmentation.segmentation_for_frame(frame)
+        if result is None or not result.mask_path:
+            return
+
+        mask_path = Path(result.mask_path)
+        if not mask_path.exists():
+            return
+
+        mask_image = QImage(str(mask_path))
+        if mask_image.isNull():
+            return
+
+        painter.save()
+
+        vx = int(video_rect.x())
+        vy = int(video_rect.y())
+        vw = int(video_rect.width())
+        vh = int(video_rect.height())
+
+        # Scale mask to video display size
+        scaled_mask = mask_image.scaled(
+            vw, vh,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ).convertToFormat(QImage.Format.Format_ARGB32)
+
+        # Build a dark overlay pixmap the size of the video area,
+        # then punch holes where the mask says "person" (non-black pixels).
+        overlay = QPixmap(vw, vh)
+        overlay.fill(_SEG_DARKEN)
+
+        overlay_painter = QPainter(overlay)
+        overlay_painter.setCompositionMode(
+            QPainter.CompositionMode.CompositionMode_DestinationOut
+        )
+        # Draw the mask: white=person → erases dark overlay → video shows through
+        # Black=background → overlay stays → video is darkened
+        overlay_painter.drawImage(0, 0, scaled_mask)
+        overlay_painter.end()
+
+        painter.drawPixmap(vx, vy, overlay)
         painter.restore()

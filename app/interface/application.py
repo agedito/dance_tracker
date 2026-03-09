@@ -4,6 +4,7 @@ from app.interface.layers import Layer
 from app.interface.media import MediaPort
 from app.interface.music import MusicPort
 from app.interface.pose_detector import PoseDetectorPort
+from app.interface.segmentation import SegmentationPort
 from app.interface.sequence_data import SequenceDataPort
 from app.interface.sequences import SequencePort
 from app.interface.track_detector import TrackDetectorPort
@@ -47,3 +48,4 @@ class DanceTrackerPort(Protocol):
     sequence_data: SequenceDataPort
     track_detector: TrackDetectorPort
     pose_detector: PoseDetectorPort
+    segmentation: SegmentationPort

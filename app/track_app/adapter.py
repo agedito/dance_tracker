@@ -5,6 +5,7 @@ from pathlib import Path
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import MusicPort, SongMetadata, SongStatus
 from app.interface.pose_detector import PoseDetection as PoseDetectionResult
+from app.interface.segmentation import SegmentationResult
 from app.interface.sequence_data import Bookmark, SequenceDataPort
 from app.interface.sequence_prefs import SequencePreferencesPort
 from app.interface.sequences import SequenceItem, SequenceState
@@ -481,6 +482,56 @@ class PoseDetectorAdapter:
         return self._service.detected_pose_flags(total_frames)
 
 
+class SegmentationAdapter:
+    def __init__(self, app: DanceTrackerApp, events: EventBus):
+        self._service = app.segmentation
+        self._events = events
+
+    def set_active_provider(self, provider: str) -> bool:
+        return self._service.set_active_provider(provider)
+
+    def detect_for_sequence(self, frames_folder_path: str, frame_index: int | None = None) -> int:
+        result = self._service.detect_for_sequence(frames_folder_path, frame_index=frame_index)
+        self._events.emit(Event.SegmentationsUpdated, frames_folder_path)
+        return result
+
+    def detect_for_video(self, frames_folder_path: str) -> int:
+        result = self._service.detect_for_video(frames_folder_path)
+        self._events.emit(Event.SegmentationsUpdated, frames_folder_path)
+        return result
+
+    def detect_streaming(
+        self,
+        frames_folder_path: str,
+        should_cancel=None,
+        current_frame: int = 0,
+    ) -> int:
+        self._events.emit(Event.SegmentationDetectionStarted, frames_folder_path)
+
+        def _on_frame(frame_index: int, _result) -> None:
+            self._events.emit(Event.SegmentationDetectionFrameResolved, frames_folder_path, frame_index)
+
+        result = self._service.detect_streaming(
+            frames_folder_path, _on_frame, should_cancel, current_frame=current_frame
+        )
+        self._events.emit(Event.SegmentationsUpdated, frames_folder_path)
+        return result
+
+    def load_segmentations(self, frames_folder_path: str) -> None:
+        self._service.load_segmentations(frames_folder_path)
+        self._events.emit(Event.SegmentationsUpdated, frames_folder_path)
+
+    def clear_segmentations(self, frames_folder_path: str) -> None:
+        self._service.clear_segmentations(frames_folder_path)
+        self._events.emit(Event.SegmentationsUpdated, frames_folder_path)
+
+    def segmentation_for_frame(self, frame_index: int) -> SegmentationResult | None:
+        return self._service.segmentation_for_frame(frame_index)
+
+    def detected_segmentation_flags(self, total_frames: int) -> list[bool]:
+        return self._service.detected_segmentation_flags(total_frames)
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus, prefs: SequencePreferencesPort):
         self.media = MediaAdapter(app, events)
@@ -490,3 +541,4 @@ class AppAdapter:
         self.sequence_data = SequenceDataAdapter(events)
         self.track_detector = TrackDetectorAdapter(app, events)
         self.pose_detector = PoseDetectorAdapter(app, events)
+        self.segmentation = SegmentationAdapter(app, events)

@@ -8,9 +8,12 @@ from app.track_app.services.music_identifier.audd_client import AuddSongIdentifi
 from app.track_app.services.music_identifier.service import MusicIdentifierService
 from app.track_app.services.music_identifier.tempo_analyzer import ScipyTempoAnalyzer
 from app.interface.pose_detector import PoseDetectorPort
+from app.interface.segmentation import SegmentationPort
 from app.track_app.sections.track_detector.detection_api_adapter import DetectionApiPersonDetector
 from app.track_app.sections.track_detector.pose_api_adapter import PoseApiDetector
 from app.track_app.sections.track_detector.pose_service import PoseDetectorService
+from app.track_app.sections.track_detector.segmentation_api_adapter import SegmentationApiAdapter
+from app.track_app.sections.track_detector.segmentation_service import SegmentationService
 from app.track_app.sections.track_detector.service import TrackDetectorService
 from services.detection.client import DetectionApiClient
 from app.track_app.sections.video_manager.manager import VideoManager
@@ -28,7 +31,9 @@ class DanceTrackerApp:
             identifier=AuddSongIdentifier(api_token=cfg.audd_api_token),
             analyzer=ScipyTempoAnalyzer(),
         )
-        detectors, capabilities, pose_detectors = _load_from_capabilities(cfg.detection_api_base_url, cfg.data_path)
+        detectors, capabilities, pose_detectors, seg_detectors = _load_from_capabilities(
+            cfg.detection_api_base_url, cfg.data_path
+        )
         self.track_detector: TrackDetectorPort = TrackDetectorService(
             detectors=detectors,
             default_detector_name=next(iter(detectors), ""),
@@ -37,6 +42,11 @@ class DanceTrackerApp:
         self.pose_detector: PoseDetectorPort = PoseDetectorService(
             detectors=pose_detectors,
             default_provider=next(iter(pose_detectors), ""),
+        )
+        self.segmentation: SegmentationPort = SegmentationService(
+            detectors=seg_detectors,
+            default_provider=next(iter(seg_detectors), ""),
+            data_path=cfg.data_path,
         )
 
 
@@ -61,6 +71,14 @@ def _load_from_capabilities(base_url: str, data_path: str = "", timeout: int = 5
             for provider in pose_providers
         }
 
-        return detectors, capabilities, pose_detectors
+        seg_cap = capabilities.get("segmentation")
+        seg_providers = seg_cap.providers if seg_cap else []
+        seg_client = DetectionApiClient(base_url, timeout=60, video_timeout=600)
+        seg_detectors = {
+            provider: SegmentationApiAdapter(seg_client, provider, data_path=data_path)
+            for provider in seg_providers
+        }
+
+        return detectors, capabilities, pose_detectors, seg_detectors
     except Exception:
-        return {}, {}, {}
+        return {}, {}, {}, {}

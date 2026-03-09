@@ -45,8 +45,10 @@ class ViewerWidget(QWidget):
         self._drop_handler.framesLoaded.connect(self.framesLoaded)
         self._drop_handler.folderLoaded.connect(self.folderLoaded)
 
-        # ── Overlay bar (detection + pose toggles + drawing) ─────────
-        self._overlay_bar = ViewerOverlayBar(app.track_detector, app.pose_detector, parent=self)
+        # ── Overlay bar (detection + pose + segmentation toggles + drawing) ──
+        self._overlay_bar = ViewerOverlayBar(
+            app.track_detector, app.pose_detector, app.segmentation, parent=self
+        )
         self._overlay_bar.repaintRequested.connect(self.update)
 
     # ── Public API ───────────────────────────────────────────────────

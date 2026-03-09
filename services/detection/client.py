@@ -46,6 +46,15 @@ class PoseFrameResult:
 
 
 @dataclass(frozen=True)
+class SegmentFrameResult:
+    frame_index: int
+    image_width: int
+    image_height: int
+    output_path: str | None       # relative path to saved PNG mask
+    segments: list[dict]          # raw segment dicts from API
+
+
+@dataclass(frozen=True)
 class DetectResponse:
     provider: str
     num_persons: int
@@ -211,6 +220,46 @@ class DetectionApiClient:
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_pose_frame(f) for f in frames]
 
+    def segment(self, image_path: str, provider: str, output_name: str) -> SegmentFrameResult:
+        url = f"{self._base_url}/api/segmentation?provider={urllib.parse.quote(provider)}"
+        body = json.dumps({
+            "image_path": image_path,
+            "output_name": output_name,
+        }).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
+        req = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+        print(f"[DetectionApiClient] response: {raw}")
+
+        frames = raw.get("frames", [])
+        if not frames:
+            return SegmentFrameResult(frame_index=0, image_width=0, image_height=0,
+                                      output_path=None, segments=[])
+        return _parse_segment_frame(frames[0])
+
+    def segment_batch(self, folder_path: str, provider: str) -> list[SegmentFrameResult]:
+        url = f"{self._base_url}/api/segmentation/batch?provider={urllib.parse.quote(provider)}"
+        body = json.dumps({"folder_path": folder_path}).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
+        req = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+        print(f"[DetectionApiClient] response: {raw}")
+
+        frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
+        return [_parse_segment_frame(f) for f in frames]
+
+    def segment_video(self, video_path: str, provider: str) -> list[SegmentFrameResult]:
+        """Fallback: segmentation has no dedicated video endpoint; raises NotImplementedError."""
+        raise NotImplementedError("Segmentation does not support a video endpoint.")
+
     def pose_video(self, video_path: str, provider: str) -> list[PoseFrameResult]:
         url = f"{self._base_url}/api/pose/video?provider={urllib.parse.quote(provider)}"
         body = json.dumps({"video_path": video_path}).encode("utf-8")
@@ -225,6 +274,16 @@ class DetectionApiClient:
 
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_pose_frame(f) for f in frames]
+
+
+def _parse_segment_frame(raw: dict) -> SegmentFrameResult:
+    return SegmentFrameResult(
+        frame_index=int(raw.get("frame_index", 0)),
+        image_width=int(raw.get("image_width", 0)),
+        image_height=int(raw.get("image_height", 0)),
+        output_path=raw.get("output_path"),
+        segments=list(raw.get("segments", [])),
+    )
 
 
 def _parse_pose_frame(raw: dict) -> PoseFrameResult:

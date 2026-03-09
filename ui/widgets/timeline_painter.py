@@ -61,6 +61,11 @@ class TimelineTrackPainter:
                 painter, width, height, total_frames, detected_flags, viewport,
                 color=QColor(150, 80, 255, 220),
             )
+        if kind == "segmentation":
+            TimelineTrackPainter._draw_detected_indicator(
+                painter, width, height, total_frames, detected_flags, viewport,
+                color=QColor(255, 165, 30, 220),
+            )
         if kind in ("", "image"):
             TimelineTrackPainter._draw_loaded_indicator(
                 painter, width, height, total_frames, loaded_flags, proxy_loaded_flags, viewport

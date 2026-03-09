@@ -17,6 +17,9 @@ class Event(Enum):
     PosesUpdated = auto()
     PoseDetectionStarted = auto()
     PoseDetectionFrameResolved = auto()
+    SegmentationsUpdated = auto()
+    SegmentationDetectionStarted = auto()
+    SegmentationDetectionFrameResolved = auto()
     BookmarksChanged = auto()
 
 
@@ -38,6 +41,12 @@ class EventsListener(Protocol):
     def on_pose_detection_started(self, frames_folder_path: str) -> None: ...
 
     def on_pose_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None: ...
+
+    def on_segmentations_updated(self, frames_folder_path: str) -> None: ...
+
+    def on_segmentation_detection_started(self, frames_folder_path: str) -> None: ...
+
+    def on_segmentation_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None: ...
 
     def on_bookmarks_changed(self, frames_folder_path: str) -> None: ...
 
@@ -131,6 +140,9 @@ class EventBus:
         self.on(Event.PosesUpdated, listener.on_poses_updated)
         self.on(Event.PoseDetectionStarted, listener.on_pose_detection_started)
         self.on(Event.PoseDetectionFrameResolved, listener.on_pose_detection_frame_resolved)
+        self.on(Event.SegmentationsUpdated, listener.on_segmentations_updated)
+        self.on(Event.SegmentationDetectionStarted, listener.on_segmentation_detection_started)
+        self.on(Event.SegmentationDetectionFrameResolved, listener.on_segmentation_detection_frame_resolved)
         self.on(Event.BookmarksChanged, listener.on_bookmarks_changed)
 
     def disconnect(self, listener: EventsListener) -> None:
@@ -143,4 +155,7 @@ class EventBus:
         self.off(Event.PosesUpdated, listener.on_poses_updated)
         self.off(Event.PoseDetectionStarted, listener.on_pose_detection_started)
         self.off(Event.PoseDetectionFrameResolved, listener.on_pose_detection_frame_resolved)
+        self.off(Event.SegmentationsUpdated, listener.on_segmentations_updated)
+        self.off(Event.SegmentationDetectionStarted, listener.on_segmentation_detection_started)
+        self.off(Event.SegmentationDetectionFrameResolved, listener.on_segmentation_detection_frame_resolved)
         self.off(Event.BookmarksChanged, listener.on_bookmarks_changed)

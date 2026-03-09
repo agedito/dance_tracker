@@ -7,6 +7,7 @@ from app.interface.track_detector import CapabilityInfo
 from ui.widgets.detection_stream_worker import DetectionStreamWorker
 from ui.widgets.generic_widgets.detection_group import DetectionGroupWidget
 from ui.widgets.pose_stream_worker import PoseStreamWorker
+from ui.widgets.segmentation_stream_worker import SegmentationStreamWorker
 from ui.widgets.right_panel_tabs.common import section_label
 from ui.window.sections.preferences_manager import PreferencesManager
 
@@ -50,15 +51,32 @@ class EmbeddingsTabWidget(QWidget):
             is_pose = key == "pose"
             saved = preferences.embeddings_group_state(key)
 
+            is_segmentation = key == "segmentation"
+
             group = DetectionGroupWidget(
                 title=title,
                 capability=cap,
                 get_current_folder=get_current_folder,
                 log_message=log_message,
                 on_detector_changed=self._on_detector_changed if is_detection else None,
-                on_detect=self._make_detect_fn() if is_detection else (self._make_pose_detect_fn() if is_pose else None),
-                on_clean=self._on_clean_detections if is_detection else (self._on_clean_poses if is_pose else None),
-                create_stream_worker=self._make_stream_worker if is_detection else (self._make_pose_stream_worker if is_pose else None),
+                on_detect=(
+                    self._make_detect_fn() if is_detection
+                    else self._make_pose_detect_fn() if is_pose
+                    else self._make_segmentation_detect_fn() if is_segmentation
+                    else None
+                ),
+                on_clean=(
+                    self._on_clean_detections if is_detection
+                    else self._on_clean_poses if is_pose
+                    else self._on_clean_segmentations if is_segmentation
+                    else None
+                ),
+                create_stream_worker=(
+                    self._make_stream_worker if is_detection
+                    else self._make_pose_stream_worker if is_pose
+                    else self._make_segmentation_stream_worker if is_segmentation
+                    else None
+                ),
                 on_state_changed=self._make_state_changed_fn(key),
                 initial_provider=saved.get("provider", ""),
                 initial_endpoint=saved.get("endpoint", ""),
@@ -132,6 +150,32 @@ class EmbeddingsTabWidget(QWidget):
 
     def _make_stream_worker(self, folder: str, provider: str) -> DetectionStreamWorker:
         return DetectionStreamWorker(
+            self._app,
+            folder,
+            provider=provider,
+            current_frame=self._app.frames.cur_frame,
+        )
+
+    def _make_segmentation_detect_fn(self) -> Callable[[str, str, str], int]:
+        def _detect(folder: str, provider: str, endpoint_type: str) -> int:
+            self._app.segmentation.set_active_provider(provider)
+            if endpoint_type == "single":
+                return self._app.segmentation.detect_for_sequence(
+                    folder, frame_index=self._app.frames.cur_frame
+                )
+            if endpoint_type == "batch":
+                return self._app.segmentation.detect_for_sequence(folder)
+            if endpoint_type == "video":
+                return self._app.segmentation.detect_for_video(folder)
+            return 0
+        return _detect
+
+    def _on_clean_segmentations(self, folder: str, _provider: str) -> None:
+        self._app.segmentation.clear_segmentations(folder)
+        self._log_message("Segmentations cleared.")
+
+    def _make_segmentation_stream_worker(self, folder: str, provider: str) -> SegmentationStreamWorker:
+        return SegmentationStreamWorker(
             self._app,
             folder,
             provider=provider,

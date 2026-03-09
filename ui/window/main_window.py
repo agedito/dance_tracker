@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self._right_panel.update_sequence_data(path)
         self._app.track_detector.load_detections(path)
         self._app.pose_detector.load_poses(path)
+        self._app.segmentation.load_segmentations(path)
         self._right_panel.sync_detector_selection()
         target = self._app.sequence_data.get_last_frame(path) or 0
         self._folder_session.load_folder(path, target_frame=target)
@@ -133,6 +134,22 @@ class MainWindow(QMainWindow):
 
     def on_pose_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None:
         self._timeline.set_frame_pose_detected(frame_index, True)
+        if frame_index == self._frames.cur_frame:
+            self._viewer_panel.viewer.update()
+
+    def on_segmentations_updated(self, frames_folder_path: str) -> None:
+        self._viewer_panel.viewer.update()
+        self._timeline.set_segmentation_detected_flags(
+            self._app.segmentation.detected_segmentation_flags(self._frames.total_frames)
+        )
+        source_name = Path(frames_folder_path).name or "sequence"
+        self._log_message(f"Segmentations updated for: {source_name}.")
+
+    def on_segmentation_detection_started(self, frames_folder_path: str) -> None:
+        self._timeline.set_segmentation_detected_flags([False] * self._frames.total_frames)
+
+    def on_segmentation_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None:
+        self._timeline.set_frame_segmentation_detected(frame_index, True)
         if frame_index == self._frames.cur_frame:
             self._viewer_panel.viewer.update()
 
@@ -316,6 +333,9 @@ class MainWindow(QMainWindow):
         self._timeline.set_proxy_loaded_flags(self._frame_store.proxy_loaded_flags)
         self._timeline.set_detected_flags(self._app.track_detector.detected_frame_flags(total_frames))
         self._timeline.set_pose_detected_flags(self._app.pose_detector.detected_pose_flags(total_frames))
+        self._timeline.set_segmentation_detected_flags(
+            self._app.segmentation.detected_segmentation_flags(total_frames)
+        )
         self._preload_tracker.reset(total_frames, self._frame_store.preload_generation, loaded_flags)
         self._bookmarks.refresh()
         source_name = Path(self._folder_session.current_folder_path or "").name or "sequence"
@@ -343,6 +363,7 @@ class MainWindow(QMainWindow):
         self._timeline.set_proxy_loaded_flags([False] * 1000)
         self._timeline.set_detected_flags([False] * 1000)
         self._timeline.set_pose_detected_flags([False] * 1000)
+        self._timeline.set_segmentation_detected_flags([False] * 1000)
         self._preload_tracker.reset(1000, self._frame_store.preload_generation, self._frame_store.loaded_flags)
         self._topbar.set_active_folder(None)
         self._right_panel.set_current_folder_path(None)

@@ -149,6 +149,16 @@ class TimelinePanel(QFrame):
             if track.kind == "pose":
                 track.set_frame_detected(frame, detected)
 
+    def set_segmentation_detected_flags(self, flags: list[bool]):
+        for track in self.track_widgets:
+            if track.kind == "segmentation":
+                track.set_detected_flags(flags)
+
+    def set_frame_segmentation_detected(self, frame: int, detected: bool):
+        for track in self.track_widgets:
+            if track.kind == "segmentation":
+                track.set_frame_detected(frame, detected)
+
     def update_info(
             self,
             total_frames: int,
