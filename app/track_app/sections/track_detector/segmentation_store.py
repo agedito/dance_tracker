@@ -16,15 +16,14 @@ class SegmentationStore:
         frames_folder_path: str,
         provider: str,
         segmentations: dict[int, SegmentationResult],
-        data_path: str = "",
     ) -> None:
-        data_root = Path(data_path) if data_path else None
+        frames_folder = Path(frames_folder_path).expanduser()
 
         def _relative(abs_path: str | None) -> str | None:
-            if not abs_path or data_root is None:
+            if not abs_path:
                 return abs_path
             try:
-                return Path(abs_path).relative_to(data_root).as_posix()
+                return Path(abs_path).relative_to(frames_folder).as_posix()
             except ValueError:
                 return abs_path
 
@@ -53,7 +52,6 @@ class SegmentationStore:
     @staticmethod
     def read(
         frames_folder_path: str,
-        data_path: str = "",
     ) -> tuple[dict[int, SegmentationResult], str | None]:
         path = SegmentationStore.json_path(frames_folder_path)
         if not path.exists():
@@ -74,13 +72,13 @@ class SegmentationStore:
         if not isinstance(frames_data, dict):
             return {}, saved_provider
 
-        data_root = Path(data_path) if data_path else None
+        frames_folder = Path(frames_folder_path).expanduser()
 
         def _absolute(rel_path: str | None) -> str | None:
-            if not rel_path or data_root is None:
+            if not rel_path:
                 return rel_path
-            candidate = data_root / rel_path
-            return str(candidate) if candidate.exists() else rel_path
+            candidate = frames_folder / rel_path
+            return str(candidate)
 
         result: dict[int, SegmentationResult] = {}
         for key, item in frames_data.items():

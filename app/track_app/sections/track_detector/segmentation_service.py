@@ -16,7 +16,6 @@ class SegmentationService:
         self,
         detectors: dict[str, SegmentationApiAdapter],
         default_provider: str = "",
-        data_path: str = "",
     ):
         self._detectors = dict(detectors)
         self._active_provider = (
@@ -24,7 +23,6 @@ class SegmentationService:
             if default_provider in self._detectors
             else next(iter(self._detectors), "")
         )
-        self._data_path = data_path
         self._segmentations: dict[int, SegmentationResult] = {}
 
     def set_active_provider(self, provider: str) -> bool:
@@ -39,7 +37,7 @@ class SegmentationService:
         detector = self._detectors.get(self._active_provider)
         if detector is None:
             self._segmentations = {}
-            SegmentationStore.write(frames_folder_path, self._active_provider, {}, self._data_path)
+            SegmentationStore.write(frames_folder_path, self._active_provider, {})
             return 0
 
         frame_files = self._frame_files(frames_folder_path)
@@ -52,7 +50,7 @@ class SegmentationService:
             if result is not None:
                 segs[frame_index] = result
             self._segmentations = segs
-            SegmentationStore.write(frames_folder_path, self._active_provider, segs, self._data_path)
+            SegmentationStore.write(frames_folder_path, self._active_provider, segs)
             return 1
 
         batch = detector.detect_in_batch(frames_folder_path)
@@ -60,7 +58,7 @@ class SegmentationService:
             i: r for i, r in enumerate(batch) if r is not None
         }
         SegmentationStore.write(
-            frames_folder_path, self._active_provider, self._segmentations, self._data_path
+            frames_folder_path, self._active_provider, self._segmentations
         )
         return len(self._segmentations)
 
@@ -79,7 +77,7 @@ class SegmentationService:
         if detector is None:
             return 0
 
-        saved, saved_provider = SegmentationStore.read(frames_folder_path, self._data_path)
+        saved, saved_provider = SegmentationStore.read(frames_folder_path)
         if saved_provider is None or saved_provider == self._active_provider:
             self._segmentations = dict(saved)
         else:
@@ -105,19 +103,19 @@ class SegmentationService:
                 on_frame_resolved(index, result)
 
         SegmentationStore.write(
-            frames_folder_path, self._active_provider, self._segmentations, self._data_path
+            frames_folder_path, self._active_provider, self._segmentations
         )
         return count
 
     def load_segmentations(self, frames_folder_path: str) -> None:
-        segs, saved_provider = SegmentationStore.read(frames_folder_path, self._data_path)
+        segs, saved_provider = SegmentationStore.read(frames_folder_path)
         self._segmentations = segs
         if saved_provider and saved_provider in self._detectors:
             self._active_provider = saved_provider
 
     def clear_segmentations(self, frames_folder_path: str) -> None:
         self._segmentations = {}
-        SegmentationStore.write(frames_folder_path, self._active_provider, {}, self._data_path)
+        SegmentationStore.write(frames_folder_path, self._active_provider, {})
 
     def segmentation_for_frame(self, frame_index: int) -> SegmentationResult | None:
         return self._segmentations.get(frame_index)

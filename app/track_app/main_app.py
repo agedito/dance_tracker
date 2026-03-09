@@ -46,7 +46,6 @@ class DanceTrackerApp:
         self.segmentation: SegmentationPort = SegmentationService(
             detectors=seg_detectors,
             default_provider=next(iter(seg_detectors), ""),
-            data_path=cfg.data_path,
         )
 
 
