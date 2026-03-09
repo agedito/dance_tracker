@@ -1,5 +1,7 @@
+from collections.abc import Callable
+
 from PySide6.QtCore import QPointF, Qt, QRectF, Signal
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtWidgets import QLineEdit, QWidget
 
 from app.interface.layers import Segment
@@ -84,8 +86,24 @@ class TimelineTrack(QWidget):
         self._drag_bookmark_frame: int | None = None
         self._viewport = TimelineViewport()
         self._editor = _BookmarkEditor(self, self._finish_bookmark_rename)
+        self._thumbnail_provider: Callable[[int], QPixmap | None] | None = None
+        self._thumbnail_interval: int = 100
         self.setFixedHeight(40)
         self.setCursor(Qt.CursorShape.CrossCursor)
+
+    def set_thumbnail_provider(
+        self,
+        provider: Callable[[int], QPixmap | None] | None,
+        interval: int = 100,
+    ) -> None:
+        """Set a callable that returns a QPixmap for a given frame index.
+
+        Pass ``None`` to disable thumbnail rendering.
+        ``interval`` controls how many frames apart each thumbnail is drawn.
+        """
+        self._thumbnail_provider = provider
+        self._thumbnail_interval = max(1, interval)
+        self.update()
 
     # ── Viewport ─────────────────────────────────────────────────────
 
@@ -364,6 +382,56 @@ class TimelineTrack(QWidget):
             frame, name = result
             self.bookmarkNameChanged.emit(frame, name)
 
+    # ── Frame navigation ─────────────────────────────────────────────
+
+    def prev_frame_with_data(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if self.detected_flags[f]:
+                return f
+        return None
+
+    def next_frame_with_data(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if self.detected_flags[f]:
+                return f
+        return None
+
+    def prev_frame_without_data(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if not self.detected_flags[f]:
+                return f
+        return None
+
+    def next_frame_without_data(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if not self.detected_flags[f]:
+                return f
+        return None
+
+    def prev_frame_loaded(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if self.loaded_flags[f]:
+                return f
+        return None
+
+    def next_frame_loaded(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if self.loaded_flags[f]:
+                return f
+        return None
+
+    def prev_frame_not_loaded(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if not self.loaded_flags[f]:
+                return f
+        return None
+
+    def next_frame_not_loaded(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if not self.loaded_flags[f]:
+                return f
+        return None
+
     # ── Paint ────────────────────────────────────────────────────────
 
     def paintEvent(self, _ev):
@@ -384,5 +452,7 @@ class TimelineTrack(QWidget):
             self._drag_source_bookmark,
             self._drag_bookmark_frame,
             self.kind,
+            thumbnail_provider=self._thumbnail_provider,
+            thumbnail_interval=self._thumbnail_interval,
         )
         p.end()

@@ -224,6 +224,12 @@ class MainWindow(QMainWindow):
         self._layout.set_bottom_content(self._timeline, self._status)
         self._layout.finalize()
 
+        self._timeline.set_thumbnail_provider(
+            "image",
+            lambda f: self._frame_store.get_frame(f, use_proxy=True),
+            interval=100,
+        )
+
         self._setup_shortcuts()
 
     def _setup_shortcuts(self):

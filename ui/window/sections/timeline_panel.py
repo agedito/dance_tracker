@@ -1,5 +1,6 @@
 from typing import Callable
 
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QProgressBar, QScrollArea,
     QVBoxLayout, QWidget,
@@ -7,7 +8,16 @@ from PySide6.QtWidgets import (
 
 from app.interface.sequence_data import Bookmark
 from ui.widgets.timeline import TimelineTrack
+from ui.widgets.track_nav_buttons import TrackNavButtons
 from ui.widgets.viewport_overview_bar import ViewportOverviewBar
+
+# Dot colors matching each track kind's indicator color
+_NAV_DOT_COLOR: dict[str, QColor] = {
+    "image":        QColor(80,  200, 120, 230),
+    "bbox":         QColor(80,  180, 220, 230),
+    "pose":         QColor(150,  80, 255, 230),
+    "segmentation": QColor(255, 165,  30, 230),
+}
 
 
 class TimelinePanel(QFrame):
@@ -74,11 +84,11 @@ class TimelinePanel(QFrame):
             row = QWidget()
             rl = QHBoxLayout(row)
             rl.setContentsMargins(0, 0, 0, 0)
-            rl.setSpacing(10)
+            rl.setSpacing(6)
 
             name = QLabel(layer.name)
             name.setObjectName("LayerName")
-            name.setFixedWidth(160)
+            name.setFixedWidth(110)
 
             track = TimelineTrack(total_frames, layer.segments, kind=layer.kind)
             track.frameChanged.connect(on_frame_changed)
@@ -93,6 +103,43 @@ class TimelinePanel(QFrame):
             track.viewportChanged.connect(self._sync_viewport_from_track)
 
             rl.addWidget(name)
+
+            dot_color = _NAV_DOT_COLOR.get(layer.kind)
+            if dot_color is not None:
+                if layer.kind == "image":
+                    nav = TrackNavButtons(
+                        dot_color=dot_color,
+                        on_prev_gap=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.prev_frame_not_loaded()) is not None else None
+                        ),
+                        on_prev_data=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.prev_frame_loaded()) is not None else None
+                        ),
+                        on_next_data=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.next_frame_loaded()) is not None else None
+                        ),
+                        on_next_gap=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.next_frame_not_loaded()) is not None else None
+                        ),
+                    )
+                else:
+                    nav = TrackNavButtons(
+                        dot_color=dot_color,
+                        on_prev_gap=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.prev_frame_without_data()) is not None else None
+                        ),
+                        on_prev_data=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.prev_frame_with_data()) is not None else None
+                        ),
+                        on_next_data=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.next_frame_with_data()) is not None else None
+                        ),
+                        on_next_gap=lambda _=None, t=track: (
+                            on_frame_changed(f) if (f := t.next_frame_without_data()) is not None else None
+                        ),
+                    )
+                rl.addWidget(nav)
+
             rl.addWidget(track, 1)
             lay.addWidget(row)
 
@@ -100,6 +147,21 @@ class TimelinePanel(QFrame):
         scroll.setWidget(content)
         root.addWidget(scroll, 1)
         self._update_viewport_indicators(self._shared_view_start, self._shared_view_span)
+
+    def set_thumbnail_provider(
+        self,
+        kind: str,
+        provider,
+        interval: int = 100,
+    ) -> None:
+        """Wire a thumbnail provider callable to all tracks of the given kind.
+
+        ``provider`` must be ``Callable[[int], QPixmap | None]``.
+        Pass ``None`` to disable thumbnails for that kind.
+        """
+        for track in self.track_widgets:
+            if track.kind == kind:
+                track.set_thumbnail_provider(provider, interval)
 
     def set_frame(self, frame: int):
         for track in self.track_widgets:

@@ -1,5 +1,7 @@
+from collections.abc import Callable
+
 from PySide6.QtCore import QPointF, Qt, QRectF
-from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
 
 from app.interface.layers import Segment
 from app.interface.sequence_data import Bookmark
@@ -32,6 +34,8 @@ class TimelineTrackPainter:
         drag_source: int | None,
         drag_target: int | None,
         kind: str = "",
+        thumbnail_provider: Callable[[int], QPixmap | None] | None = None,
+        thumbnail_interval: int = 100,
     ) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
@@ -50,6 +54,12 @@ class TimelineTrackPainter:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(_status_color(s.t))
             painter.drawRect(QRectF(left, 12, max(1, right - left), height - 16))
+
+        if thumbnail_provider is not None:
+            TimelineTrackPainter._draw_thumbnails(
+                painter, width, height, total_frames, viewport,
+                thumbnail_provider, thumbnail_interval,
+            )
 
         if kind in ("", "bbox"):
             TimelineTrackPainter._draw_detected_indicator(
@@ -79,6 +89,66 @@ class TimelineTrackPainter:
         xph = int(((frame_norm - viewport.view_start) / max(0.0001, viewport.view_span)) * width)
         painter.setPen(QPen(QColor(255, 80, 80, 240), 2))
         painter.drawLine(xph, -4, xph, height + 4)
+
+    @staticmethod
+    def _draw_thumbnails(
+        painter: QPainter,
+        width: int,
+        height: int,
+        total_frames: int,
+        viewport: TimelineViewport,
+        provider: Callable[[int], QPixmap | None],
+        interval: int,
+    ) -> None:
+        """Draw scaled frame thumbnails at every ``interval`` frames, clipped to the track bounds."""
+        if total_frames <= 1 or width <= 0:
+            return
+
+        # Pixel width that one interval spans at current zoom
+        interval_px = (interval / (total_frames - 1)) / max(1e-6, viewport.view_span) * width
+        # Leave 2 px vertical padding inside the rounded rect
+        thumb_h = height - 4
+
+        painter.save()
+        # Clip to the rounded track rect so thumbnails don't bleed outside
+        from PySide6.QtGui import QPainterPath
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(1, 1, width - 2, height - 2), 8, 8)
+        painter.setClipPath(clip)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+        for f in range(0, total_frames, interval):
+            x_center = viewport.frame_x(f, total_frames, width)
+
+            # Skip if the slot is entirely outside the visible area
+            if x_center + interval_px / 2 < 0 or x_center - interval_px / 2 > width:
+                continue
+
+            pixmap = provider(f)
+            if pixmap is None or pixmap.isNull():
+                continue
+
+            scaled = pixmap.scaledToHeight(
+                thumb_h, Qt.TransformationMode.SmoothTransformation
+            )
+            thumb_w = scaled.width()
+
+            # Limit thumbnail width to the available slot so they don't overlap
+            max_w = max(4, int(interval_px) - 2)
+            if thumb_w > max_w:
+                scaled = scaled.scaledToWidth(
+                    max_w, Qt.TransformationMode.SmoothTransformation
+                )
+                thumb_w = scaled.width()
+
+            draw_x = int(x_center - thumb_w / 2)
+            draw_y = 2
+
+            painter.setOpacity(0.75)
+            painter.drawPixmap(draw_x, draw_y, scaled)
+
+        painter.setOpacity(1.0)
+        painter.restore()
 
     @staticmethod
     def _draw_timeline_bounds(
