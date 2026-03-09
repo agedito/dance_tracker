@@ -364,6 +364,56 @@ class TimelineTrack(QWidget):
             frame, name = result
             self.bookmarkNameChanged.emit(frame, name)
 
+    # ── Frame navigation ─────────────────────────────────────────────
+
+    def prev_frame_with_data(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if self.detected_flags[f]:
+                return f
+        return None
+
+    def next_frame_with_data(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if self.detected_flags[f]:
+                return f
+        return None
+
+    def prev_frame_without_data(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if not self.detected_flags[f]:
+                return f
+        return None
+
+    def next_frame_without_data(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if not self.detected_flags[f]:
+                return f
+        return None
+
+    def prev_frame_loaded(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if self.loaded_flags[f]:
+                return f
+        return None
+
+    def next_frame_loaded(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if self.loaded_flags[f]:
+                return f
+        return None
+
+    def prev_frame_not_loaded(self) -> int | None:
+        for f in range(self.frame - 1, -1, -1):
+            if not self.loaded_flags[f]:
+                return f
+        return None
+
+    def next_frame_not_loaded(self) -> int | None:
+        for f in range(self.frame + 1, self.total_frames):
+            if not self.loaded_flags[f]:
+                return f
+        return None
+
     # ── Paint ────────────────────────────────────────────────────────
 
     def paintEvent(self, _ev):
