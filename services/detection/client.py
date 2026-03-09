@@ -38,6 +38,14 @@ class VideoDetectSummary:
 
 
 @dataclass(frozen=True)
+class PoseFrameResult:
+    frame_index: int
+    image_width: int
+    image_height: int
+    poses: list[list[dict]]  # list of poses, each pose is a list of landmark dicts
+
+
+@dataclass(frozen=True)
 class DetectResponse:
     provider: str
     num_persons: int
@@ -169,6 +177,65 @@ class DetectionApiClient:
         provider = raw["provider"]
         frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
         return [_parse_detect_response({"provider": provider, "frame": f}) for f in frames]
+
+
+    def pose(self, image_path: str, provider: str) -> PoseFrameResult:
+        url = f"{self._base_url}/api/pose?provider={urllib.parse.quote(provider)}"
+        body = json.dumps({"image_path": image_path}).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
+        req = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+            print(raw)
+
+        frames = raw.get("frames", [])
+        if not frames:
+            return PoseFrameResult(frame_index=0, image_width=0, image_height=0, poses=[])
+        return _parse_pose_frame(frames[0])
+
+    def pose_batch(self, folder_path: str, provider: str) -> list[PoseFrameResult]:
+        url = f"{self._base_url}/api/pose/batch?provider={urllib.parse.quote(provider)}"
+        body = json.dumps({"folder_path": folder_path}).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
+        req = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            raw = json.loads(resp.read())
+            print(raw)
+
+        frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
+        return [_parse_pose_frame(f) for f in frames]
+
+    def pose_video(self, video_path: str, provider: str) -> list[PoseFrameResult]:
+        url = f"{self._base_url}/api/pose/video?provider={urllib.parse.quote(provider)}"
+        body = json.dumps({"video_path": video_path}).encode("utf-8")
+        print(f"[DetectionApiClient] POST {url}  body={body.decode()}")
+
+        req = urllib.request.Request(
+            url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=self._video_timeout) as resp:
+            raw = json.loads(resp.read())
+            print(raw)
+
+        frames = sorted(raw.get("frames", []), key=lambda f: f.get("frame_index", 0))
+        return [_parse_pose_frame(f) for f in frames]
+
+
+def _parse_pose_frame(raw: dict) -> PoseFrameResult:
+    poses_raw = raw.get("poses", [])
+    poses = [p.get("landmarks", []) for p in poses_raw if isinstance(p, dict)]
+    return PoseFrameResult(
+        frame_index=int(raw.get("frame_index", 0)),
+        image_width=int(raw.get("image_width", 0)),
+        image_height=int(raw.get("image_height", 0)),
+        poses=poses,
+    )
 
 
 def _parse_capabilities(raw: dict) -> dict[str, CapabilityInfo]:

@@ -19,6 +19,8 @@ from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QHBoxLayout, QPushButton
 
 from app.interface.track_detector import CapabilityInfo
+from PySide6.QtCore import QThread
+
 from ui.widgets.detection_stream_worker import DetectionStreamWorker
 
 
@@ -49,7 +51,8 @@ class DetectionGroupWidget(QGroupBox):
         log_message: Callable[[str], None],
         on_detector_changed: Callable[[str], None] | None = None,
         on_detect: Callable[[str, str, str], int] | None = None,
-        create_stream_worker: Callable[[str, str], DetectionStreamWorker] | None = None,
+        on_clean: Callable[[str, str], None] | None = None,
+        create_stream_worker: Callable[[str, str], QThread] | None = None,
         on_state_changed: Callable[[str, str, bool], None] | None = None,
         initial_provider: str = "",
         initial_endpoint: str = "",
@@ -66,7 +69,7 @@ class DetectionGroupWidget(QGroupBox):
                        Signature: (folder, provider, endpoint_type) -> processed_count.
                        None = not connected (clicks log "not connected yet").
             create_stream_worker: Factory for streaming worker (batch + single_per_frame mode).
-                       Signature: (folder, provider) -> DetectionStreamWorker.
+                       Signature: (folder, provider) -> QThread with finished(int, bool) signal and cancel().
             on_state_changed: Persist (provider, endpoint, single_per_frame) on any change.
             initial_provider: Provider to pre-select (from saved prefs).
             initial_endpoint: Endpoint to pre-select (from saved prefs).
@@ -78,9 +81,10 @@ class DetectionGroupWidget(QGroupBox):
         self._log_message = log_message
         self._on_detector_changed_cb = on_detector_changed
         self._on_detect = on_detect
+        self._on_clean = on_clean
         self._create_stream_worker = create_stream_worker
         self._on_state_changed = on_state_changed
-        self._stream_worker: DetectionStreamWorker | None = None
+        self._stream_worker: QThread | None = None
         self._detect_worker: _DetectWorker | None = None
         self._detection_start_time: float = 0.0
 
@@ -115,6 +119,10 @@ class DetectionGroupWidget(QGroupBox):
         self._detect_button.clicked.connect(self._on_detect_clicked)
         layout.addWidget(self._detect_button)
 
+        self._clean_button = QPushButton("Clean")
+        self._clean_button.clicked.connect(self._on_clean_clicked)
+        layout.addWidget(self._clean_button)
+
         self._cancel_button = QPushButton("Cancel")
         self._cancel_button.setVisible(False)
         self._cancel_button.clicked.connect(self._on_cancel_clicked)
@@ -125,6 +133,7 @@ class DetectionGroupWidget(QGroupBox):
         self._provider_combo.setEnabled(has_providers)
         self._endpoint_combo.setEnabled(has_providers)
         self._detect_button.setEnabled(has_providers)
+        self._clean_button.setEnabled(has_providers)
 
         # ── Restore saved state ───────────────────────────────────────
         self._restore_state(initial_provider, initial_endpoint)
@@ -201,6 +210,7 @@ class DetectionGroupWidget(QGroupBox):
 
     def _set_controls_enabled(self, enabled: bool) -> None:
         self._detect_button.setEnabled(enabled)
+        self._clean_button.setEnabled(enabled)
         self._provider_combo.setEnabled(enabled)
         self._endpoint_combo.setEnabled(enabled)
         if enabled:
@@ -282,6 +292,17 @@ class DetectionGroupWidget(QGroupBox):
         worker.finished.connect(self._on_worker_finished)
         self._stream_worker = worker
         worker.start()
+
+    def _on_clean_clicked(self) -> None:
+        folder = self._get_current_folder()
+        if not folder:
+            self._log_message("No sequence loaded.")
+            return
+        if self._on_clean is None:
+            self._log_message(f"[{self.title()}] clean not connected.")
+            return
+        provider = self._provider_combo.currentText()
+        self._on_clean(folder, provider)
 
     def _on_cancel_clicked(self) -> None:
         if self._stream_worker:

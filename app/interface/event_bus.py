@@ -14,6 +14,9 @@ class Event(Enum):
     DetectionsUpdated = auto()
     DetectionStarted = auto()
     DetectionFrameResolved = auto()
+    PosesUpdated = auto()
+    PoseDetectionStarted = auto()
+    PoseDetectionFrameResolved = auto()
     BookmarksChanged = auto()
 
 
@@ -29,6 +32,12 @@ class EventsListener(Protocol):
     def on_detection_started(self, frames_folder_path: str) -> None: ...
 
     def on_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None: ...
+
+    def on_poses_updated(self, frames_folder_path: str) -> None: ...
+
+    def on_pose_detection_started(self, frames_folder_path: str) -> None: ...
+
+    def on_pose_detection_frame_resolved(self, frames_folder_path: str, frame_index: int) -> None: ...
 
     def on_bookmarks_changed(self, frames_folder_path: str) -> None: ...
 
@@ -119,6 +128,9 @@ class EventBus:
         self.on(Event.DetectionsUpdated, listener.on_detections_updated)
         self.on(Event.DetectionStarted, listener.on_detection_started)
         self.on(Event.DetectionFrameResolved, listener.on_detection_frame_resolved)
+        self.on(Event.PosesUpdated, listener.on_poses_updated)
+        self.on(Event.PoseDetectionStarted, listener.on_pose_detection_started)
+        self.on(Event.PoseDetectionFrameResolved, listener.on_pose_detection_frame_resolved)
         self.on(Event.BookmarksChanged, listener.on_bookmarks_changed)
 
     def disconnect(self, listener: EventsListener) -> None:
@@ -128,4 +140,7 @@ class EventBus:
         self.off(Event.DetectionsUpdated, listener.on_detections_updated)
         self.off(Event.DetectionStarted, listener.on_detection_started)
         self.off(Event.DetectionFrameResolved, listener.on_detection_frame_resolved)
+        self.off(Event.PosesUpdated, listener.on_poses_updated)
+        self.off(Event.PoseDetectionStarted, listener.on_pose_detection_started)
+        self.off(Event.PoseDetectionFrameResolved, listener.on_pose_detection_frame_resolved)
         self.off(Event.BookmarksChanged, listener.on_bookmarks_changed)

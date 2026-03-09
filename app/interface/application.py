@@ -3,6 +3,7 @@ from typing import Protocol
 from app.interface.layers import Layer
 from app.interface.media import MediaPort
 from app.interface.music import MusicPort
+from app.interface.pose_detector import PoseDetectorPort
 from app.interface.sequence_data import SequenceDataPort
 from app.interface.sequences import SequencePort
 from app.interface.track_detector import TrackDetectorPort
@@ -45,3 +46,4 @@ class DanceTrackerPort(Protocol):
     frames: FramesPort
     sequence_data: SequenceDataPort
     track_detector: TrackDetectorPort
+    pose_detector: PoseDetectorPort

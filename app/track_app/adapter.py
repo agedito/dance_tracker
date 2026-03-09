@@ -4,6 +4,7 @@ from pathlib import Path
 
 from app.interface.event_bus import EventBus, Event
 from app.interface.music import MusicPort, SongMetadata, SongStatus
+from app.interface.pose_detector import PoseDetection as PoseDetectionResult
 from app.interface.sequence_data import Bookmark, SequenceDataPort
 from app.interface.sequence_prefs import SequencePreferencesPort
 from app.interface.sequences import SequenceItem, SequenceState
@@ -399,6 +400,10 @@ class TrackDetectorAdapter:
         self._service.load_detections(frames_folder_path)
         self._events.emit(Event.DetectionsUpdated, frames_folder_path)
 
+    def clear_detections(self, frames_folder_path: str) -> None:
+        self._service.clear_detections(frames_folder_path)
+        self._events.emit(Event.DetectionsUpdated, frames_folder_path)
+
     def detections_for_frame(self, frame_index: int) -> list[PersonDetection]:
         return self._service.detections_for_frame(frame_index)
 
@@ -426,6 +431,56 @@ class TrackDetectorAdapter:
         return result
 
 
+class PoseDetectorAdapter:
+    def __init__(self, app: DanceTrackerApp, events: EventBus):
+        self._service = app.pose_detector
+        self._events = events
+
+    def set_active_provider(self, provider: str) -> bool:
+        return self._service.set_active_provider(provider)
+
+    def detect_for_sequence(self, frames_folder_path: str, frame_index: int | None = None) -> int:
+        result = self._service.detect_for_sequence(frames_folder_path, frame_index=frame_index)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+        return result
+
+    def detect_for_video(self, frames_folder_path: str) -> int:
+        result = self._service.detect_for_video(frames_folder_path)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+        return result
+
+    def detect_streaming(
+        self,
+        frames_folder_path: str,
+        should_cancel=None,
+        current_frame: int = 0,
+    ) -> int:
+        self._events.emit(Event.PoseDetectionStarted, frames_folder_path)
+
+        def _on_frame(frame_index: int, _poses: list) -> None:
+            self._events.emit(Event.PoseDetectionFrameResolved, frames_folder_path, frame_index)
+
+        result = self._service.detect_streaming(
+            frames_folder_path, _on_frame, should_cancel, current_frame=current_frame
+        )
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+        return result
+
+    def load_poses(self, frames_folder_path: str) -> None:
+        self._service.load_poses(frames_folder_path)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+
+    def clear_poses(self, frames_folder_path: str) -> None:
+        self._service.clear_poses(frames_folder_path)
+        self._events.emit(Event.PosesUpdated, frames_folder_path)
+
+    def poses_for_frame(self, frame_index: int) -> list[PoseDetectionResult]:
+        return self._service.poses_for_frame(frame_index)
+
+    def detected_pose_flags(self, total_frames: int) -> list[bool]:
+        return self._service.detected_pose_flags(total_frames)
+
+
 class AppAdapter:
     def __init__(self, app: DanceTrackerApp, events: EventBus, prefs: SequencePreferencesPort):
         self.media = MediaAdapter(app, events)
@@ -434,3 +489,4 @@ class AppAdapter:
         self.frames = FramesAdapter(app)
         self.sequence_data = SequenceDataAdapter(events)
         self.track_detector = TrackDetectorAdapter(app, events)
+        self.pose_detector = PoseDetectorAdapter(app, events)

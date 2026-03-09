@@ -131,11 +131,23 @@ class TimelinePanel(QFrame):
 
     def set_detected_flags(self, flags: list[bool]):
         for track in self.track_widgets:
-            track.set_detected_flags(flags)
+            if track.kind in ("", "bbox"):
+                track.set_detected_flags(flags)
 
     def set_frame_detected(self, frame: int, detected: bool):
         for track in self.track_widgets:
-            track.set_frame_detected(frame, detected)
+            if track.kind in ("", "bbox"):
+                track.set_frame_detected(frame, detected)
+
+    def set_pose_detected_flags(self, flags: list[bool]):
+        for track in self.track_widgets:
+            if track.kind == "pose":
+                track.set_detected_flags(flags)
+
+    def set_frame_pose_detected(self, frame: int, detected: bool):
+        for track in self.track_widgets:
+            if track.kind == "pose":
+                track.set_frame_detected(frame, detected)
 
     def update_info(
             self,

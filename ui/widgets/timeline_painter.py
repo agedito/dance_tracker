@@ -52,7 +52,15 @@ class TimelineTrackPainter:
             painter.drawRect(QRectF(left, 12, max(1, right - left), height - 16))
 
         if kind in ("", "bbox"):
-            TimelineTrackPainter._draw_detected_indicator(painter, width, height, total_frames, detected_flags, viewport)
+            TimelineTrackPainter._draw_detected_indicator(
+                painter, width, height, total_frames, detected_flags, viewport,
+                color=QColor(80, 180, 220, 220),
+            )
+        if kind == "pose":
+            TimelineTrackPainter._draw_detected_indicator(
+                painter, width, height, total_frames, detected_flags, viewport,
+                color=QColor(150, 80, 255, 220),
+            )
         if kind in ("", "image"):
             TimelineTrackPainter._draw_loaded_indicator(
                 painter, width, height, total_frames, loaded_flags, proxy_loaded_flags, viewport
@@ -97,15 +105,17 @@ class TimelineTrackPainter:
         total_frames: int,
         detected_flags: list[bool],
         viewport: TimelineViewport,
+        color: QColor = QColor(80, 180, 220, 220),
     ) -> None:
-        """Cyan bar just above the loaded indicator, fills in as frames are detected."""
+        """Bar just above the loaded indicator, fills in as frames are detected."""
         bar_h = 3
         y = h - bar_h - 1 - 4  # 4 px above the loaded bar
         painter.setPen(Qt.PenStyle.NoPen)
+        empty_color = QColor(40, 45, 55, 60)
 
         if w <= 1:
             detected = bool(detected_flags and detected_flags[0])
-            painter.setBrush(QColor(80, 180, 220, 220) if detected else QColor(40, 45, 55, 60))
+            painter.setBrush(color if detected else empty_color)
             painter.drawRect(QRectF(1, y, max(1, w - 2), bar_h))
             return
 
@@ -113,7 +123,7 @@ class TimelineTrackPainter:
             norm_pos = viewport.view_start + (x / max(1, w - 1)) * viewport.view_span
             f = int(clamp(norm_pos, 0.0, 1.0) * (total_frames - 1))
             detected = detected_flags[f] if f < len(detected_flags) else False
-            painter.setBrush(QColor(80, 180, 220, 220) if detected else QColor(40, 45, 55, 60))
+            painter.setBrush(color if detected else empty_color)
             painter.drawRect(QRectF(x, y, 1, bar_h))
 
     @staticmethod

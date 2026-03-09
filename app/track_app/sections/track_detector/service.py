@@ -116,6 +116,10 @@ class TrackDetectorService:
         if saved_name is not None and saved_name in self._detectors:
             self._active_detector_name = saved_name
 
+    def clear_detections(self, frames_folder_path: str) -> None:
+        self._detections_by_frame = {}
+        DetectionsStore.write(frames_folder_path, self._active_detector_name, {})
+
     def detect_people_streaming(
         self,
         frames_folder_path: str,

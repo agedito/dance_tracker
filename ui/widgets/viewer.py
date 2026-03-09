@@ -6,6 +6,7 @@ from shiboken6 import isValid
 from app.interface.application import DanceTrackerPort
 from ui.widgets.frame_store import FrameStore
 from ui.widgets.drop_handler import DropHandler
+from ui.widgets.pose_overlay import PoseOverlay
 from ui.widgets.radial_menu_widget import RadialMenuWidget
 from ui.window.frames_mock import draw_viewer_frame
 from utils.numbers import clamp
@@ -140,6 +141,10 @@ class ViewerWidget(QWidget):
         self._detection_overlay = DetectionOverlay(app.track_detector, parent=self)
         self._detection_overlay.repaintRequested.connect(self.update)
 
+        # ── Pose overlay ─────────────────────────────────────────────
+        self._pose_overlay = PoseOverlay(app.pose_detector, parent=self)
+        self._pose_overlay.repaintRequested.connect(self.update)
+
     # ── Public API ───────────────────────────────────────────────────
 
     @property
@@ -193,7 +198,7 @@ class ViewerWidget(QWidget):
         self._radial_menu.setGeometry(self.rect())
         video_rect = self._video_rect()
         self._sync_radial_menu_anchor(video_rect)
-        self._detection_overlay.reposition(video_rect)
+        self._reposition_overlays(video_rect)
 
     def closeEvent(self, ev):
         self._is_closing = True
@@ -227,6 +232,7 @@ class ViewerWidget(QWidget):
             painter = QPainter(self)
             self._draw_border(painter, video_rect)
             self._detection_overlay.paint(painter, video_rect, self._frame)
+            self._pose_overlay.paint(painter, video_rect, self._frame)
             painter.end()
 
         self._sync_radial_menu_anchor(video_rect)
@@ -239,6 +245,11 @@ class ViewerWidget(QWidget):
 
     # ── Painting helpers ─────────────────────────────────────────────
 
+    def _reposition_overlays(self, video_rect: QRectF) -> None:
+        self._detection_overlay.reposition(video_rect)
+        detection_bottom = self._detection_overlay.y() + self._detection_overlay.height()
+        self._pose_overlay.reposition(video_rect, y_offset=detection_bottom + 6)
+
     def _paint_frame(self, pixmap, video_rect: QRectF):
         painter = QPainter(self)
         painter.fillRect(self.rect(), Qt.GlobalColor.black)
@@ -246,6 +257,7 @@ class ViewerWidget(QWidget):
         painter.drawPixmap(video_rect, pixmap, QRectF(pixmap.rect()))
         self._draw_border(painter, video_rect)
         self._detection_overlay.paint(painter, video_rect, self._frame)
+        self._pose_overlay.paint(painter, video_rect, self._frame)
         painter.end()
 
     def _draw_border(self, painter: QPainter, video_rect: QRectF):

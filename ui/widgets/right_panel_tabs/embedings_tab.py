@@ -6,6 +6,7 @@ from app.interface.application import DanceTrackerPort
 from app.interface.track_detector import CapabilityInfo
 from ui.widgets.detection_stream_worker import DetectionStreamWorker
 from ui.widgets.generic_widgets.detection_group import DetectionGroupWidget
+from ui.widgets.pose_stream_worker import PoseStreamWorker
 from ui.widgets.right_panel_tabs.common import section_label
 from ui.window.sections.preferences_manager import PreferencesManager
 
@@ -46,6 +47,7 @@ class EmbeddingsTabWidget(QWidget):
             cap: CapabilityInfo | None = capabilities.get(key)
             title = _GROUP_TITLES.get(key, key.capitalize())
             is_detection = key == "detection"
+            is_pose = key == "pose"
             saved = preferences.embeddings_group_state(key)
 
             group = DetectionGroupWidget(
@@ -54,8 +56,9 @@ class EmbeddingsTabWidget(QWidget):
                 get_current_folder=get_current_folder,
                 log_message=log_message,
                 on_detector_changed=self._on_detector_changed if is_detection else None,
-                on_detect=self._make_detect_fn() if is_detection else None,
-                create_stream_worker=self._make_stream_worker if is_detection else None,
+                on_detect=self._make_detect_fn() if is_detection else (self._make_pose_detect_fn() if is_pose else None),
+                on_clean=self._on_clean_detections if is_detection else (self._on_clean_poses if is_pose else None),
+                create_stream_worker=self._make_stream_worker if is_detection else (self._make_pose_stream_worker if is_pose else None),
                 on_state_changed=self._make_state_changed_fn(key),
                 initial_provider=saved.get("provider", ""),
                 initial_endpoint=saved.get("endpoint", ""),
@@ -96,6 +99,36 @@ class EmbeddingsTabWidget(QWidget):
                 return self._app.track_detector.detect_people_for_video(folder)
             return 0
         return _detect
+
+    def _on_clean_detections(self, folder: str, _provider: str) -> None:
+        self._app.track_detector.clear_detections(folder)
+        self._log_message("Detections cleared.")
+
+    def _make_pose_detect_fn(self) -> Callable[[str, str, str], int]:
+        def _detect(folder: str, provider: str, endpoint_type: str) -> int:
+            self._app.pose_detector.set_active_provider(provider)
+            if endpoint_type == "single":
+                return self._app.pose_detector.detect_for_sequence(
+                    folder, frame_index=self._app.frames.cur_frame
+                )
+            if endpoint_type == "batch":
+                return self._app.pose_detector.detect_for_sequence(folder)
+            if endpoint_type == "video":
+                return self._app.pose_detector.detect_for_video(folder)
+            return 0
+        return _detect
+
+    def _on_clean_poses(self, folder: str, _provider: str) -> None:
+        self._app.pose_detector.clear_poses(folder)
+        self._log_message("Poses cleared.")
+
+    def _make_pose_stream_worker(self, folder: str, provider: str) -> PoseStreamWorker:
+        return PoseStreamWorker(
+            self._app,
+            folder,
+            provider=provider,
+            current_frame=self._app.frames.cur_frame,
+        )
 
     def _make_stream_worker(self, folder: str, provider: str) -> DetectionStreamWorker:
         return DetectionStreamWorker(
